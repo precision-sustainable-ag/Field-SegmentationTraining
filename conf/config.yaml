@@ -1,0 +1,10 @@
+# Hydra defaults and settings. Ignore these (don't change)
+defaults:
+  - paths: default
+  - experiments: default
+  - _self_
+
+hydra:
+  run:
+    dir: outputs
+  output_subdir: ${hydra.run.dir}/hydra
