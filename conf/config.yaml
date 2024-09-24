@@ -1,10 +1,48 @@
-# Hydra defaults and settings. Ignore these (don't change)
+# Hydra defaults and settings
 defaults:
-  - paths: default
-  - experiments: default
+  - paths: paths
+  - yolo_conf: yolo_conf
   - _self_
 
 hydra:
   run:
-    dir: outputs
+    dir: ${logs.logdir}/${job.job_now}
   output_subdir: ${hydra.run.dir}/hydra
+
+pipeline:
+  - yolo_segmentation
+
+general:
+  task: # Leave empty as placeholder
+  workdir: ${hydra:runtime.cwd}  # where the code is executed
+
+logs:
+  logdir: ${general.workdir}/logging
+
+reports: ${general.workdir}/reports
+
+job:
+  job_now_date: &nowdir ${now:%Y-%m-%d}
+  job_now_time: ${now:%H_%M_%S}
+  job_now: ${job.job_now_date}/${job.job_now_time} 
+  jobdir: ${data.datadir}/${job.job_now}
+
+# yolo_conf:
+#   path: data/YOLO_dataset # dataset root dir
+#   train: data/YOLO_dataset/images/train 
+#   val: data/YOLO_dataset/images/val 
+
+#   model_version: data/model_YOLO_seg/yolov8x-seg.pt
+
+#   # Class
+#   names:
+#       0: target_plant
+
+#   masks:
+#       train: data/YOLO_dataset/masks/train
+#       val: data/YOLO_dataset/masks/val
+
+#   image_size: 640
+#   batch_size: 16
+#   epochs: 100
+#   model_format: "PyTorch"

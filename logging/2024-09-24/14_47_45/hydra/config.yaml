@@ -1,0 +1,15 @@
+yolo_conf: 2
+paths: 3
+pipeline:
+- yolo_segmentation
+general:
+  task: null
+  workdir: ${hydra:runtime.cwd}
+logs:
+  logdir: ${general.workdir}/logging
+reports: ${general.workdir}/reports
+job:
+  job_now_date: ${now:%Y-%m-%d}
+  job_now_time: ${now:%H_%M_%S}
+  job_now: ${job.job_now_date}/${job.job_now_time}
+  jobdir: ${data.datadir}/${job.job_now}
