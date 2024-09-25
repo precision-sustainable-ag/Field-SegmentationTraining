@@ -1,0 +1,7 @@
+workdir: ${hydra:runtime.cwd}  # where the code is executed
+image_dir: ${paths.workdir}/data/YOLO_dataset/custom_data_fine_tuning/images
+masks_dir: ${paths.workdir}/data/YOLO_dataset/custom_data_fine_tuning/masks
+yolo_format_label: ${paths.workdir}/data/YOLO_dataset/custom_data_fine_tuning/label_yolo_format
+
+reports: ${general.workdir}/reports
+logdir: ${general.workdir}/logging

@@ -1,0 +1,29 @@
+# Hydra defaults and settings
+defaults:
+  - paths: default # or your_paths_template
+  - yolo_conf: yolo_conf
+  - _self_
+
+hydra:
+  run:
+    dir: ${paths.logdir}/${job.job_now}
+  output_subdir: ${hydra.run.dir}/hydra
+
+pipeline:
+  - masks_to_yolo
+  - train_val_split
+  - yolo_segmentation
+  
+
+masks_to_yolo:
+  num_classes: 1
+  num_workers: 10
+
+project_name: FIELD
+task: # Leave empty as placeholder
+
+job:
+  job_now_date: &nowdir ${now:%Y-%m-%d}
+  job_now_time: ${now:%H_%M_%S}
+  job_now: ${job.job_now_date}/${job.job_now_time} 
+  jobdir: ${data.datadir}/${job.job_now}
