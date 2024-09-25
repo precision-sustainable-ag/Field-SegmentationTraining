@@ -10,8 +10,14 @@ hydra:
   output_subdir: ${hydra.run.dir}/hydra
 
 pipeline:
-  - yolo_segmentation
   - masks_to_yolo
+  - train_val_split
+  - yolo_segmentation
+  
+
+masks_to_yolo:
+  num_classes: 1
+  num_workers: 10
 
 project_name: FIELD
 task: # Leave empty as placeholder
@@ -21,5 +27,3 @@ job:
   job_now_time: ${now:%H_%M_%S}
   job_now: ${job.job_now_date}/${job.job_now_time} 
   jobdir: ${data.datadir}/${job.job_now}
-
-

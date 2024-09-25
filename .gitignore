@@ -1,6 +1,9 @@
 # data directory
 data
 
+# logging
+logging
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -7,7 +7,7 @@ import hydra
 from hydra.utils import get_method
 from omegaconf import DictConfig, OmegaConf
 
-sys.path.append("scripts")
+sys.path.append("src")
 
 
 log = logging.getLogger(__name__)
@@ -17,14 +17,14 @@ azlogger = logging.getLogger("azure")
 azlogger.setLevel(logging.WARN)
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
-def run_FINE_TUNE_SAM(cfg : DictConfig) -> None:
+def main(cfg : DictConfig) -> None:
     cfg = OmegaConf.create(cfg)
     whoami = getpass.getuser()
 
     tasks = cfg.pipeline
     log.info(f"Running {' ,'.join(tasks)} as {whoami}")
     for task in tasks:
-        cfg.general.task = task
+        cfg.task = task
         try:
             task = get_method(f"{task}.main")
             task(cfg)
@@ -34,4 +34,4 @@ def run_FINE_TUNE_SAM(cfg : DictConfig) -> None:
             sys.exit(1)
             
 if __name__ == "__main__":
-    run_FINE_TUNE_SAM()
+    main()
