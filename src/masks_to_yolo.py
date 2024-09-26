@@ -65,6 +65,7 @@ class YOLOSegmentConverter:
             classes (int): Total number of classes in the dataset. Default is 255.
             num_workers (int): Number of parallel workers for multiprocessing. Default is 4.
         """
+        log.info("Initializing YOLOSegmentConverter...")
         self.mask_dir = Path(cfg.paths.masks_dir)
         self.output_dir = Path(cfg.paths.yolo_format_label)
         self.classes = cfg.masks_to_yolo.num_classes
@@ -166,6 +167,7 @@ class YOLOSegmentConverter:
             list: A list of YOLO-formatted segmentation data (class_id, normalized coordinates).
         """
         pixel_to_class_mapping = {i + 1: i for i in range(classes)}
+        log.info(f"Converting mask to YOLO format: {mask_path}")
         if mask_path.suffix == ".png":
             mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
             mask = np.where(mask == 255, 0, 1)  # Convert everything into class 0
@@ -196,7 +198,7 @@ class YOLOSegmentConverter:
 
 
 
-    def convert_and_save_wo_merging(self, data: list, file_path: Path):
+    def convert_and_save(self, data: list, file_path: Path):
         with open(file_path, 'w') as file:
 
             # for item in data:
@@ -207,7 +209,7 @@ class YOLOSegmentConverter:
     
 
 
-    def process_single_mask_wo_merging(self, mask_path: Path):
+    def process_single_mask(self, mask_path: Path):
         """Processes a single mask file, converts it to YOLO format, and saves the result (no merging)."""
         log.info(f"Processing single mask: {mask_path}")
 
@@ -233,16 +235,18 @@ class YOLOSegmentConverter:
 
 
     def process_masks_sequentially(self):
+        """Processes all mask files in the input mask directory sequentially."""
+        log.info(f"Processing sequentially masks from directory: {self.mask_dir}")
         mask_paths = [mask_path for mask_path in self.mask_dir.iterdir() if mask_path.suffix == '.png']
         mask_paths = [mask_path for mask_path in mask_paths if mask_path.stem not in [x.stem for x in self.output_dir.glob("*.txt")]]
         log.info(f"Processing {len(mask_paths)} masks from directory: {self.mask_dir}")
         for mask_path in mask_paths:
-            results  = self.process_single_mask_wo_merging(mask_path)
+            results  = self.process_single_mask(mask_path)
             if not results:
                 log.warning(f"No results found for mask: {mask_path}")
                 continue
             output_path = self.output_dir / f"{mask_path.stem}.txt"
-            self.convert_and_save_wo_merging(results, output_path)
+            self.convert_and_save(results, output_path)
 
 
 # Example usage
