@@ -1,6 +1,9 @@
 # data directory
 data
 
+# model training runs
+runs
+
 # logging
 logging
 

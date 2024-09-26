@@ -1,7 +1,7 @@
 # Hydra defaults and settings
 defaults:
   - paths: default # or your_paths_template
-  - yolo_conf: yolo_conf
+  - yolo_conf: default # or your_yolo_conf_template
   - _self_
 
 hydra:

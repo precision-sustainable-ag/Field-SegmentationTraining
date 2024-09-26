@@ -1,23 +1,7 @@
-import os
-import cv2
-import uuid
 import torch
 import logging
-import numpy as np
-
-from tqdm import tqdm
-from pathlib import Path
-from datetime import date
-from statistics import mean
 from ultralytics import YOLO
-import matplotlib.pyplot as plt
 from omegaconf import DictConfig
-import torch.multiprocessing as mp
-from torch.utils.data import Dataset, DataLoader
-from utils.utils import mask_to_yolo_segmentation
-from torch.nn.functional import threshold, normalize
-from segment_anything import sam_model_registry
-from segment_anything.utils.transforms import ResizeLongestSide
 
 
 # Configure logging
@@ -38,32 +22,22 @@ class TrainYOLOSegmentation:
 
         # Set the YOLO model version and data YAML file
         self.YOLO_model_version = cfg.yolo_conf.model_version
-        self.data_yaml = cfg.yolo_conf.data_yaml
+        self.data_yaml = cfg.yolo_conf.train_config
         self.epochs = cfg.yolo_conf.epochs
         self.batch_size = cfg.yolo_conf.batch_size
-        self.img_size = cfg.yolo_conf.img_size
-        self.model_export_format = cfg.yolo_conf.model_export_format
+        self.img_size = cfg.yolo_conf.image_size
+        self.model_export_format = cfg.yolo_conf.model_format
         self.model = YOLO(self.YOLO_model_version)
+        self.single_cls = cfg.yolo_conf.single_cls
 
-        # Set the paths for the images, masks and yolo format labels directories
-        self.image_dir = cfg.paths.image_dir
-        self.masks_dir = cfg.paths.mask_dir #make sure to convert binary masks to yolo format first
+        # Print the configuration or attributes
+        log.info(f"YOLO Model Version: {self.YOLO_model_version}")
+        log.info(f"Data YAML: {self.data_yaml}")
+        log.info(f"Epochs: {self.epochs}")
+        log.info(f"Batch Size: {self.batch_size}")
+        log.info(f"Image Size: {self.img_size}")
+        log.info(f"Model Export Format: {self.model_export_format}")
 
-    # def convert_mask_to_yolo_format(self):
-    #     """
-    #     Converts mask files in the specified directory to YOLO format.
-    #     This method iterates over all mask files in the directory specified by `self.masks_dir`,
-    #     converts each mask to YOLO segmentation format, and saves the converted files in the
-    #     directory specified by `self.yolo_format_labels`.
-    #     Args:
-    #         None    
-    #     Returns:                
-    #         None
-    #     """
-    #     for mask_path in os.listdir(self.masks_dir):
-    #         mask_path_stem = Path(mask_path).stem
-    #         yolo_format_path = os.path.join(self.yolo_format_labels, f"{mask_path_stem}.txt")
-    #         mask_to_yolo_segmentation(mask_path, yolo_format_path)
 
     def train(self):
         """
@@ -82,7 +56,8 @@ class TrainYOLOSegmentation:
             epochs=self.epochs,
             batch=self.batch_size,
             imgsz=self.img_size,  
-            task="segment",       
+            task="segment",
+            single_cls=True,       
         )
 
     def validate(self):
@@ -123,5 +98,5 @@ def main(cfg: DictConfig) -> None:
     
     trainer.train() # Start training the model
     trainer.validate() # Validate the model
-    trainer.export_model()  # Export the model
+    # trainer.export_model()  # Export the model
 
