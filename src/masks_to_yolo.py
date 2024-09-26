@@ -46,6 +46,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
 from omegaconf import DictConfig
 import gc  # Garbage collection
+import tqdm
 
 # Configure logging
 log = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ class YOLOSegmentConverter:
             classes (int): Total number of classes in the dataset. Default is 255.
             num_workers (int): Number of parallel workers for multiprocessing. Default is 4.
         """
+        log.info("Initializing YOLOSegmentConverter...")
         self.mask_dir = Path(cfg.paths.masks_dir)
         self.output_dir = Path(cfg.paths.yolo_format_label)
         self.classes = cfg.masks_to_yolo.num_classes
@@ -100,6 +102,7 @@ class YOLOSegmentConverter:
         Returns:
             list: A list of YOLO-formatted segmentation data (class_id, normalized coordinates).
         """
+        log.info(f"Converting mask to YOLO format: {mask_path}")
         if mask_path.suffix == ".png":
             mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
             mask = np.where(mask == 255, 0, 1)  # Convert everything into class 0
@@ -136,6 +139,7 @@ class YOLOSegmentConverter:
         Returns:
             np.ndarray: A merged NumPy array of concatenated points in normalized coordinates.
         """
+        log.info(f"Merging {len(segments)} segments with interpolation...")
         segments = [np.array(i).reshape(-1, 2) for i in segments]
 
         if not segments:
@@ -196,6 +200,7 @@ class YOLOSegmentConverter:
             data (list): List of YOLO segmentation data (class_id, normalized coordinates).
             file_path (Path): Path to the output text file.
         """
+        log.info(f"Saving YOLO segmentation file to {file_path}")
         result = []
         for item in data:
             if isinstance(item, np.ndarray):
@@ -214,6 +219,7 @@ class YOLOSegmentConverter:
         Args:
             mask_path (Path): Path to the binary mask image file.
         """
+        log.info(f"Processing mask: {mask_path}")
         # Convert masks to YOLO format
         results = self.convert_segment_masks_to_yolo_seg(mask_path)
         if not results:
@@ -242,6 +248,7 @@ class YOLOSegmentConverter:
 
     def process_masks_concurrently(self):
         """Processes all mask files in the input mask directory using multithreading (or multiprocessing)."""
+        log.info(f"Processing concurrently masks from directory: {self.mask_dir}")
         mask_paths = [mask_path for mask_path in self.mask_dir.iterdir() if mask_path.suffix == '.png']
         mask_paths = [mask_path for mask_path in mask_paths if mask_path.stem not in [x.stem for x in self.output_dir.glob("*.txt")]]
 
@@ -250,12 +257,15 @@ class YOLOSegmentConverter:
         # Use ThreadPoolExecutor for multithreading, or ProcessPoolExecutor for multiprocessing
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             # Use map instead of submit for cleaner concurrency
-            list(executor.map(self.process_single_mask, mask_paths))
+            # list(executor.map(self.process_single_mask, mask_paths))
+            list(tqdm(executor.map(self.process_single_mask, mask_paths)), total=len(mask_paths), desc="Processing Masks")
 
         log.info("Mask processing complete.")
         gc.collect()
 
     def process_masks_sequentially(self):
+        """Processes all mask files in the input mask directory sequentially."""
+        log.info(f"Processing sequentially masks from directory: {self.mask_dir}")
         mask_paths = [mask_path for mask_path in self.mask_dir.iterdir() if mask_path.suffix == '.png']
         mask_paths = [mask_path for mask_path in mask_paths if mask_path.stem not in [x.stem for x in self.output_dir.glob("*.txt")]]
         log.info(f"Processing {len(mask_paths)} masks from directory: {self.mask_dir}")
@@ -268,5 +278,5 @@ class YOLOSegmentConverter:
 # Example usage
 def main(cfg: DictConfig) -> None:
     converter = YOLOSegmentConverter(cfg)
-    converter.process_masks_concurrently()
-    # converter.process_masks_sequentially()
+    # converter.process_masks_concurrently()
+    converter.process_masks_sequentially()
