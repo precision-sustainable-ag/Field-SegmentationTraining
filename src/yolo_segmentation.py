@@ -11,6 +11,14 @@ log = logging.getLogger(__name__)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 class TrainYOLOSegmentation:
+    """
+    Class to handle the training, validation, and exporting of a YOLO segmentation model for AgIR.
+
+    This class abstracts the process of training a YOLO model for segmentation tasks. 
+    It provides methods for initializing the model, training, validating, and exporting 
+    the trained model in a specified format. The configuration required for these operations 
+    is passed during the initialization of the class.
+    """
     def __init__(self, cfg: DictConfig):
         """
         Initialize the YOLO segmentation training process.
@@ -60,6 +68,8 @@ class TrainYOLOSegmentation:
             single_cls=True,       
         )
 
+        log.info("Finished training the YOLO segmentation model.")
+
     def validate(self):
         """
         Validate the YOLO segmentation model.
@@ -73,6 +83,8 @@ class TrainYOLOSegmentation:
         log.info("Starting the YOLO segmentation model validation process.")
 
         self.model.val()
+
+        log.info("Finished validating the YOLO segmentation model.")
 
     def save_model(self):
         """
@@ -95,8 +107,10 @@ def main(cfg: DictConfig) -> None:
     """
     # Initialize the trainer with custom settings
     trainer = TrainYOLOSegmentation(cfg)
-    
+    log.info("Starting the YOLO segmentation training process.")
     trainer.train() # Start training the model
+    log.info("Starting the YOLO segmentation model validation process.")
     trainer.validate() # Validate the model
-    # trainer.export_model()  # Export the model
+    log.info("Exporting the YOLO segmentation model.")
+    trainer.export_model()  # Export the model
 
