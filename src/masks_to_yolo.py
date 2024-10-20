@@ -14,5 +14,6 @@ def main(cfg: DictConfig) -> None:
 
     mask_dir = cfg.paths.masks_dir
     output_dir = cfg.paths.yolo_format_label
-        
+    
+    log.info("Converting segment masks to YOLO format.")
     convert_segment_masks_to_yolo_seg(masks_dir=mask_dir, output_dir=output_dir, classes=2)

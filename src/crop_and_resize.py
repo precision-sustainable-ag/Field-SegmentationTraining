@@ -1,10 +1,12 @@
 import os
 import numpy as np
+import logging
 from PIL import Image
 from omegaconf import DictConfig
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+log = logging.getLogger(__name__)
 
 def crop_pad_or_resize(image_path, mask_path, output_image_path, output_mask_path, target_size=(1024, 1024)):
     try:
@@ -118,4 +120,5 @@ def main(cfg: DictConfig) -> None:
     output_mask_dir = Path(cfg.paths.data_dir, 'cropped_resized_masks')
     target_size = (cfg.crop_and_resize.target_size, cfg.crop_and_resize.target_size)
 
+    log.info("Cropping and resizing images and masks.")
     process_directory(image_dir, mask_dir, output_image_dir, output_mask_dir, target_size=target_size)

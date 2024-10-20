@@ -52,4 +52,5 @@ def split_data(cfg: DictConfig,  train_ratio=0.9, seed=42):
 
 def main(cfg: DictConfig) -> None:
     
+    log.info("Splitting the data into training and validation sets.")
     split_data(cfg)
