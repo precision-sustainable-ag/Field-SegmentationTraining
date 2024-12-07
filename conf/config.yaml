@@ -1,7 +1,7 @@
 # Hydra defaults and settings
 defaults:
   - paths: default # or your_paths_template
-  - yolo_conf: yolo_conf
+  - unet_conf: default
   - _self_
 
 hydra:
@@ -10,15 +10,9 @@ hydra:
   output_subdir: ${hydra.run.dir}/hydra
 
 pipeline:
-  - masks_to_yolo
-  - train_val_split
-  - yolo_segmentation
+  # - crop_and_resize
+  - unet_segmentation
   
-
-masks_to_yolo:
-  num_classes: 1
-  num_workers: 10
-
 project_name: FIELD
 task: # Leave empty as placeholder
 

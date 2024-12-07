@@ -1,6 +1,9 @@
 # data directory
 data
 
+# trained_models directory
+trained_models
+
 # logging
 logging
 

@@ -1,8 +1,4 @@
 workdir: ${hydra:runtime.cwd}  # where the code is executed
 data_dir: ${paths.workdir}/data
-image_dir: ${paths.data_dir}/images
-masks_dir: ${paths.data_dir}/masks
-yolo_format_label: ${paths.data_dir}/yolo_segment_labels
-
-reports: ${paths.workdir}/reports
+model_save_dir: ${paths.workdir}/trained_models
 logdir: ${paths.workdir}/logging
