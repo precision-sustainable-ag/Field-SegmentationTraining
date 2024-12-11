@@ -1,15 +1,15 @@
 # U-Net Segmentation Training Pipeline
 
-This repository provides a pipeline for training a U-Net model for semantic segmentation tasks for the Ag Image repository. It is designed to handle data loading, model training, validation, and evaluation while offering modularity for customization.
+This repository provides a pipeline for training a U-Net model for semantic segmentation tasks for the Ag Image repository. It is designed to handle data loading, model training, validation, and inference.
 
-## Features
+## Included Scripts
 
-- **Custom Dataset Handling**: Load and preprocess your datasets seamlessly.
-- **Model Training and Validation**: Train a U-Net model with user-defined configurations.
-- **Metrics Logging**: Track metrics such as loss, accuracy, recall, IOU, and generalized dice score for each epoch.
-- **Save and Resume**: Models and metrics are saved for further use or analysis.
+1. **`main.py`**: The entry point of the pipeline, allowing task-based modular execution using Hydra for configuration management.
+2. **`crop_and_resize.py`**: Utility functions for preprocessing images, including cropping and resizing.
+3. **`unet_segmentation.py`**: Script defining the U-Net architecture and training functions.
+4. **`inference.py`**: Script for performing inference using the trained U-Net model.
 
-### Configuration
+## Configuration
 
 Create a configuration file (e.g., `config.yaml`) in the `conf` directory. Below is an example configuration:
 
@@ -22,22 +22,27 @@ unet_conf:
 paths:
   data_dir: "./data"
   model_save_dir: "./models"
+
+pipeline:
+  - crop_and_resize
+  - unet_segmentation
+  - inference
 ```
 
-### Running the Script
+## Running the Pipeline
 
-1. Ensure your dataset is placed in the specified `data_dir`.
-2. Start training:
+1. Place your dataset in the specified `data_dir`.
+2. Start the pipeline:
    ```bash
-   python main.py --config-path /path/to/config.yaml
+   CUDA_VISIBLE_DEVICES=1 python main.py 
    ```
+   Modify CUDA_VISIBLE_DEVICES according to availability. 
 
 ### Outputs
 
 - **Model Checkpoints**: Saved in the `model_save_dir` with a folder for the current date.
 - **Metrics Logs**: Saved in `training_metrics.txt` inside the date-specific folder.
 - **Dataset Info**: Saved as `dataset_info.json` in the same directory.
-
 
 ## Metrics
 
@@ -58,3 +63,4 @@ Epoch   Train Loss   Val Loss   Accuracy   Recall
 1       0.4500      0.3900     0.85       0.88
 ...
 ```
+
