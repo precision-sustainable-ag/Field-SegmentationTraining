@@ -1,5 +1,5 @@
 import os
-import json
+import yaml
 import torch
 import logging
 
@@ -41,9 +41,9 @@ class TrainUNetSegmentation:
         self._init_model(cfg)
 
         # Initialize metrics log file
-        self.metrics_log_path = os.path.join(self.current_date_dir, "training_metrics.txt")
+        self.metrics_log_path = os.path.join(self.project_dir, "results.csv")
         with open(self.metrics_log_path, "w") as log_file:
-            log_file.write("Epoch\tTrain Loss\tVal Loss\tAccuracy\tRecall\tIoU\tDice\n")
+            log_file.write("Epoch\tTrain Loss\tVal Loss\tAccuracy\tRecall\tIoU\tGeneralized Dice Score\n")
         log.info(f"Metrics will be logged to {self.metrics_log_path}")
 
         log.info("Initialization complete.")
@@ -62,11 +62,15 @@ class TrainUNetSegmentation:
 
         # Create directory with current date
         current_date = datetime.now().strftime("%Y-%m-%d")
-        self.current_date_dir = os.path.join(self.model_save_dir, current_date)
+        self.current_date_dir = os.path.join(self.model_save_dir, f"runs_{current_date}")
         os.makedirs(self.current_date_dir, exist_ok=True)
 
+        # Create directory for current project
+        self.project_dir = os.path.join(self.current_date_dir, "project")
+        os.makedirs(self.project_dir, exist_ok=True)
+
         # Create directory for trained weights
-        self.weights_save_dir = os.path.join(self.current_date_dir, "weights")
+        self.weights_save_dir = os.path.join(self.project_dir, "weights")
         os.makedirs(self.weights_save_dir, exist_ok=True)
 
         # Save model in the created directory
@@ -223,13 +227,16 @@ class TrainUNetSegmentation:
         Logs dataset information to a JSON file.
         """
         dataset_info = {
+            "learning_rate": self.learning_rate,
+            "batch_size": self.batch_size,
+            "epochs": self.epochs,
             "train_size": len(self.train_dataset),
             "val_size": len(self.val_dataset)
         }
 
-        dataset_save_path = os.path.join(self.current_date_dir, "dataset_info.json")
+        dataset_save_path = os.path.join(self.project_dir, "unet_conf.yaml")
         with open(dataset_save_path, "w") as dataset_file:
-            json.dump(dataset_info, dataset_file)
+            yaml.dump(dataset_info, dataset_file)
 
 def main(cfg: DictConfig) -> None:
     """
