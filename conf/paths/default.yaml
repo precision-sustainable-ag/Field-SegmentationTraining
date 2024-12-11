@@ -1,4 +1,6 @@
 workdir: ${hydra:runtime.cwd}  # where the code is executed
+logdir: ${paths.workdir}/logging
 data_dir: ${paths.workdir}/data
 model_save_dir: ${paths.workdir}/trained_models
-logdir: ${paths.workdir}/logging
+test_dir: ${paths.data_dir}/test
+inference_results_dir: ${paths.data_dir}/inference_results

@@ -11,7 +11,8 @@ hydra:
 
 pipeline:
   # - crop_and_resize
-  - unet_segmentation
+  # - unet_segmentation
+  - inference
   
 project_name: FIELD
 task: # Leave empty as placeholder
