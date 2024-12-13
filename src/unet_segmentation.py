@@ -2,6 +2,7 @@ import os
 import yaml
 import torch
 import logging
+import numpy as np
 
 from tqdm import tqdm
 from utils.unet import UNet
@@ -142,7 +143,7 @@ class TrainUNetSegmentation:
         """
         self.model.train()
         running_loss = 0.0
-        for batch in tqdm(self.train_loader, desc=f"Training Epoch {epoch}", leave=False):
+        for batch in tqdm(self.train_loader, desc=f"Training Epoch {epoch}", leave=False): # batch is a tuple of (images, masks) 
             inputs, targets = batch[0].to(device), batch[1].to(device)
             self.optimizer.zero_grad()
             outputs = self.model(inputs)
@@ -171,7 +172,7 @@ class TrainUNetSegmentation:
         self.generalized_dice.reset()
 
         with torch.no_grad():
-            for batch in tqdm(self.val_loader, desc=f"Validation Epoch {epoch}", leave=False):
+            for batch in tqdm(self.val_loader, desc=f"Validation Epoch {epoch}", leave=False): # batch is a tuple of (images, masks) 
                 inputs, targets = batch[0].float().to(device), batch[1].float().to(device)
                 outputs = self.model(inputs)
                 loss = self.criterion(outputs, targets)
@@ -189,9 +190,13 @@ class TrainUNetSegmentation:
                 all_targets.extend(targets.cpu().numpy().flatten())
 
         # Compute metrics
+        log.info("Computing accuracy...")
         accuracy = accuracy_score(all_targets, all_preds)
+        log.info("Computing recall...")
         recall = recall_score(all_targets, all_preds, pos_label=1)
+        log.info("Computing mean_iou_score...")
         mean_iou_score = self.mean_iou.compute().item()
+        log.info("Computing dice_score...")        
         dice_score = self.generalized_dice.compute().item()
 
         log.info(f"Accuracy: {accuracy}, Recall: {recall}, IoU: {mean_iou_score}, Dice: {dice_score}")
@@ -210,6 +215,7 @@ class TrainUNetSegmentation:
             iou (float): Mean IoU.
             dice (float): Dice Score.
         """
+        log.info("Logging training and validation metrics for the current epoch")
         log.info(
             f"Epoch {epoch}: Train Loss={train_loss:.4f}, Val Loss={val_loss:.4f}, "
             f"Accuracy={accuracy:.4f}, Recall={recall:.4f}, IoU={iou:.4f}, Dice={dice:.4f}"
@@ -226,6 +232,8 @@ class TrainUNetSegmentation:
         """
         Logs dataset information to a JSON file.
         """
+        log.info("Logging the dataset information to a JSON file.")
+
         dataset_info = {
             "learning_rate": self.learning_rate,
             "batch_size": self.batch_size,
