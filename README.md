@@ -64,3 +64,11 @@ Epoch   Train Loss   Val Loss   Accuracy   Recall
 ...
 ```
 
+## Data dir
+
+data/
+  - train
+  - train_masks
+  - test
+  - test_masks
+  - inference_results
