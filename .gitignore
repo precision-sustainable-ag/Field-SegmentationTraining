@@ -7,6 +7,9 @@ trained_models
 # logging
 logging
 
+# extra scripts
+utils/maybe_needed
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
