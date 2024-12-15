@@ -10,8 +10,7 @@ hydra:
   output_subdir: ${hydra.run.dir}/hydra
 
 pipeline:
-  # - crop_and_resize
-  # - unet_segmentation
+  - unet_segmentation
   - inference
   
 project_name: FIELD

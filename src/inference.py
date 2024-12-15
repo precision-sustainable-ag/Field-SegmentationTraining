@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from tqdm import tqdm
 from pathlib import Path
-from utils.unet import UNet
+from src.utils.unet import UNet
 from datetime import datetime
 from omegaconf import DictConfig
 from torchvision import transforms

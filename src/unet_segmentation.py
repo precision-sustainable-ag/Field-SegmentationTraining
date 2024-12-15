@@ -9,7 +9,7 @@ from utils.unet import UNet
 from torch import optim, nn
 from datetime import datetime
 from omegaconf import DictConfig
-from utils.custom_dataset import CustomDataset
+from src.utils.custom_dataset import CustomDataset
 from torch.utils.data import DataLoader, random_split
 from sklearn.metrics import accuracy_score, recall_score
 from torchmetrics.segmentation import MeanIoU, GeneralizedDiceScore
