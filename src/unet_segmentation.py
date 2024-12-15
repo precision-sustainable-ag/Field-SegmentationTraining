@@ -11,7 +11,6 @@ from datetime import datetime
 from omegaconf import DictConfig
 from src.utils.custom_dataset import CustomDataset
 from torch.utils.data import DataLoader, random_split
-from sklearn.metrics import accuracy_score, recall_score
 from torchmetrics.segmentation import MeanIoU, GeneralizedDiceScore
 
 # Configure logging
@@ -44,7 +43,7 @@ class TrainUNetSegmentation:
         # Initialize metrics log file
         self.metrics_log_path = os.path.join(self.project_dir, "results.csv")
         with open(self.metrics_log_path, "w") as log_file:
-            log_file.write("Epoch\tTrain Loss\tVal Loss\tAccuracy\tRecall\tIoU\tGeneralized Dice Score\n")
+            log_file.write("Epoch\tTrain Loss\tVal Loss\tIoU\tGeneralized Dice Score\n")
         log.info(f"Metrics will be logged to {self.metrics_log_path}")
 
         log.info("Initialization complete.")
@@ -120,8 +119,8 @@ class TrainUNetSegmentation:
         log.info("Starting training...")
         for epoch in range(1, self.epochs + 1):
             train_loss = self._train_one_epoch(epoch)
-            val_loss, accuracy, recall, iou, dice = self._validate(epoch)
-            self._log_epoch_metrics(epoch, train_loss, val_loss, accuracy, recall, iou, dice)
+            val_loss, iou, dice = self._validate(epoch)
+            self._log_epoch_metrics(epoch, train_loss, val_loss, iou, dice)
 
         self._dataset_metrics(DictConfig)
 
@@ -161,7 +160,7 @@ class TrainUNetSegmentation:
             epoch (int): Current epoch number.
 
         Returns:
-            tuple: Validation loss, accuracy, recall, IoU, Dice Score.
+            tuple: Validation loss, IoU, Dice Score.
         """
         self.model.eval()
         running_loss = 0.0
@@ -190,19 +189,15 @@ class TrainUNetSegmentation:
                 all_targets.extend(targets.cpu().numpy().flatten())
 
         # Compute metrics
-        log.info("Computing accuracy...")
-        accuracy = accuracy_score(all_targets, all_preds)
-        log.info("Computing recall...")
-        recall = recall_score(all_targets, all_preds, pos_label=1)
         log.info("Computing mean_iou_score...")
         mean_iou_score = self.mean_iou.compute().item()
         log.info("Computing dice_score...")        
         dice_score = self.generalized_dice.compute().item()
 
-        log.info(f"Accuracy: {accuracy}, Recall: {recall}, IoU: {mean_iou_score}, Dice: {dice_score}")
-        return running_loss / len(self.val_loader), accuracy, recall, mean_iou_score, dice_score
+        log.info(f"IoU: {mean_iou_score}, Dice: {dice_score}")
+        return running_loss / len(self.val_loader), mean_iou_score, dice_score
 
-    def _log_epoch_metrics(self, epoch, train_loss, val_loss, accuracy, recall, iou, dice):
+    def _log_epoch_metrics(self, epoch, train_loss, val_loss, iou, dice):
         """
         Logs training and validation metrics for the current epoch.
 
@@ -210,22 +205,19 @@ class TrainUNetSegmentation:
             epoch (int): Current epoch number.
             train_loss (float): Training loss.
             val_loss (float): Validation loss.
-            accuracy (float): Validation accuracy.
-            recall (float): Validation recall.
             iou (float): Mean IoU.
             dice (float): Dice Score.
         """
         log.info("Logging training and validation metrics for the current epoch")
         log.info(
             f"Epoch {epoch}: Train Loss={train_loss:.4f}, Val Loss={val_loss:.4f}, "
-            f"Accuracy={accuracy:.4f}, Recall={recall:.4f}, IoU={iou:.4f}, Dice={dice:.4f}"
+            f"IoU={iou:.4f}, Dice={dice:.4f}"
         )
 
         # Append metrics to the log file
         with open(self.metrics_log_path, "a") as log_file:
             log_file.write(
-                f"{epoch}\t{train_loss:.4f}\t{val_loss:.4f}\t{accuracy:.4f}\t"
-                f"{recall:.4f}\t{iou:.4f}\t{dice:.4f}\n"
+                f"{epoch}\t{train_loss:.4f}\t{val_loss:.4f}\t{iou:.4f}\t{dice:.4f}\n"
             )
 
     def _dataset_metrics(self, cfg: DictConfig):
