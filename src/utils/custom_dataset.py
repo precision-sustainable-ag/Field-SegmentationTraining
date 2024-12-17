@@ -28,6 +28,14 @@ class CustomDataset(Dataset):
             transforms.ToTensor()          # Convert images and masks to PyTorch tensors.
         ])
 
+        self.root_path = root_path
+        if test:
+            self.images = sorted([root_path + "/test/" + i for i in os.listdir(root_path + "/test/")])
+            self.masks = sorted([root_path + "/test_masks/" + i for i in os.listdir(root_path + "/test_masks/")])
+        else:
+            self.images = sorted([root_path + "/train/" + i for i in os.listdir(root_path + "/train/")])
+            self.masks = sorted([root_path + "/train_masks/" + i for i in os.listdir(root_path + "/train_masks/")])
+
     def __getitem__(self, index):
         """
         Get the image and mask at the specified index.
