@@ -1,8 +1,8 @@
 workdir: ${hydra:runtime.cwd}  # where the code is executed
-data_dir: ${paths.workdir}/data
-image_dir: ${paths.data_dir}/images
-masks_dir: ${paths.data_dir}/masks
-yolo_format_label: ${paths.data_dir}/yolo_segment_labels
-
-reports: ${paths.workdir}/reports
 logdir: ${paths.workdir}/logging
+data_dir: ${paths.workdir}/data
+model_save_dir: ${paths.workdir}/trained_models
+# test_dir: ${paths.data_dir}/test
+test_dir: ${paths.data_dir}/test_full_size_images # temporary
+inference_results_dir: ${paths.data_dir}/inference_results
+yolo_weed_detection_model: ${paths.model_save_dir}/yolo_weed_detection_model/best.pt

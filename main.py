@@ -9,7 +9,6 @@ from omegaconf import DictConfig, OmegaConf
 
 sys.path.append("src")
 
-
 log = logging.getLogger(__name__)
 # Get the logger for the Azure SDK
 azlogger = logging.getLogger("azure")
