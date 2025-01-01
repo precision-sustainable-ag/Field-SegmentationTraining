@@ -182,12 +182,12 @@ class UNetInference:
         )
 
         pil_cropped_resized_image = Image.fromarray(cropped_image_resized) # Convert to PIL image before applying transform
-        image_tensor = self.transform(pil_cropped_resized_image).float().to(device).unsqueeze(0)
+        image_tensor = self.transform(pil_cropped_resized_image).float().to(device).unsqueeze(0) # Tranform image to tensor
 
         # Perform segmentation inference
         pred_mask = self.seg_model(image_tensor)
-        pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0)
-        pred_mask = (pred_mask > 0).float().numpy()
+        pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0) # Remove batch dimension and move channel dimension to last
+        pred_mask = (pred_mask > 0).float().numpy() # Convert to numpy array
 
         # Resize predicted mask to the size of the cropped_image_bbox
         pred_mask_cropped_size = cv2.resize(
@@ -195,12 +195,13 @@ class UNetInference:
             (cropped_image_bbox.shape[1], cropped_image_bbox.shape[0])
         )
 
-        x_min, y_min, x_max, y_max = bbox
+        # Get the size of the full size image
         full_size_height, full_size_width = image_full_size.shape[:2]
 
         # Create a padded mask with the same size as the original image
+        x_min, y_min, x_max, y_max = bbox # Get bounding box coordinates
         padded_mask = np.zeros((full_size_height, full_size_width), dtype=np.uint8)
-        padded_mask[y_min:y_max, x_min:x_max] = pred_mask_cropped_size
+        padded_mask[y_min:y_max, x_min:x_max] = pred_mask_cropped_size # Insert the predicted mask into the padded mask
 
         # Save the full-size mask 
         cv2.imwrite(str(self.masks_dir / f"{image_name}.png"), padded_mask * 255)
@@ -214,9 +215,9 @@ class UNetInference:
         colored_mask = cv2.bitwise_and(colored_overlay, colored_overlay, mask=padded_mask)
 
         # Combine the original image and the colored overlay using the predicted mask
-        alpha = 0.5
+        alpha = 0.75 # Transparency factor for the overlay
         colored_overlay = cv2.addWeighted(image_full_size, 1, colored_mask, alpha, 0)
-        colored_overlay = cv2.resize(colored_overlay, (full_size_width // 10, full_size_height // 10))
+        colored_overlay = cv2.resize(colored_overlay, (full_size_width // 10, full_size_height // 10)) # Resize for faster display
 
         # Save the overlayed image
         cv2.imwrite(str(self.img_mask_comparison_dir / f"{image_name}_overlay.png"), colored_overlay)
