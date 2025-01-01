@@ -48,10 +48,10 @@ class UNetInference:
             log.error("No valid folder with a trained model was found.")
             raise FileNotFoundError("No valid folder with a trained model was found.")
 
-        trained_model_path = os.path.join(
+        self.trained_model_path = os.path.join(
             self.model_save_dir, self.latest_folder, "project/weights/unet_segmentation.pth"
         )
-        log.info(f"Trained UNet model located at: {trained_model_path}")
+        log.info(f"Trained UNet model located at: {self.trained_model_path}")
 
         # Load YOLO model
         log.info("Loading YOLO model for target weed detection.")
@@ -60,7 +60,7 @@ class UNetInference:
         # Load UNet model
         log.info("Loading UNet model for segmentation.")
         self.seg_model = UNet(in_channels=3, num_classes=1).to(device)
-        self.seg_model.load_state_dict(torch.load(trained_model_path, map_location=device))
+        self.seg_model.load_state_dict(torch.load(self.trained_model_path, map_location=device))
         self.seg_model.eval()
         log.info("UNet model loaded and set to evaluation mode.")
 
@@ -80,15 +80,12 @@ class UNetInference:
         latest_folder = None
 
         for folder_name in os.listdir(self.model_save_dir):
-            try:
-                folder_date = folder_name.split('_')[1]
-                folder_date_obj = datetime.strptime(folder_date, "%Y-%m-%d")
-                difference = abs((folder_date_obj - datetime.now()).days)
-                if difference < min_difference:
-                    min_difference = difference
-                    latest_folder = folder_name
-            except (IndexError, ValueError):
-                log.warning(f"Skipping folder '{folder_name}' due to invalid date format.")
+            folder_date = folder_name.split('_')[1]
+            folder_date_object = datetime.strptime(folder_date, "%Y-%m-%d")
+            difference = abs((folder_date_object - datetime.now()).days)
+            if difference < min_difference:
+                min_difference = difference
+                latest_folder = folder_name
 
         log.info(f"Latest folder identified: {latest_folder}")
         return latest_folder
@@ -108,7 +105,7 @@ class UNetInference:
 
     def _detect_weeds(self, image_path: str):
         """
-        Detects target weed in the given image.
+        Detects target weed in the given image using a pretrained model.
 
         Args:
             image_path (str): Path to the input image.
@@ -179,7 +176,7 @@ class UNetInference:
             (cropped_image_bbox.shape[1] // 4, cropped_image_bbox.shape[0] // 4)
         )
 
-        pil_cropped_resized_image = Image.fromarray(cropped_image_resized)
+        pil_cropped_resized_image = Image.fromarray(cropped_image_resized) # Convert to PIL image before applying transform
         image_tensor = self.transform(pil_cropped_resized_image).float().to(device).unsqueeze(0)
 
         # Perform segmentation inference
