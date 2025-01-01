@@ -35,12 +35,25 @@ class UNetInference:
             cfg (DictConfig): Configuration object containing paths and settings.
         """
         log.info(f"Initializing UNetInference at {datetime.now()}")
+        
+        # Get current timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         # Set up directories
         self.model_save_dir = Path(cfg.paths.model_save_dir)
         self.test_dir = Path(cfg.paths.test_dir)
+
         self.inference_results_dir = Path(cfg.paths.inference_results_dir)
         self.inference_results_dir.mkdir(parents=True, exist_ok=True)
+
+        self.timestamp_inference_results_dir = self.inference_results_dir / timestamp
+        self.timestamp_inference_results_dir.mkdir(parents=True, exist_ok=True)
+
+        self.masks_dir = self.timestamp_inference_results_dir / "masks"
+        self.masks_dir.mkdir(parents=True, exist_ok=True)
+
+        self.img_mask_comparison_dir = self.timestamp_inference_results_dir / "img_mask_overlayed"
+        self.img_mask_comparison_dir.mkdir(parents=True, exist_ok=True)
 
         # Find the latest trained model
         self.latest_folder = self._get_latest_folder()
@@ -53,7 +66,7 @@ class UNetInference:
         )
         log.info(f"Trained UNet model located at: {self.trained_model_path}")
 
-        # Load YOLO model
+        # Load pretrained weed detection YOLO model
         log.info("Loading YOLO model for target weed detection.")
         self.target_weed_detection_model = YOLO(cfg.paths.yolo_weed_detection_model)
 
@@ -80,13 +93,16 @@ class UNetInference:
         latest_folder = None
 
         for folder_name in os.listdir(self.model_save_dir):
-            folder_date = folder_name.split('_')[1]
-            folder_date_object = datetime.strptime(folder_date, "%Y-%m-%d")
-            difference = abs((folder_date_object - datetime.now()).days)
-            if difference < min_difference:
-                min_difference = difference
-                latest_folder = folder_name
-
+            try:
+                folder_date = folder_name.split('_')[1]
+                folder_date_object = datetime.strptime(folder_date, "%Y-%m-%d")
+                difference = abs((folder_date_object - datetime.now()).days)
+                if difference < min_difference:
+                    min_difference = difference
+                    latest_folder = folder_name
+            except (IndexError, ValueError):
+                log.warning(f"Invalid dated folder name: {folder_name}")
+        
         log.info(f"Latest folder identified: {latest_folder}")
         return latest_folder
 
@@ -152,17 +168,6 @@ class UNetInference:
         Args:
             image_path (str): Path to the input image.
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H")
-
-        # Create directories for saving results
-        results_dir = self.inference_results_dir / timestamp
-        results_dir.mkdir(parents=True, exist_ok=True)
-
-        masks_dir = results_dir / "masks"
-        masks_dir.mkdir(parents=True, exist_ok=True)
-
-        img_mask_comparison_dir = results_dir / "img_mask_overlayed"
-        img_mask_comparison_dir.mkdir(parents=True, exist_ok=True)
 
         image_name = Path(image_path).stem
         log.info(f"Processing image: {image_path}")
@@ -198,8 +203,8 @@ class UNetInference:
         padded_mask[y_min:y_max, x_min:x_max] = pred_mask_cropped_size
 
         # Save the full-size mask 
-        cv2.imwrite(str(masks_dir / f"{image_name}.png"), padded_mask * 255)
-        log.info(f"Full-size mask saved for {image_name} at {masks_dir}")
+        cv2.imwrite(str(self.masks_dir / f"{image_name}.png"), padded_mask * 255)
+        log.info(f"Full-size mask saved for {image_name} at {self.masks_dir}")
 
         # Save the predicted mask overlayed on the original image
         colored_overlay = np.zeros_like(image_full_size)
@@ -214,9 +219,9 @@ class UNetInference:
         colored_overlay = cv2.resize(colored_overlay, (full_size_width // 10, full_size_height // 10))
 
         # Save the overlayed image
-        cv2.imwrite(str(img_mask_comparison_dir / f"{image_name}_overlay.png"), colored_overlay)
+        cv2.imwrite(str(self.img_mask_comparison_dir / f"{image_name}_overlay.png"), colored_overlay)
 
-        log.info(f"Original image and predicted mask comparison saved for {image_name} at {img_mask_comparison_dir}")
+        log.info(f"Original image and predicted mask comparison saved for {image_name} at {self.img_mask_comparison_dir}")
 
     def process_directory(self):
         """
@@ -225,7 +230,6 @@ class UNetInference:
         log.info(f"Processing images in directory: {self.test_dir}")
         for img_path in tqdm(self.test_dir.rglob("*.jpg"), desc="Processing images"):
             self.infer_single_image(img_path)
-
 
 def main(cfg: DictConfig):
     """
