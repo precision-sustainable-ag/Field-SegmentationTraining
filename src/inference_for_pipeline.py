@@ -187,7 +187,7 @@ class UNetInference:
         # Perform segmentation inference
         pred_mask = self.seg_model(image_tensor)
         pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0) # Remove batch dimension and move channel dimension to last
-        pred_mask = (pred_mask > 0).float().numpy() # Convert to numpy array
+        pred_mask = (pred_mask > 0).float().numpy() # Convert to numpy array and thresholding for binary mask
 
         # Resize predicted mask to the size of the cropped_image_bbox
         pred_mask_cropped_size = cv2.resize(
