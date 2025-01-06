@@ -3,11 +3,13 @@ import cv2
 import torch
 import logging
 import numpy as np
+
 from PIL import Image
 from tqdm import tqdm
 from pathlib import Path
-from datetime import datetime
 from ultralytics import YOLO
+from datetime import datetime
+from torch.nn import DataParallel
 from torchvision import transforms
 from src.utils.unet import UNet
 from omegaconf import DictConfig
@@ -129,7 +131,7 @@ class UNetInference:
         Returns:
             tuple or None: Bounding box coordinates (x_min, y_min, x_max, y_max) if detection is successful; otherwise, None.
         """
-        log.debug("Starting weed detection.")
+        log.info("Starting weed detection.")
         image = self._convert_to_rgb(image_path)
         results = self.target_weed_detection_model(image)
 
@@ -168,61 +170,71 @@ class UNetInference:
         Args:
             image_path (str): Path to the input image.
         """
-
-        image_name = Path(image_path).stem
         log.info(f"Processing image: {image_path}")
+        image_name = Path(image_path).stem
+        cropped_image, bbox, image_full_size = self._process_image(image_path)
+        cropped_image_shape = cropped_image.shape
 
-        # Crop image according to bbox and predict mask
+        log.info(f"Size of cropped image: {cropped_image_shape}")
+
+        if cropped_image_shape[0] < 4000 or cropped_image_shape[1] < 3000:
+            log.info(f"Image size is small enough for direct processing.")
+            pred_mask = self._predict_mask(cropped_image)
+        else:
+            log.info(f"Image size is too big for direct processing. Resizing by 2 and processing.")
+            pred_mask = self._predict_mask(cv2.resize(cropped_image, (cropped_image_shape[1] // 2, cropped_image_shape[0] // 2)))
+
+        padded_mask = self._resize_and_pad_mask(pred_mask, bbox, image_full_size.shape[:2])
+
+        self._save_full_size_mask(padded_mask, image_name)
+        self._save_overlay_image(padded_mask, image_full_size, image_name)
+
+        log.info(f"Processing completed for {image_name}")
+    
+    def _process_image(self, image_path: str):
+        """Crop the image and return the cropped image, bounding box, and full-size image."""
         cropped_image_bbox, bbox, image_full_size = self._crop_image_bbox(image_path)
+        return cropped_image_bbox, bbox, image_full_size
 
-        # Resize cropped image for faster inference
-        cropped_image_resized = cv2.resize(
-            cropped_image_bbox, 
-            (cropped_image_bbox.shape[1] // 4, cropped_image_bbox.shape[0] // 4)
-        )
+    def _predict_mask(self, cropped_image: np.ndarray):
+        """Perform segmentation inference on the cropped image."""
+        pil_image = Image.fromarray(cropped_image)
+        image_tensor = self.transform(pil_image).float().to(device).unsqueeze(0)
 
-        pil_cropped_resized_image = Image.fromarray(cropped_image_resized) # Convert to PIL image before applying transform
-        image_tensor = self.transform(pil_cropped_resized_image).float().to(device).unsqueeze(0) # Tranform image to tensor
-
-        # Perform segmentation inference
         pred_mask = self.seg_model(image_tensor)
-        pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0) # Remove batch dimension and move channel dimension to last
-        pred_mask = (pred_mask > 0).float().numpy() # Convert to numpy array and thresholding for binary mask
+        pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0)
+        return (pred_mask > 0).float().numpy()
 
-        # Resize predicted mask to the size of the cropped_image_bbox
-        pred_mask_cropped_size = cv2.resize(
-            pred_mask, 
-            (cropped_image_bbox.shape[1], cropped_image_bbox.shape[0])
-        )
+    def _resize_and_pad_mask(self, pred_mask: np.ndarray, bbox: tuple, full_size: tuple):
+        """Resize the predicted mask and pad it to the original image size."""
+        x_min, y_min, x_max, y_max = bbox
+        cropped_height, cropped_width = y_max - y_min, x_max - x_min
 
-        # Get the size of the full size image
-        full_size_height, full_size_width = image_full_size.shape[:2]
+        resized_mask = cv2.resize(pred_mask, (cropped_width, cropped_height))
+        padded_mask = np.zeros(full_size, dtype=np.uint8)
+        padded_mask[y_min:y_max, x_min:x_max] = resized_mask
+        return padded_mask
 
-        # Create a padded mask with the same size as the original image
-        x_min, y_min, x_max, y_max = bbox # Get bounding box coordinates
-        padded_mask = np.zeros((full_size_height, full_size_width), dtype=np.uint8)
-        padded_mask[y_min:y_max, x_min:x_max] = pred_mask_cropped_size # Insert the predicted mask into the padded mask
+    def _save_full_size_mask(self, mask: np.ndarray, image_name: str):
+        """Save the full-size mask to disk."""
+        mask_path = self.masks_dir / f"{image_name}.png"
+        cv2.imwrite(str(mask_path), mask * 255)
+        log.info(f"Full-size mask saved for {image_name} at {mask_path}")
 
-        # Save the full-size mask 
-        cv2.imwrite(str(self.masks_dir / f"{image_name}.png"), padded_mask * 255)
-        log.info(f"Full-size mask saved for {image_name} at {self.masks_dir}")
+    def _save_overlay_image(self, mask: np.ndarray, original_image: np.ndarray, image_name: str):
+        """Save the overlay of the predicted mask on the original image."""
+        full_size_height, full_size_width = original_image.shape[:2]
+        colored_overlay = np.zeros_like(original_image)
+        colored_overlay[:, :, 1] = 255  # Green overlay
 
-        # Save the predicted mask overlayed on the original image
-        colored_overlay = np.zeros_like(image_full_size)
-        colored_overlay[:, :, 1] = 255
+        colored_mask = cv2.bitwise_and(colored_overlay, colored_overlay, mask=mask)
+        alpha = 0.75
+        overlay_image = cv2.addWeighted(original_image, 1, colored_mask, alpha, 0)
+        overlay_image = cv2.resize(overlay_image, (full_size_width // 10, full_size_height // 10))
 
-        # Apply the mask to the colored overlay
-        colored_mask = cv2.bitwise_and(colored_overlay, colored_overlay, mask=padded_mask)
-
-        # Combine the original image and the colored overlay using the predicted mask
-        alpha = 0.75 # Transparency factor for the overlay
-        colored_overlay = cv2.addWeighted(image_full_size, 1, colored_mask, alpha, 0)
-        colored_overlay = cv2.resize(colored_overlay, (full_size_width // 10, full_size_height // 10)) # Resize for faster display
-
-        # Save the overlayed image
-        cv2.imwrite(str(self.img_mask_comparison_dir / f"{image_name}_overlay.png"), colored_overlay)
-
-        log.info(f"Original image and predicted mask comparison saved for {image_name} at {self.img_mask_comparison_dir}")
+        overlay_path = self.img_mask_comparison_dir / f"{image_name}_overlay.png"
+        cv2.imwrite(str(overlay_path), overlay_image)
+        log.info(f"Overlay image saved for {image_name} at {overlay_path}")
 
     def process_directory(self):
         """
@@ -231,6 +243,7 @@ class UNetInference:
         log.info(f"Processing images in directory: {self.test_dir}")
         for img_path in tqdm(self.test_dir.rglob("*.jpg"), desc="Processing images"):
             self.infer_single_image(img_path)
+        log.info("Inference completed.")
 
 def main(cfg: DictConfig):
     """
