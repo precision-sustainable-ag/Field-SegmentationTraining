@@ -181,8 +181,9 @@ class UNetInference:
             log.info(f"Image size is small enough for direct processing.")
             pred_mask = self._predict_mask(cropped_image)
         else:
-            log.info(f"Image size is too big for direct processing. Resizing by 2 and processing.")
-            pred_mask = self._predict_mask(cv2.resize(cropped_image, (cropped_image_shape[1] // 2, cropped_image_shape[0] // 2)))
+            log.info(f"Image size is too big for direct processing. Resizing and processing.")
+            # pred_mask = self._predict_mask(cv2.resize(cropped_image, (int(cropped_image_shape[1] * 0.5), int(cropped_image_shape[0] * 0.5)))) # Resize to half
+            pred_mask = self._process_image_in_tiles(cropped_image) # Process in tiles
 
         padded_mask = self._resize_and_pad_mask(pred_mask, bbox, image_full_size.shape[:2])
 
@@ -204,7 +205,37 @@ class UNetInference:
         pred_mask = self.seg_model(image_tensor)
         pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0)
         return (pred_mask > 0).float().numpy()
+    
+    def _process_image_in_tiles(self, image: np.ndarray, overlap_pixels=500):
+        """Process the image in tiles to avoid memory issues.
+        Args:
+            image (np.ndarray): The input image.
+            overlap_pixels (int): The number of overlapping pixels between tiles.
+        Returns:
+            np.ndarray: The full-size mask for the input image.
+        """
+        height, width = image.shape[:2]
+        tile_h, tile_w = height // 2, width // 2
+        step_h, step_w = tile_h - overlap_pixels, tile_w - overlap_pixels
 
+        print(f"Image shape: {image.shape}")
+        print(f"step_h: {step_h}, step_w: {step_w}")
+        print(f"tile_h: {tile_h}, tile_w: {tile_w}")
+
+        full_mask = np.zeros((height, width), dtype=np.float32)
+
+        for y in range(0, height, step_h):
+            for x in range(0, width, step_w):
+                y_end, x_end = min(y + tile_h, height), min(x + tile_w, width) # Calculate end coordinates for tile
+
+                tile = image[y:y_end, x:x_end] # Extract tile from image
+                tile_pred = self._predict_mask(tile) # Predict mask for tile
+                tile_pred_sequeezed = tile_pred.squeeze() # Remove the channel dimension               
+
+                full_mask[y:y_end, x:x_end] = np.maximum(full_mask[y:y_end, x:x_end], tile_pred_sequeezed) # Combine overlapping tiles by taking the maximum value
+
+        return full_mask
+   
     def _resize_and_pad_mask(self, pred_mask: np.ndarray, bbox: tuple, full_size: tuple):
         """Resize the predicted mask and pad it to the original image size."""
         x_min, y_min, x_max, y_max = bbox
