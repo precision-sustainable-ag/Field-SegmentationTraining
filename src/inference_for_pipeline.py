@@ -13,6 +13,7 @@ from torch.nn import DataParallel
 from torchvision import transforms
 from src.utils.unet import UNet
 from omegaconf import DictConfig
+import matplotlib.pyplot as plt
 
 # Configure logging
 logging.basicConfig(
@@ -51,21 +52,22 @@ class UNetInference:
         self.timestamp_inference_results_dir = self.inference_results_dir / timestamp
         self.timestamp_inference_results_dir.mkdir(parents=True, exist_ok=True)
 
-        self.masks_dir = self.timestamp_inference_results_dir / "masks"
-        self.masks_dir.mkdir(parents=True, exist_ok=True)
+        self.save_mask = cfg.inference_for_pipeline.save_mask
+        if self.save_mask:
+            self.masks_dir = self.timestamp_inference_results_dir / "masks"
+            self.masks_dir.mkdir(parents=True, exist_ok=True)
 
-        self.img_mask_comparison_dir = self.timestamp_inference_results_dir / "img_mask_overlayed"
-        self.img_mask_comparison_dir.mkdir(parents=True, exist_ok=True)
+        self.overlay_comparison = cfg.inference_for_pipeline.overlay_comparison
+        if self.overlay_comparison:
+            self.img_mask_comparison_dir = self.timestamp_inference_results_dir / "img_mask_overlayed"
+            self.img_mask_comparison_dir.mkdir(parents=True, exist_ok=True)
 
-        # Find the latest trained model
-        self.latest_folder = self._get_latest_folder()
-        if not self.latest_folder:
-            log.error("No valid folder with a trained model was found.")
-            raise FileNotFoundError("No valid folder with a trained model was found.")
+        self.side_by_side = cfg.inference_for_pipeline.side_by_side_comparison
+        if self.side_by_side:
+            self.img_mask_side_by_side_dir = self.timestamp_inference_results_dir / "img_mask_side_by_side"
+            self.img_mask_side_by_side_dir.mkdir(parents=True, exist_ok=True)
 
-        self.trained_model_path = os.path.join(
-            self.model_save_dir, self.latest_folder, "project/weights/unet_segmentation.pth"
-        )
+        self.trained_model_path = cfg.paths.unet_segmentation_model
         log.info(f"Trained UNet model located at: {self.trained_model_path}")
 
         # Load pretrained weed detection YOLO model
@@ -83,30 +85,6 @@ class UNetInference:
         self.transform = transforms.Compose([
             transforms.ToTensor(),
         ])
-
-    def _get_latest_folder(self) -> str:
-        """
-        Finds the folder with the latest date in its name.
-
-        Returns:
-            str: The name of the folder with the closest date to the current date.
-        """
-        min_difference = float("inf")
-        latest_folder = None
-
-        for folder_name in os.listdir(self.model_save_dir):
-            try:
-                folder_date = folder_name.split('_')[1]
-                folder_date_object = datetime.strptime(folder_date, "%Y-%m-%d")
-                difference = abs((folder_date_object - datetime.now()).days)
-                if difference < min_difference:
-                    min_difference = difference
-                    latest_folder = folder_name
-            except (IndexError, ValueError):
-                log.warning(f"Invalid dated folder name: {folder_name}")
-        
-        log.info(f"Latest folder identified: {latest_folder}")
-        return latest_folder
 
     def _convert_to_rgb(self, image_path: str) -> np.ndarray:
         """
@@ -177,7 +155,7 @@ class UNetInference:
 
         log.info(f"Size of cropped image: {cropped_image_shape}")
 
-        if cropped_image_shape[0] < 4000 or cropped_image_shape[1] < 3000:
+        if cropped_image_shape[0] < 4000 and cropped_image_shape[1] < 4000:
             log.info(f"Image size is small enough for direct processing.")
             pred_mask = self._predict_mask(cropped_image)
         else:
@@ -187,8 +165,14 @@ class UNetInference:
 
         padded_mask = self._resize_and_pad_mask(pred_mask, bbox, image_full_size.shape[:2])
 
-        self._save_full_size_mask(padded_mask, image_name)
-        self._save_overlay_image(padded_mask, image_full_size, image_name)
+        if self.save_mask:
+            self._save_full_size_mask(padded_mask, image_name)
+        
+        if self.overlay_comparison:
+            self._save_overlay_image(padded_mask, image_full_size, image_name)
+        
+        if self.side_by_side:
+            self._save_side_by_side_comparison(image_full_size, padded_mask, image_name)
 
         log.info(f"Processing completed for {image_name}")
     
@@ -203,8 +187,12 @@ class UNetInference:
         image_tensor = self.transform(pil_image).float().to(device).unsqueeze(0)
 
         pred_mask = self.seg_model(image_tensor)
+        # Apply sigmoid to convert logits to probabilities (for binary)
+        pred_mask = torch.sigmoid(pred_mask)
+        
         pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0)
-        return (pred_mask > 0).float().numpy()
+        pred_mask = (pred_mask > 0.5).float().numpy()
+        return pred_mask
     
     def _process_image_in_tiles(self, image: np.ndarray, overlap_pixels=500):
         """Process the image in tiles to avoid memory issues.
@@ -246,6 +234,35 @@ class UNetInference:
         padded_mask[y_min:y_max, x_min:x_max] = resized_mask
         return padded_mask
 
+    def _save_side_by_side_comparison(self, image: np.ndarray, mask: np.ndarray, image_name: str):
+        """
+        Save a side-by-side comparison of the original image and the predicted mask.
+
+        Args:
+            image (np.ndarray): Original RGB image.
+            mask (np.ndarray): Predicted binary mask.
+            image_name (str): Name of the image file (without extension).
+        """
+        # Create a figure for the side-by-side plot
+        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+        # Original RGB image
+        axes[0].imshow(image)
+        axes[0].axis("off")
+        axes[0].set_title(f"Original Image: {image_name}")
+
+        # Predicted mask
+        axes[1].imshow(mask, cmap="gray")
+        axes[1].axis("off")
+        axes[1].set_title("Predicted Mask")
+        plt.tight_layout()
+        # Save the plot
+        comparison_path = self.img_mask_side_by_side_dir / f"{image_name}_side_by_side.png"
+        plt.savefig(comparison_path, bbox_inches="tight", dpi=300)
+        plt.close(fig)
+
+        log.info(f"Side-by-side comparison saved for {image_name} at {comparison_path}")
+        
     def _save_full_size_mask(self, mask: np.ndarray, image_name: str):
         """Save the full-size mask to disk."""
         mask_path = self.masks_dir / f"{image_name}.png"
@@ -272,7 +289,8 @@ class UNetInference:
         Processes all images in the test directory for segmentation inference.
         """
         log.info(f"Processing images in directory: {self.test_dir}")
-        for img_path in tqdm(self.test_dir.rglob("*.jpg"), desc="Processing images"):
+        images = sorted(list(self.test_dir.rglob("*.jpg")))
+        for img_path in tqdm(images, desc="Processing images"):
             self.infer_single_image(img_path)
         log.info("Inference completed.")
 
