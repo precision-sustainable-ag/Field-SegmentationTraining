@@ -8,6 +8,7 @@ This repository provides a pipeline for training a U-Net model for semantic segm
 2. **`crop_and_resize.py`**: Utility functions for preprocessing images, including cropping and resizing.
 3. **`unet_segmentation.py`**: Script defining the U-Net architecture and training functions.
 4. **`inference.py`**: Script for performing inference using the trained U-Net model.
+5. **`inference_for_pipeline.py`**: Script for testing the trained U-Net model as it will be used in the inferencing pipeline.
 
 ## Configuration
 

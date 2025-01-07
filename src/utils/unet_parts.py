@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class DoubleConv(nn.Module):
     """
@@ -115,5 +116,10 @@ class UpSample(nn.Module):
             torch.Tensor: Output tensor with shape (batch_size, out_channels, height*2, width*2).
         """
         x1 = self.up(x1)
+
+        # Resize x1 to match x2 if they differ in size
+        if x1.size(2) != x2.size(2) or x1.size(3) != x2.size(3):
+            x1 = F.interpolate(x1, size=(x2.size(2), x2.size(3)), mode='bilinear', align_corners=False)
+
         x = torch.cat([x1, x2], 1)
         return self.conv(x)
