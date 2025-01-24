@@ -23,9 +23,21 @@ class CustomDataset(Dataset):
             root_path (str): Root directory containing `train/`, `train_masks/`, `test/`, and `test_masks/`.
             test (bool, optional): Flag to indicate whether the dataset is for testing. Defaults to False (training).
         """
-        self.transform = transforms.Compose([
+
+        self.image_transform = transforms.Compose([
             transforms.Resize((512, 512)),  # Resize images and masks to 512x512 pixels.
-            transforms.ToTensor()          # Convert images and masks to PyTorch tensors.
+            transforms.ToTensor(),          # Convert images and masks to PyTorch tensors.
+            transforms.RandomApply(torch.nn.ModuleList(       # Randomly apply transformations to the images.
+                [       
+                transforms.ColorJitter(),  # Randomly change the brightness, contrast, saturation and hue of an image.
+                transforms.RandomSolarize(threshold=int(200/255)),  # Randomly solarize an image.
+                ]), p=0.5
+            ),
+        ])
+
+        self.mask_transform = transforms.Compose([
+            transforms.Resize((512, 512)),  # Resize images and masks to 512x512 pixels.
+            transforms.ToTensor(),          # Convert images and masks to PyTorch tensors.
         ])
 
         self.root_path = root_path
@@ -67,7 +79,7 @@ class CustomDataset(Dataset):
         # Convert mask back to PIL Image
         mask = transforms.ToPILImage()(mask)
 
-        return self.transform(img), self.transform(mask)
+        return self.image_transform(img), self.mask_transform(mask)
 
     def __len__(self):
         """
