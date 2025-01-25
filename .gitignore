@@ -8,7 +8,7 @@ trained_models
 logging
 
 # extra scripts
-utils/maybe_needed
+utils/maybe_needed/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
