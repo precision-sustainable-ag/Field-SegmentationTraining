@@ -7,3 +7,4 @@ test_masks_dir: ${paths.data_dir}/test_masks
 inference_results_dir: ${paths.data_dir}/inference_results
 yolo_weed_detection_model: ${paths.model_save_dir}/yolo_weed_detection/weights/best.pt
 unet_segmentation_model: ${paths.model_save_dir}/best_unet_segmentation_model/weights/unet_segmentation.pth
+persistent_table_path: ${paths.data_dir}/persistent_tables/merged_blobs_tables_metadata_permanent.csv
