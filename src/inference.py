@@ -36,7 +36,8 @@ class UNetInference:
 
         # Load the trained model
         self.trained_model_path = Path(cfg.paths.unet_segmentation_model)
-        self.trained_model_name = self.trained_model_path.stem
+        self.trained_model_name = self.trained_model_path.parent.parent.parent.name
+
         self.model = UNet(in_channels=3, num_classes=1).to(device)
         self.model.load_state_dict(torch.load(self.trained_model_path, map_location=device))
         self.model.eval()
@@ -163,7 +164,7 @@ class UNetInference:
         species_metrics.index.name = 'species' # Set index name to species
 
         # Save metrics to CSV
-        csv_save_dir = self.results_dir_with_timestamp / "metrics_dir"
+        csv_save_dir = self.results_dir_with_timestamp.parent / "metrics_dir"
         csv_save_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = csv_save_dir / "species_metrics.csv"
