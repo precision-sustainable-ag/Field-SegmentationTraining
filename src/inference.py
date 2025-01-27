@@ -39,7 +39,7 @@ class UNetInference:
         self.trained_model_name = self.trained_model_path.parent.parent.parent.name
 
         self.model = UNet(in_channels=3, num_classes=1).to(device)
-        self.model.load_state_dict(torch.load(self.trained_model_path, map_location=device))
+        self.model.load_state_dict(torch.load(self.trained_model_path, map_location=device, weights_only=True))
         self.model.eval()
         log.info("Model loaded and set to evaluation mode.")
 
@@ -56,7 +56,7 @@ class UNetInference:
         self.inference_results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime('%Y%m%d%H%M')
-        self.results_dir_with_timestamp = self.inference_results_dir / f"{self.trained_model_name}_{timestamp}/true_vs_predicted_masks"
+        self.results_dir_with_timestamp = self.inference_results_dir / f"{self.trained_model_name}_{timestamp}/predictions"
         self.results_dir_with_timestamp.mkdir(parents=True, exist_ok=True)
 
         # Persistent data
@@ -84,26 +84,85 @@ class UNetInference:
         dice = (2 * intersection) / (predicted_mask.sum() + true_mask.sum()) if (predicted_mask.sum() + true_mask.sum()) != 0 else 0
 
         return iou, dice
+    
 
-    def _save_visualization(self, true_mask: np.ndarray, pred_mask: np.ndarray, image_name: str):
+    def _save_metrics(self):
         """
-        Save a side-by-side visualization of the true and predicted masks.
+        Save IoU and Dice metrics per species and overall.
+        """
+        combined_species_df, species_metrics = self._data_by_speceis()
+
+        # Calculate overall metrics
+        overall_metrics = combined_species_df[['iou', 'dice_score']].mean()
+        overall_row = pd.DataFrame({
+            'mean_iou': [overall_metrics['iou']],
+            'mean_dice': [overall_metrics['dice_score']]
+        }, index=['Overall'])
+
+        # Calculate total images
+        total_images = species_metrics['count'].sum()
+        total_images_row = pd.DataFrame({
+            'count': [total_images]
+        }, index=['Total Images'])
+
+
+        species_metrics = pd.concat([species_metrics, overall_row, total_images_row])
+
+        species_metrics.index.name = 'species' # Set index name to species
+
+        # Save metrics to CSV
+        csv_save_dir = self.results_dir_with_timestamp.parent / "metrics_dir"
+        csv_save_dir.mkdir(parents=True, exist_ok=True)
+
+        output_path = csv_save_dir / "species_metrics.csv"
+        species_metrics.to_csv(output_path)
+        log.info(f"Metrics saved to {output_path}")
+
+    def _data_by_speceis(self):
+        """
+        Filter persistent table for relevant image data and calculate per-species metrics.
+
+        Returns:
+            tuple: Combined species DataFrame and per-species metrics DataFrame.
+        """
+        # Create DataFrame from image metrics
+        metrics_df = pd.DataFrame.from_dict(self.image_metrics, orient='index', columns=['iou', 'dice_score'])
+        metrics_df.index.name = 'Stem'
+
+        # Filter persistent table for relevant image data
+        df = self.persistent_table
+        filtered_df = df[df['Extension'] == 'jpg'][['Stem', 'Species']].dropna()
+        combined_species_df = pd.merge(filtered_df, metrics_df, on='Stem')
+
+        # Calculate per-species and overall metrics
+        species_metrics = combined_species_df.groupby('Species').agg(
+            count=('iou', 'count'),
+            mean_iou=('iou', 'mean'), 
+            mean_dice=('dice_score', 'mean')
+        )
+
+        return combined_species_df, species_metrics
+
+    def _save_visualization(self, img_np: np.ndarray, pred_mask: np.ndarray, image_name: str, species_dir: Path):
+        """
+        Save a side-by-side visualization of the input image and predicted mask.
 
         Args:
-            true_mask (np.ndarray): Ground truth mask.
+            img_np (np.ndarray): Input image as a numpy array.
             pred_mask (np.ndarray): Predicted mask.
             image_name (str): Name of the input image.
+            species_dir (Path): Directory to save the visualization.
         """
-        plt.figure()
+        plt.figure(figsize=(20, 10))
         plt.subplot(1, 2, 1)
-        plt.title("True Mask")
-        plt.imshow(true_mask, cmap="gray")
+        plt.title("Image")
+        plt.imshow(img_np)
 
         plt.subplot(1, 2, 2)
         plt.title("Predicted Mask")
         plt.imshow(pred_mask, cmap="gray")
 
-        output_path = self.results_dir_with_timestamp / f"{image_name}_output.png"
+        output_path = species_dir/f"{image_name}_prediction.png"
         plt.savefig(output_path)
         plt.close()
         log.info(f"Visualization saved for {image_name}")
@@ -126,6 +185,9 @@ class UNetInference:
         # Load and preprocess image
         img = self.transform(Image.open(image_path)).float().to(device).unsqueeze(0)
 
+        # Convert img to numpy array
+        img_np = img.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
+
         # Predict mask
         pred_mask = self.model(img).squeeze(0).squeeze(0).cpu().detach().numpy()
         pred_mask = (pred_mask > 0.5).astype(np.uint8)
@@ -134,49 +196,26 @@ class UNetInference:
         iou, dice = self._calculate_metrics(pred_mask, true_mask)
         self.image_metrics[image_name] = (iou, dice)
 
-        # Save visualization
-        self._save_visualization(true_mask, pred_mask, image_name)
+        # Save visualization by species
+        combined_species_df, _ = self._data_by_speceis()
 
-    def _save_metrics(self):
-        """
-        Save IoU and Dice metrics per species and overall.
-        """
-        metrics_df = pd.DataFrame.from_dict(self.image_metrics, orient='index', columns=['iou', 'dice_score'])
-        metrics_df.index.name = 'Stem'
-
-        # Filter persistent table for relevant image data
-        df = self.persistent_table
-        filtered_df = df[df['Extension'] == 'jpg'][['Stem', 'Species']].dropna()
-        combined_df = pd.merge(filtered_df, metrics_df, on='Stem')
-
-        # Calculate per-species and overall metrics
-        species_metrics = combined_df.groupby('Species').agg(mean_iou=('iou', 'mean'), mean_dice=('dice_score', 'mean'))
-
-        # Calculate overall metrics
-        overall_metrics = combined_df[['iou', 'dice_score']].mean()
-        overall_row = pd.DataFrame({
-            'mean_iou': [overall_metrics['iou']],
-            'mean_dice': [overall_metrics['dice_score']]
-        }, index=['Overall'])
-
-        species_metrics = pd.concat([species_metrics, overall_row])
-
-        species_metrics.index.name = 'species' # Set index name to species
-
-        # Save metrics to CSV
-        csv_save_dir = self.results_dir_with_timestamp.parent / "metrics_dir"
-        csv_save_dir.mkdir(parents=True, exist_ok=True)
-
-        output_path = csv_save_dir / "species_metrics.csv"
-        species_metrics.to_csv(output_path)
-        log.info(f"Metrics saved to {output_path}")
+        for stem in combined_species_df['Stem']:
+            if image_name in stem:
+                species = combined_species_df[combined_species_df['Stem'] == stem]['Species'].values[0]
+                species_dir = self.results_dir_with_timestamp / species
+                species_dir.mkdir(parents=True, exist_ok=True)
+                self._save_visualization(img_np, pred_mask, image_name, species_dir)
 
     def process_directory(self):
         """
         Perform segmentation inference for all images in the test directory.
         """
-        for img_path in tqdm(self.test_dir.rglob("*.jpg"), desc="Processing images"):
-            self.infer_single_image(img_path)
+        image_paths = list(self.test_dir.rglob("*.jpg"))
+
+        with tqdm(total=len(image_paths), desc="Processing images", unit="image") as pbar:
+            for img_path in image_paths:
+                self.infer_single_image(img_path)
+                pbar.update(1)
 
         self._save_metrics()
         log.info("Inference completed.")
