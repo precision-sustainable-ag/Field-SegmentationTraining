@@ -36,7 +36,7 @@ class UNetInference:
 
         # Load the trained model
         self.trained_model_path = Path(cfg.paths.unet_segmentation_model)
-        self.trained_model_name = self.trained_model_path.parent.parent.parent.name
+        self.trained_model_name = self.trained_model_path.parent.parent.name
 
         self.model = UNet(in_channels=3, num_classes=1).to(device)
         self.model.load_state_dict(torch.load(self.trained_model_path, map_location=device, weights_only=True))
@@ -90,6 +90,7 @@ class UNetInference:
         """
         Save IoU and Dice metrics per species and overall.
         """
+        log.info("Calculating and saving metrics...")
         combined_species_df, species_metrics = self._data_by_speceis()
 
         # Calculate overall metrics
@@ -154,6 +155,7 @@ class UNetInference:
             species_dir (Path): Directory to save the visualization.
         """
         plt.figure(figsize=(20, 10))
+        plt.suptitle(f"{image_name}: {species_dir.name}")
         plt.subplot(1, 2, 1)
         plt.title("Image")
         plt.imshow(img_np)
@@ -167,9 +169,17 @@ class UNetInference:
         plt.close()
         log.info(f"Visualization saved for {image_name}")
 
+    def _copy_unet_conf_to_inference_dir(self):
+        """
+        Copy the UNet configuration file to the inference results directory.
+        """
+        unet_conf_path = self.trained_model_path.parent.parent / "unet_conf.yaml"
+        inference_conf_path = self.results_dir_with_timestamp.parent / "unet_conf.yaml"
+        os.system(f"cp {unet_conf_path} {inference_conf_path}")
+
     def infer_single_image(self, image_path: str):
         """
-        Perform segmentation inference for a single image and save the results.
+        Perform segmentation inference for a single image and save the results alongwith the unet config of model.
 
         Args:
             image_path (str): Path to the input image.
@@ -216,8 +226,11 @@ class UNetInference:
             for img_path in image_paths:
                 self.infer_single_image(img_path)
                 pbar.update(1)
-
+        
         self._save_metrics()
+        log.info("Metrics saved.")
+        self._copy_unet_conf_to_inference_dir()
+        log.info("UNet configuration copied to inference directory.")
         log.info("Inference completed.")
 
 def main(cfg: DictConfig):
