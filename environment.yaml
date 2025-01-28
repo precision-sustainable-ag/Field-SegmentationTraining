@@ -12,8 +12,9 @@ dependencies:
   - pytorch
   - torchvision
   - tqdm
-  - pyyaml  
+  - pyyaml
+  - ultralytics  
+  
   - pip:
-      - ultralytics
       - torchmetrics
       - omegaconf
