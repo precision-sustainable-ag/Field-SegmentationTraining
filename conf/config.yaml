@@ -11,8 +11,8 @@ hydra:
 
 pipeline:
   # - unet_segmentation
-  # - inference
-  - inference_for_pipeline
+  - evaluate
+  # - inference_for_pipeline
 
 project_name: FIELD
 task: # Leave empty as placeholder

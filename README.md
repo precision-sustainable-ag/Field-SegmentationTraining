@@ -7,7 +7,7 @@ This repository provides a pipeline for training a U-Net model for semantic segm
 1. **`main.py`**: The entry point of the pipeline, allowing task-based modular execution using Hydra for configuration management.
 2. **`crop_and_resize.py`**: Utility functions for preprocessing images, including cropping and resizing.
 3. **`unet_segmentation.py`**: Script defining the U-Net architecture and training functions.
-4. **`inference.py`**: Script for performing inference using the trained U-Net model.
+4. **`evaluate.py`**: Script for performing inference using the trained U-Net model.
 5. **`inference_for_pipeline.py`**: Script for testing the trained U-Net model as it will be used in the inferencing pipeline.
 
 ## Configuration
@@ -25,9 +25,8 @@ paths:
   model_save_dir: "./models"
 
 pipeline:
-  - crop_and_resize
   - unet_segmentation
-  - inference
+  - evaluate
 ```
 
 ## Running the Pipeline
@@ -73,3 +72,6 @@ data/
   - test
   - test_masks
   - inference_results
+  - persistent_tables
+  
+  data/persistent_tables must contain the 'merged_blobs_tables_metadata_permanent' that has the metadata from the images collected.
