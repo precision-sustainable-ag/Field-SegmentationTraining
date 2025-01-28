@@ -73,3 +73,6 @@ data/
   - test
   - test_masks
   - inference_results
+  - persistent_tables
+  
+  data/persistent_tables must contain the 'merged_blobs_tables_metadata_permanent' that has the metadata from the images collected.
