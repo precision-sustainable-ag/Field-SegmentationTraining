@@ -1,5 +1,5 @@
 import os
-import csv
+import yaml
 import torch
 import logging
 import pandas as pd
@@ -12,6 +12,7 @@ from datetime import datetime
 from omegaconf import DictConfig
 from torchvision import transforms
 from src.utils.unet import UNet
+from src.utils import custom_dataset
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +51,7 @@ class UNetInference:
         ])
 
         # Directories for test data and results
+        self.data_dir = Path(cfg.paths.data_dir)
         self.test_dir = Path(cfg.paths.test_dir)
         self.test_masks_dir = Path(cfg.paths.test_masks_dir)
         self.inference_results_dir = Path(cfg.paths.inference_results_dir)
@@ -85,7 +87,6 @@ class UNetInference:
 
         return iou, dice
     
-
     def _save_metrics(self):
         """
         Save IoU and Dice metrics per species and overall.
@@ -177,6 +178,23 @@ class UNetInference:
         inference_conf_path = self.results_dir_with_timestamp.parent / "unet_conf.yaml"
         os.system(f"cp {unet_conf_path} {inference_conf_path}")
 
+    def _add_augmentation_transforms_dict_to_unet_conf(self):
+        """
+        Add augmentation transforms dictionary to the UNet configuration file.
+        """
+        # Get augmentation transforms applied during training
+        dataset = custom_dataset.CustomDataset(root_path=str(self.data_dir))
+        augmentation_dict = dataset.get_transforms_dict()
+
+        # Add augmentation transforms to unet_conf.yaml
+        unet_conf_path = self.results_dir_with_timestamp.parent / "unet_conf.yaml"
+        with open(unet_conf_path, 'r') as file:
+            unet_conf = yaml.load(file, Loader=yaml.FullLoader)
+            unet_conf.update({"augmentations":augmentation_dict})
+
+        with open(unet_conf_path, 'w') as file:
+            yaml.dump(unet_conf, file, sort_keys=False)
+
     def infer_single_image(self, image_path: str):
         """
         Perform segmentation inference for a single image and save the results alongwith the unet config of model.
@@ -230,6 +248,7 @@ class UNetInference:
         self._save_metrics()
         log.info("Metrics saved.")
         self._copy_unet_conf_to_inference_dir()
+        self._add_augmentation_transforms_dict_to_unet_conf()
         log.info("UNet configuration copied to inference directory.")
         log.info("Inference completed.")
 

@@ -23,16 +23,17 @@ class CustomDataset(Dataset):
             root_path (str): Root directory containing `train/`, `train_masks/`, `test/`, and `test_masks/`.
             test (bool, optional): Flag to indicate whether the dataset is for testing. Defaults to False (training).
         """
+        # Define a random apply transform for data augmentation
+        self.aug_random_apply = transforms.RandomApply([
+            transforms.ColorJitter(),
+            transforms.RandomSolarize(threshold=int(200/255)),
+        ], p=0.5)
 
+        # Define image and mask transformations
         self.image_transform = transforms.Compose([
             transforms.Resize((512, 512)),  # Resize images and masks to 512x512 pixels.
             transforms.ToTensor(),          # Convert images and masks to PyTorch tensors.
-            transforms.RandomApply(torch.nn.ModuleList(       # Randomly apply transformations to the images.
-                [       
-                transforms.ColorJitter(),  # Randomly change the brightness, contrast, saturation and hue of an image.
-                transforms.RandomSolarize(threshold=int(200/255)),  # Randomly solarize an image.
-                ]), p=0.5
-            ),
+            self.aug_random_apply,
         ])
 
         self.mask_transform = transforms.Compose([
@@ -47,6 +48,34 @@ class CustomDataset(Dataset):
         else:
             self.images = sorted([root_path + "/train/" + i for i in os.listdir(root_path + "/train/")])
             self.masks = sorted([root_path + "/train_masks/" + i for i in os.listdir(root_path + "/train_masks/")])
+
+    def get_transforms_dict(self):
+        """
+        Create a dictionary of all the transforms applied in the dataset in a clean and dynamic format.
+
+        Returns:
+            dict: A dictionary containing detailed and filtered image transform configurations.
+        """
+        transforms_dict = {}
+
+        for transform in self.aug_random_apply.transforms:
+            transform_name = transform.__class__.__name__.lower()
+            transform_details = {}
+
+            # Extract attributes dynamically but filter out unnecessary items
+            for attr in dir(transform):
+                if not attr.startswith("_") and not callable(getattr(transform, attr)):
+                    # Only include relevant attributes (filter out unnecessary ones)
+                    if attr not in ["T_destination", "call_super_init", "dump_patches", "training", "threshold"]:
+                        transform_details[attr] = getattr(transform, attr)
+
+            # Add a default "state" attribute to indicate that the transform is active
+            transform_details["state"] = True
+
+            # Add the transform to the dictionary
+            transforms_dict[transform_name] = transform_details
+
+        return transforms_dict
 
     def __getitem__(self, index):
         """
