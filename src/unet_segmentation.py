@@ -59,6 +59,7 @@ class TrainUNetSegmentation:
         self.batch_size = cfg.unet_conf.batch_size
         self.epochs = cfg.unet_conf.epochs
         self.model_save_dir = cfg.paths.model_save_dir
+        self.data_dir = cfg.paths.data_dir
 
         # Create directory with current date
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -220,23 +221,44 @@ class TrainUNetSegmentation:
                 f"{epoch}\t{train_loss:.4f}\t{val_loss:.4f}\t{iou:.4f}\t{dice:.4f}\n"
             )
 
+    def _add_augmentation_transforms_dict_to_unet_conf(self):
+        """
+        Add augmentation transforms dictionary to the UNet configuration file.
+        """
+        # Get augmentation transforms applied during training
+        dataset = CustomDataset(root_path=str(self.data_dir))
+        augmentation_dict = dataset.get_transforms_dict()
+
+        # Add augmentation transforms to unet_conf.yaml
+        unet_conf_path = self.results_dir_with_timestamp.parent / "unet_conf.yaml"
+        with open(unet_conf_path, 'r') as file:
+            unet_conf = yaml.load(file, Loader=yaml.FullLoader)
+            unet_conf.update({"augmentations":augmentation_dict})
+
+        with open(unet_conf_path, 'w') as file:
+            yaml.dump(unet_conf, file, sort_keys=False)
+
     def _dataset_metrics(self, cfg: DictConfig):
         """
         Logs dataset information to a JSON file.
         """
         log.info("Logging the dataset information to a JSON file.")
 
+        # Get augmentation transforms applied during training
+        augmentation_dict = CustomDataset(root_path=str(self.data_dir)).get_transforms_dict()
+
         dataset_info = {
             "learning_rate": self.learning_rate,
             "batch_size": self.batch_size,
             "epochs": self.epochs,
             "train_size": len(self.train_dataset),
-            "val_size": len(self.val_dataset)
+            "val_size": len(self.val_dataset),
+            "augmentations": augmentation_dict
         }
 
         dataset_save_path = os.path.join(self.project_dir, "unet_conf.yaml")
         with open(dataset_save_path, "w") as dataset_file:
-            yaml.dump(dataset_info, dataset_file)
+            yaml.dump(dataset_info, dataset_file, sort_keys=False)
 
 def main(cfg: DictConfig) -> None:
     """
