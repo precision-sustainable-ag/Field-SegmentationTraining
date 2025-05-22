@@ -29,107 +29,66 @@ class TrainUNetSegmentation:
 
     def __init__(self, cfg: DictConfig):
         """
-        Initializes the training pipeline.
+        Initializes the U-Net training pipeline.
 
         Args:
             cfg (DictConfig): Configuration object containing parameters 
-                              such as learning rate, batch size, and paths.
+                            such as learning rate, batch size, and paths.
         """
         log.info("Initializing U-Net training...")
-        self._init_config(cfg)
-        self._init_data(cfg)
-        self._init_model(cfg)
-
-        # Initialize metrics log file
-        self.metrics_log_path = os.path.join(self.project_dir, "results.csv")
-        with open(self.metrics_log_path, "w") as log_file:
-            log_file.write("Epoch\tTrain Loss\tVal Loss\tIoU\tGeneralized Dice Score\n")
-        log.info(f"Metrics will be logged to {self.metrics_log_path}")
-
-        log.info("Initialization complete.")
-
-    def _init_config(self, cfg: DictConfig):
-        """
-        Sets configuration parameters.
-
-        Args:
-            cfg (DictConfig): Configuration object.
-        """
+        # Load configuration parameters
         self.learning_rate = cfg.unet_conf.learning_rate
         self.batch_size = cfg.unet_conf.batch_size
         self.epochs = cfg.unet_conf.epochs
         self.model_save_dir = cfg.paths.model_save_dir
         self.data_dir = cfg.paths.data_dir
 
-        # Create directory with current date
+        # Create date-based directories for saving outputs
         current_date = datetime.now().strftime("%Y-%m-%d")
         self.current_date_dir = os.path.join(self.model_save_dir, f"runs_{current_date}")
-        os.makedirs(self.current_date_dir, exist_ok=True)
-
-        # Create directory for current project
         self.project_dir = os.path.join(self.current_date_dir, "project")
-        os.makedirs(self.project_dir, exist_ok=True)
-
-        # Create directory for trained weights
         self.weights_save_dir = os.path.join(self.project_dir, "weights")
-        os.makedirs(self.weights_save_dir, exist_ok=True)
-
-        # Save model in the created directory
         self.model_save_path = os.path.join(self.weights_save_dir, "unet_segmentation.pth")
 
-    def _init_data(self, cfg: DictConfig):
-        """
-        Loads the dataset and splits it into training and validation sets.
+        os.makedirs(self.current_date_dir, exist_ok=True)
+        os.makedirs(self.project_dir, exist_ok=True)
+        os.makedirs(self.weights_save_dir, exist_ok=True)
 
-        Args:
-            cfg (DictConfig): Configuration object containing dataset path.
-        """
+        self._load_data() # Load dataset and create train/val splits
+        self._build_model() # Initialize model, optimizer, loss function, and metrics
+        self._setup_metric_logging() # Initialize CSV file for logging metrics
+
+        log.info("Initialization complete.")
+
+    def _load_data(self):
+        """Loads the dataset and creates training/validation splits."""
         log.info("Loading dataset...")
-        dataset = CustomDataset(cfg.paths.data_dir)
+        dataset = CustomDataset(self.data_dir)
         train_size = int(0.8 * len(dataset))
         val_size = len(dataset) - train_size
         generator = torch.Generator().manual_seed(42)
 
-        # Split dataset into training and validation subsets
-        self.train_dataset, self.val_dataset = random_split(
-            dataset, [train_size, val_size], generator=generator
-        )
+        self.train_dataset, self.val_dataset = random_split(dataset, [train_size, val_size], generator=generator)
         self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
         self.val_loader = DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
         log.info(f"Dataset loaded: {train_size} train samples, {val_size} validation samples.")
 
-    def _init_model(self, cfg: DictConfig):
-        """
-        Initializes the U-Net model, optimizer, loss function, and metrics.
-
-        Args:
-            cfg (DictConfig): Configuration object with model parameters.
-        """
+    def _build_model(self):
+        """Initializes the U-Net model, optimizer, loss function, and metrics."""
         self.model = UNet(in_channels=3, num_classes=1).to(device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate)
-        self.criterion = nn.BCEWithLogitsLoss()
+        self.loss_fn = nn.BCEWithLogitsLoss()
 
-        # Initialize segmentation metrics
-        self.mean_iou = MeanIoU(num_classes=2).to(device)  # Binary segmentation: 2 classes
+        self.mean_iou = MeanIoU(num_classes=2).to(device)
         self.generalized_dice = GeneralizedDiceScore(num_classes=2).to(device)
 
-    def train_val(self):
-        """
-        Trains the U-Net model over multiple epochs and evaluates after each epoch.
-        """
-        log.info("Starting training...")
-        for epoch in range(1, self.epochs + 1):
-            train_loss = self._train_one_epoch(epoch)
-            val_loss, iou, dice = self._validate(epoch)
-            self._log_epoch_metrics(epoch, train_loss, val_loss, iou, dice)
+    def _setup_metric_logging(self):
+        """Initializes the CSV file for logging training metrics."""
+        self.metrics_log_path = os.path.join(self.project_dir, "results.csv")
+        with open(self.metrics_log_path, "w") as log_file:
+            log_file.write("Epoch\tTrain Loss\tVal Loss\tIoU\tGeneralized Dice Score\n")
+        log.info(f"Metrics will be logged to {self.metrics_log_path}")
 
-        self._dataset_metrics(DictConfig)
-
-        log.info("Training completed. Saving model...")
-
-        # Save the trained model
-        torch.save(self.model.state_dict(), self.model_save_path)
-        log.info(f"Model saved in {self.model_save_dir}.")
 
     def _train_one_epoch(self, epoch: int):
         """
@@ -147,7 +106,7 @@ class TrainUNetSegmentation:
             inputs, targets = batch[0].to(device), batch[1].to(device)
             self.optimizer.zero_grad()
             outputs = self.model(inputs)
-            loss = self.criterion(outputs, targets)
+            loss = self.loss_fn(outputs, targets)
             loss.backward()
             self.optimizer.step()
             running_loss += loss.item()
@@ -175,7 +134,7 @@ class TrainUNetSegmentation:
             for batch in tqdm(self.val_loader, desc=f"Validation Epoch {epoch}", leave=False): # batch is a tuple of (images, masks) 
                 inputs, targets = batch[0].float().to(device), batch[1].float().to(device)
                 outputs = self.model(inputs)
-                loss = self.criterion(outputs, targets)
+                loss = self.loss_fn(outputs, targets)
                 running_loss += loss.item()
 
                 # Convert predictions to binary and ensure targets are binary integers
@@ -260,6 +219,24 @@ class TrainUNetSegmentation:
         with open(dataset_save_path, "w") as dataset_file:
             yaml.dump(dataset_info, dataset_file, sort_keys=False)
 
+    def train_and_validate_multiple_epochs(self):
+        """
+        Trains the U-Net model over multiple epochs and evaluates after each epoch.
+        """
+        log.info("Starting training...")
+        for epoch in range(1, self.epochs + 1):
+            train_loss = self._train_one_epoch(epoch)
+            val_loss, iou, dice = self._validate(epoch)
+            self._log_epoch_metrics(epoch, train_loss, val_loss, iou, dice)
+
+        self._dataset_metrics(DictConfig)
+
+        log.info("Training completed. Saving model...")
+
+        # Save the trained model
+        torch.save(self.model.state_dict(), self.model_save_path)
+        log.info(f"Model saved in {self.model_save_dir}.")
+
 def main(cfg: DictConfig) -> None:
     """
     Main function to initialize and start training.
@@ -268,4 +245,4 @@ def main(cfg: DictConfig) -> None:
         cfg (DictConfig): Configuration object.
     """
     trainer = TrainUNetSegmentation(cfg)
-    trainer.train_val()
+    trainer.train_and_validate_multiple_epochs()
