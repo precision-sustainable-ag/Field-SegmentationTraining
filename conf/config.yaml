@@ -11,7 +11,8 @@ hydra:
 
 pipeline:
   # - unet_segmentation
-  - evaluate
+  - train
+  # - inference
   # - inference_for_pipeline
 
 project_name: FIELD
