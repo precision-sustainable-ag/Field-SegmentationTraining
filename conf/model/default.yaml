@@ -1,3 +1,6 @@
+arch_name: UNet
+what_ever_other_config: value
 learning_rate: 0.0001
 batch_size: 32
 epochs: 30
+

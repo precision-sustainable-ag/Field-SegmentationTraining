@@ -15,6 +15,16 @@ pipeline:
   # - inference
   # - inference_for_pipeline
 
+# These are all test variables for showing gh stuff to Sina
+project_dir: ${paths.projectdir}
+paths:
+  projectdir: ${hydra:project_dir}
+  datadir: ${paths.projectdir}/data
+  logdir: ${paths.projectdir}/logs
+  modeldir: ${paths.projectdir}/models
+  configdir: ${paths.projectdir}/conf
+  scriptsdir: ${paths.projectdir}/scripts
+
 project_name: FIELD
 task: # Leave empty as placeholder
 
