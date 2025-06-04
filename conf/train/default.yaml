@@ -1,0 +1,49 @@
+# Training hyperparameters & Lightning Trainer settings. 
+# “train.*” keys map to src/train.py (LightningModule + Trainer).
+
+train:
+  learning_rate: 1e-4
+  batch_size: ${datamodule.batch_size}
+  max_epochs: 50
+  num_workers: ${datamodule.num_workers}
+  seed: ${datamodule.seed}
+
+  # Optimizer:
+  optimizer:
+    _target_: "torch.optim.AdamW"
+    lr: ${train.learning_rate}
+    weight_decay: 1e-5
+
+  # Scheduler:
+  scheduler:
+    _target_: "torch.optim.lr_scheduler.CosineAnnealingLR"
+    T_max: 50
+    eta_min: 1e-6
+
+  # Lightning Trainer arguments:
+  trainer:
+    accelerator: "gpu"
+    devices: 1
+    precision: 16
+    deterministic: true
+
+  # Checkpoint callback:
+  checkpoint:
+    monitor: "val_iou"
+    mode: "max"
+    save_top_k: 3
+    dirpath: ${paths.model_save_dir}
+
+  # EarlyStopping callback (optional):
+  early_stop:
+    enabled: true
+    monitor: "val_iou"
+    mode: "max"
+    patience: 10
+
+  # Logger (e.g. WandB):
+  logger:
+    _target_: "pytorch_lightning.loggers.WandbLogger"
+    project: ${projects.field.project_name}
+    entity: "your_wandb_entity"
+    log_model: true

@@ -1,0 +1,18 @@
+# Project‐specific defaults for “field” segmentation.
+#
+# Anything you want to share across modes (e.g. number of classes, channels, default image size). Other projects (e.g. “semi_field”) could have their own YAML.
+
+project:
+  project_name: "field_segmentation"
+  data_subdir: "field_data"           # relative folder under base_dir/data/
+  mask_subdir: "field_masks"          # relative folder under data_dir/
+  num_classes: 1
+  input_channels: 3
+
+  image_size:
+    height: 512
+    width: 512
+
+  # If you want to version experiments, you could add:
+  #   experiment_name: "baseline_v1"
+  # and override at CLI via: projects.field.experiment_name=new_exp

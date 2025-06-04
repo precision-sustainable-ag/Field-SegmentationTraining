@@ -1,0 +1,28 @@
+# Preprocessing: resizing, normalization, cropping. 
+# Your datamodule code should use these for transforms prior to augment.
+
+preprocess:
+  resize:
+    enabled: true
+    height: ${projects.field.image_size.height}
+    width: ${projects.field.image_size.width}
+
+  normalize:
+    enabled: true
+    mean: [0.485, 0.456, 0.406]
+    std:  [0.229, 0.224, 0.225]
+
+  center_crop:
+    enabled: false
+    size:  ${projects.field.image_size.height}
+
+  # If you want to remap mask values (e.g. 0→0, 255→1):
+  remap_mask:
+    enabled: true
+    mapping: { "0": 0, "255": 1 }
+
+  # (Optional) any morphological cleanup on masks before training:
+  mask_morphology:
+    enabled: false
+    operation: "open"         # "open", "close", "erode", "dilate"
+    kernel_size: 3
