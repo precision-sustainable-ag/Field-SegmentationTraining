@@ -1,8 +1,8 @@
 ```sh
 field_segmentation/                    # ← top‐level repo
 ├── README.md                          # 1. High‐level project overview, setup instructions, usage examples
-├── LICENSE                            # 2. License file (e.g. MIT, Apache‐2.0)
-├── environment.yaml  or  setup.py     # 3. Conda‐ or pip‐based dependencies, installation
+├── LICENSE                            # 2. License file (e.g. MIT, Apache‐2.0, etc)
+├── environment.yaml  or  setup.py     # 3. Conda‐ or pip‐based dependencies, installation instructions
 ├── requirements.txt                   # 4. Pin versions for “pip install -r requirements.txt”
 ├── main.py                            # 5a. Entry‐point: @hydra.main(config_path="conf", config_name="config"), dispatches to maskgen, preprocess, train, inference
 │
@@ -23,7 +23,7 @@ field_segmentation/                    # ← top‐level repo
 │   │   └── default.yaml               #     • horizontal_flip, vertical_flip, random_rotate, color_jitter, random_resized_crop, gaussian_blur, etc.
 │   │
 │   ├── preprocess/                    # 6f. “preprocess” group: resizing, normalization, cropping, mask remapping, plus dataset folders
-│   │   └── default.yaml               #     • resize.enabled/height/width, normalize.enabled/mean/std, center_crop.enabled/size, remap_mask.enabled/mapping, mask_morphology settings, preprocess.image_dir, preprocess.mask_dir, preprocess.processed_image_dir, preprocess.processed_mask_dir
+│   │   └── default.yaml               #     • resize.enabled/height/width, normalize.enabled/mean/std, center_crop.enabled/size, remap_mask.enabled/mapping, mask_morphology settings
 │   │
 │   ├── maskgen/                       # 6g. “maskgen” group: mask generation/refinement settings
 │   │   └── default.yaml               #     • classical.enabled/method/min_area/morph settings, sam.enabled/checkpoint/model_type/prompts_csv, refine_with_model.enabled/checkpoint/threshold, manual_qc.enabled/output_qc_dir/overlay_opacity, output_dir
