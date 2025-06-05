@@ -1,0 +1,21 @@
+name: field_segmentation_training
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pandas
+  - matplotlib
+  - pillow 
+  - pytorch
+  - torchvision
+  - tqdm
+  - pyyaml
+  - ultralytics  
+  
+  - pip:
+      - torchmetrics
+      - omegaconf
+      - hydra-core

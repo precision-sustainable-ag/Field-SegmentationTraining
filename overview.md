@@ -1,3 +1,4 @@
+```sh
 field_segmentation/                    # ← top‐level repo
 ├── README.md                          # 1. High‐level project overview, setup instructions, usage examples
 ├── LICENSE                            # 2. License file (e.g. MIT, Apache‐2.0, etc.)
@@ -83,3 +84,4 @@ field_segmentation/                    # ← top‐level repo
 └── .github/                           # 10. CI/CD workflows, code formatting, etc.
     └── workflows/
         └── ci.yaml                    # 10a. Run pytest, flake8, black, isort, plus any sanity checks (e.g. one‐epoch train)
+```
