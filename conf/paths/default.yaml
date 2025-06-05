@@ -1,11 +1,24 @@
-workdir: ${hydra:runtime.cwd}  # where the code is executed
-logdir: ${paths.workdir}/logging
-data_dir: ${paths.workdir}/data
-model_save_dir: ${paths.workdir}/trained_models
-test_dir: ${paths.data_dir}/test
-# test_dir: ${paths.data_dir}/test_full_size_images_temp
-test_masks_dir: ${paths.data_dir}/test_masks
-inference_results_dir: ${paths.data_dir}/inference_results
-yolo_weed_detection_model: ${paths.model_save_dir}/yolo_weed_detection/weights/best.pt
-unet_segmentation_model: ${paths.model_save_dir}/best_unet_segmentation_model/weights/unet_segmentation.pth
-persistent_table_path: ${paths.data_dir}/persistent_tables/merged_blobs_tables_metadata_permanent.csv
+# All filesystem paths, built from base_dir + project‐specific subfolders
+
+paths:
+  base_dir: ${hydra:runtime.cwd}                      # usually the repo root
+  data_dir: ${paths.base_dir}/data/${projects.field.data_subdir}
+  image_dir: ${paths.data_dir}/images
+  mask_dir: ${paths.data_dir}/masks
+  processed_image_dir: ${paths.data_dir}/processed/images
+  processed_mask_dir: ${paths.data_dir}/processed/masks
+  maskgen_output_dir: ${paths.data_dir}/maskgen_out
+
+  model_save_dir: ${paths.base_dir}/trained_models/${projects.field.project_name}
+  inference_results_dir: ${paths.base_dir}/inference_results/${projects.field.project_name}
+  reports_dir: ${paths.base_dir}/reports/${projects.field.project_name}
+
+  # If you keep a separate “test” set:
+  test_image_dir: ${paths.data_dir}/test/images
+  test_mask_dir: ${paths.data_dir}/test/masks
+
+  logdir: ${paths.base_dir}/logging/${projects.field.project_name}
+
+  # (Optional) any external weights you need, e.g. SAM model or YOLO:
+  sam_checkpoint: "${paths.base_dir}/external_weights/sam_vit_b.pth"
+  yolo_model_path: "${paths.base_dir}/external_weights/yolo_weed.pt"
