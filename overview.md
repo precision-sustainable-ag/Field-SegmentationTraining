@@ -1,7 +1,7 @@
 ```sh
 field_segmentation/                    # ← top‐level repo
 ├── README.md                          # 1. High‐level project overview, setup instructions, usage examples
-├── LICENSE                            # 2. License file (e.g. MIT, Apache‐2.0, etc)
+├── LICENSE                            # 2. License file (e.g. MIT, Apache‐2.0, etc.)
 ├── environment.yaml  or  setup.py     # 3. Conda‐ or pip‐based dependencies, installation instructions
 ├── requirements.txt                   # 4. Pin versions for “pip install -r requirements.txt”
 ├── main.py                            # 5a. Entry‐point: @hydra.main(config_path="conf", config_name="config"), dispatches to maskgen, preprocess, train, inference
