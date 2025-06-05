@@ -7,8 +7,6 @@ This script:
 - Opens the FiftyOne App for interactive sample selection
 - Saves the names of selected samples to a text file
 
-Author: Navjot Singh
-Date: Updated on 2025-06-04
 """
 
 import fiftyone as fo
@@ -115,8 +113,11 @@ def create_fiftyone_dataset(image_dir, mask_dir, dataset_name, port):
         session.close()
         print("Session closed.")
 
-    output_file = Path(image_dir).parent / "selected_samples_with_voxel51.txt"
-    save_selected_samples(dataset, session, output_file)
+    if session.selected:
+        output_file = Path(image_dir).parent / "selected_samples_with_voxel51.txt"
+        save_selected_samples(dataset, session, output_file)
+    else:
+        print("No samples were selected. No file written.")
 
 if __name__ == "__main__":
     image_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/train")
