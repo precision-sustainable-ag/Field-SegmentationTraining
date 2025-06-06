@@ -2,46 +2,52 @@
 Script to create and visualize a FiftyOne dataset for image segmentation tasks.
 
 This script:
-- Loads image and corresponding mask pairs
+- Loads image and corresponding mask pairs (including an optional secondary mask)
 - Creates FiftyOne samples with segmentation masks
 - Opens the FiftyOne App for interactive sample selection
 - Saves the names of selected samples to a text file
-
 """
-
 import fiftyone as fo
 from PIL import Image
 import numpy as np
 from pathlib import Path
 from datetime import datetime
 
-def load_samples(image_dir, mask_dir):
+def load_samples(image_dir, ground_truth_mask_dir, prediction_mask_dir):
     """
     Loads image and corresponding mask files into FiftyOne samples.
 
     Args:
         image_dir (str or Path): Directory containing .jpg images.
-        mask_dir (str or Path): Directory containing .png masks with same stem names.
+        ground_truth_mask_dir (str or Path): Directory containing ground truth .png masks.
+        prediction_mask_dir (str or Path, optional): Directory containing prediction .png masks.
 
     Returns:
-        List[fo.Sample]: List of FiftyOne samples with ground truth segmentation masks.
+        List[fo.Sample]: List of FiftyOne samples with segmentation masks.
     """
     samples = []
 
     for image_path in Path(image_dir).glob("*.jpg"):
         stem = image_path.stem
-        mask_path = Path(mask_dir) / f"{stem}.png"
+        ground_truth_mask_path = Path(ground_truth_mask_dir) / f"{stem}.png"
 
-        if not mask_path.exists():
-            print(f"Warning: Mask not found for {image_path.name}. Skipping.")
+        if not ground_truth_mask_path.exists():
+            print(f"Warning: Ground truth mask not found for {image_path.name}. Skipping.")
             continue
 
-        mask_array = np.array(Image.open(mask_path).convert("L"), dtype=np.uint8)
+        ground_truth_mask_array = np.array(Image.open(ground_truth_mask_path).convert("L"), dtype=np.uint8)
 
-        sample = fo.Sample(
-            filepath=str(image_path),
-            ground_truth=fo.Segmentation(mask=mask_array)
-        )
+        sample = fo.Sample(filepath=str(image_path))
+        sample["ground_truth"] = fo.Segmentation(mask=ground_truth_mask_array)
+
+        if prediction_mask_dir:
+            prediction_mask_path = Path(prediction_mask_dir) / f"{stem}.png"
+            if prediction_mask_path.exists():
+                prediction_mask_array = np.array(Image.open(prediction_mask_path).convert("L"), dtype=np.uint8)
+                sample["prediction"] = fo.Segmentation(mask=prediction_mask_array)
+            else:
+                print(f"Note: Prediction not found for {image_path.name}.")
+
         samples.append(sample)
 
     return samples
@@ -88,17 +94,18 @@ def save_selected_samples(dataset, session, output_path):
 
     print(f"Selected samples written to {output_path}")
 
-def create_fiftyone_dataset(image_dir, mask_dir, dataset_name, port):
+def create_fiftyone_dataset(image_dir, ground_truth_mask_dir, prediction_mask_dir, dataset_name, port):
     """
     Main pipeline to create a FiftyOne dataset and launch the app for visualization.
 
     Args:
         image_dir (str or Path): Path to the image directory.
-        mask_dir (str or Path): Path to the mask directory.
+        ground_truth_mask_dir (str or Path): Path to the ground truth mask directory.
+        prediction_mask_dir (str or Path): Path to the prediction mask directory.
         dataset_name (str): Name of the FiftyOne dataset.
         port (int): Port number to run the FiftyOne app on.
     """
-    samples = load_samples(image_dir, mask_dir)
+    samples = load_samples(image_dir, ground_truth_mask_dir, prediction_mask_dir)
     dataset = get_or_create_dataset(dataset_name, samples)
 
     session = fo.launch_app(dataset, port=port)
@@ -120,14 +127,16 @@ def create_fiftyone_dataset(image_dir, mask_dir, dataset_name, port):
         print("No samples were selected. No file written.")
 
 if __name__ == "__main__":
-    image_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/train")
-    mask_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/train_mask")
+    image_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/image_cropout")
+    ground_truth_mask_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/ground_truth")
+    prediction_mask_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/predicted_mask")  # <-- Set your secondary mask path here
     dataset_name = "IMP_non_green_stem_issue6"
     port = 5152
 
     create_fiftyone_dataset(
         image_dir,
-        mask_dir,
+        ground_truth_mask_dir,
+        prediction_mask_dir,
         dataset_name,
         port
     )
