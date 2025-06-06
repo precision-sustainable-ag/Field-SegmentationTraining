@@ -2,7 +2,7 @@
 Script to create and visualize a FiftyOne dataset for image segmentation tasks.
 
 This script:
-- Loads image and corresponding mask pairs (including an optional secondary mask)
+- Loads image and corresponding mask pairs ground truth and predictions
 - Creates FiftyOne samples with segmentation masks
 - Opens the FiftyOne App for interactive sample selection
 - Saves the names of selected samples to a text file
