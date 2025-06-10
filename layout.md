@@ -1,3 +1,4 @@
+```mermaid
 flowchart LR
   %% Entry & Dispatch
   subgraph Entry["Entry & Dispatch"]
@@ -63,3 +64,4 @@ flowchart LR
     EvalStep --> ReportOut["Save Reports<br/>${paths.reports_dir}/evaluation"]
     EvalStep --> VizOut["Generate Visualizations"]
   end
+```
