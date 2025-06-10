@@ -16,6 +16,9 @@ preprocess:
     enabled: false
     size:  ${projects.field.image_size.height}
 
+  processed_image_dir: ${paths.processed_image_dir}
+  processed_mask_dir:  ${paths.processed_mask_dir}
+
   # If you want to remap mask values (e.g. 0→0, 255→1):
   remap_mask:
     enabled: true
