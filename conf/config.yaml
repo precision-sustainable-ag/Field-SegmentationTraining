@@ -11,6 +11,7 @@ defaults:
   - preprocess: default        # resizing / normalization / cropping
   - maskgen: default           # mask generation/refinement settings
   - inference: default         # inference & evaluation settings
+  - evaluation: default         # evaluation metrics and settings
   - hydra/job_logging: custom  # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 

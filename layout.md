@@ -1,48 +1,65 @@
-```mermaid
-flowchart TB
-    %% Top-level Hydra dispatch
-    subgraph Entry
-      A[Hydra Config\nconf/config.yaml]
-      B[main.py\n@hydra.main]
-    end
+flowchart LR
+  %% Entry & Dispatch
+  subgraph Entry["Entry & Dispatch"]
+    direction LR
+    CFG["conf/config.yaml"]
+    MAIN["main.py<br/>(@hydra.main)"]
+  end
+  CFG --> MAIN
 
-    A --> B
-    B -->|mode=preprocess| Pre
-    B -->|mode=maskgen| Mask
-    B -->|mode=train| Train
-    B -->|mode=inference| Infer
+  MAIN -->|mode=preprocess| PRE["Preprocess Mode"]
+  MAIN -->|mode=maskgen| MASK["MaskGen Mode"]
+  MAIN -->|mode=train| TRAIN["Train Mode"]
+  MAIN -->|mode=inference| INF["Inference Mode"]
+  MAIN -->|mode=evaluation| EVAL["Evaluation Mode"]
 
-    %% Preprocessing mode
-    subgraph Preprocess [Preprocess]
-      direction LR
-      Raw[Raw Images & Masks] --> P1[Resize / Normalize / Crop\n(conf/preprocess)]
-      P1 --> Processed[Processed Images & Masks]
-    end
+  %% Preprocess
+  subgraph PRE["Preprocess Mode"]
+    direction TB
+    RawImgs["Raw Images<br/>${paths.image_dir}"]
+    RawMasks["Raw Masks<br/>${paths.mask_dir}"]
+    RawImgs --> PSTEP["Resize / Normalize / Crop<br/>(conf/preprocess/default.yaml)"]
+    RawMasks --> PSTEP
+    PSTEP --> ProcImgs["Processed Images<br/>${paths.processed_image_dir}"]
+    PSTEP --> ProcMasks["Processed Masks<br/>${paths.processed_mask_dir}"]
+  end
 
-    %% Mask generation mode
-    subgraph Maskgen [MaskGen]
-      direction LR
-      Raw --> M1[Classical CV\n(conf/maskgen)]
-      Raw --> M2[SAM Proposals\n(conf/maskgen)]
-      Raw --> M3[Model-Refinement\n(conf/maskgen)]
-      M1 & M2 & M3 --> QC[QC Overlays]
-      QC --> GenMasks[Final Masks\n(conf/paths → output_dir)]
-    end
+  %% MaskGen
+  subgraph MASK["MaskGen Mode"]
+    direction TB
+    SourceImgs["Raw Images<br/>${paths.image_dir}"]
+    SourceImgs --> CVSTEP["Classical CV Thresholding<br/>(conf/maskgen/default.yaml)"]
+    SourceImgs --> SAMSTEP["SAM Proposals<br/>(conf/maskgen/default.yaml)"]
+    SourceImgs --> REFSTEP["Model Refinement<br/>checkpoint=${paths.model_save_dir}/best.ckpt"]
+    CVSTEP & SAMSTEP & REFSTEP --> QCSTEP["Generate QC Overlays<br/>${paths.maskgen_output_dir}/qc"]
+    QCSTEP --> FinalMasks["Final Masks<br/>${paths.maskgen_output_dir}"]
+  end
 
-    %% Training mode
-    subgraph Train [Train]
-      direction LR
-      Processed --> Aug[Augmentation\n(conf/augment)]
-      Aug --> DL[DataLoader\n(src/data/dataset.py + augmentation.py)]
-      DL --> Lit[Lightning Trainer\n(src/models/lit_segmentation.py\n+ conf/train)]
-      Lit --> Checkpoint[Save Checkpoints & Logs\n(conf/paths)]
-    end
+  %% Train
+  subgraph TRAIN["Train Mode"]
+    direction TB
+    ProcImgs --> AUGSTEP["Augmentation<br/>(conf/augment/default.yaml)"]
+    AUGSTEP --> DATALOAD["Dataset & DataLoader<br/>data/augmentation.py + data/dataset.py"]
+    DATALOAD --> LITMOD["LitSegmentation Module<br/>(models/lit_segmentation.py)"]
+    LITMOD --> FITSTEP["Trainer.fit()<br/>(conf/train/default.yaml)"]
+    FITSTEP --> Checkpoints["Save Checkpoints & Logs<br/>${paths.model_save_dir}, ${paths.logdir}"]
+  end
 
-    %% Inference mode
-    subgraph Infer [Inference]
-      direction LR
-      Checkpoint --> InfMod[Inference Module\n(src/inference/inference.py\n+ conf/inference)]
-      Processed --> InfMod
-      InfMod --> Preds[Predicted Masks & Overlays]
-      InfMod --> Reports[Compute Metrics & Save\n(conf/paths)]
-    end
+  %% Inference
+  subgraph INF["Inference Mode"]
+    direction TB
+    Checkpoints --> INFMOD["Inference Module<br/>(src/inference/inference.py)"]
+    ProcImgs --> INFMOD
+    INFMOD --> PredMasks["Predicted Masks<br/>${paths.inference_results_dir}"]
+    PredMasks --> SaveOut["Save to directory"]
+    INFMOD --> MetricsOut["Compute & Save Metrics<br/>(conf/inference.evaluate)"]
+  end
+
+  %% Evaluation
+  subgraph EVAL["Evaluation Mode"]
+    direction TB
+    PredMasks --> EvalStep["Compute Metrics<br/>(conf/evaluation/default.yaml)"]
+    GroundTruth["Ground‐Truth Masks<br/>${paths.test_mask_dir}"] --> EvalStep
+    EvalStep --> ReportOut["Save Reports<br/>${paths.reports_dir}/evaluation"]
+    EvalStep --> VizOut["Generate Visualizations"]
+  end

@@ -31,7 +31,10 @@ field_segmentation/                    # ← top‐level repo
 │   ├── inference/                     # 6h. “inference” group: inference & evaluation settings
 │   │   └── default.yaml               #     • inference.checkpoint_path, batch_size, device, tta.enabled/horizontal_flip/vertical_flip, threshold, save_masks, save_overlay, evaluate.enabled/test_image_dir/test_mask_dir/report_csv
 │   │
-│   └── hydra/                         # 6i. Hydra overrides (job_logging, output dir, etc.)
+│   ├── evaluation/                    # 6i. “evaluation” group: evaluation and visualization settings
+│   │   └── default.yaml               #     • metrics (IoU, Dice, accuracy), evaluation splits, thresholds, visualizations     
+│   │
+│   └── hydra/                         # 6j. Hydra overrides (job_logging, output dir, etc.)
 │       └── job_logging/
 │           └── custom.yaml            #     • Custom Python logging config (formatters, handlers, loggers)
 │
