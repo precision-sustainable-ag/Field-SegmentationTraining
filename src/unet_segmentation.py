@@ -9,6 +9,8 @@ from utils.unet import UNet
 from torch import optim, nn
 from datetime import datetime
 from omegaconf import DictConfig
+from src.utils.early_stopping_train import EarlyStopping
+import segmentation_models_pytorch as smp
 from src.utils.custom_dataset import CustomDataset
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.segmentation import MeanIoU, GeneralizedDiceScore
@@ -76,6 +78,14 @@ class TrainUNetSegmentation:
     def _build_model(self):
         """Initializes the U-Net model, optimizer, loss function, and metrics."""
         self.model = UNet(in_channels=3, num_classes=1).to(device)
+
+        self.model = smp.Unet(
+            encoder_name="resnet34",
+            encoder_weights="imagenet",
+            in_channels=3,
+            classes=1
+        ).to(device)
+
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCEWithLogitsLoss()
 
@@ -224,9 +234,25 @@ class TrainUNetSegmentation:
         Trains the U-Net model over multiple epochs and evaluates after each epoch.
         """
         log.info("Starting training...")
+        early_stopper = EarlyStopping(patience=5, min_delta=0.001)
+        best_val_loss = float('inf')
+
         for epoch in range(1, self.epochs + 1):
             train_loss = self._train_one_epoch(epoch)
             val_loss, iou, dice = self._validate(epoch)
+
+            # Save model if validation loss improves
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                torch.save(self.model.state_dict(), self.model_save_path)
+                print(f"✅ Saved best model at epoch {epoch}")
+
+            # Early stopping check
+            early_stopper(val_loss)
+            if early_stopper.early_stop:
+                print(f"⏹️ Early stopping at epoch {epoch}")
+                break
+
             self._log_epoch_metrics(epoch, train_loss, val_loss, iou, dice)
 
         self._dataset_metrics(DictConfig)
