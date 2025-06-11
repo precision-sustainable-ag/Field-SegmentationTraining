@@ -1,132 +1,115 @@
 import os
+import random
 import torch
 import numpy as np
 from PIL import Image
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
+import torchvision.transforms.functional as TF
 
 class CustomDataset(Dataset):
     """
     A PyTorch Dataset class for loading images and their corresponding masks for segmentation tasks.
-
-    Attributes:
-        root_path (str): Root directory containing training and testing data.
-        images (list): Sorted list of image file paths.
-        masks (list): Sorted list of mask file paths.
-        transform (callable): Transformation to be applied to the images and masks.
     """
     def __init__(self, root_path, test=False):
         """
-        Initialize the dataset by specifying the root directory and whether it's for testing or training.
+        Initialize the dataset.
 
         Args:
-            root_path (str): Root directory containing `train/`, `train_masks/`, `test/`, and `test_masks/`.
-            test (bool, optional): Flag to indicate whether the dataset is for testing. Defaults to False (training).
+            root_path (str): Directory containing train/test and corresponding masks.
+            test (bool): If True, load test data. Otherwise, load training data.
         """
-        # Define a random apply transform for data augmentation
         self.aug_random_apply = transforms.RandomApply([
             transforms.ColorJitter(),
             transforms.RandomSolarize(threshold=int(200/255)),
         ], p=0.5)
 
-        # Define image and mask transformations
-        self.image_transform = transforms.Compose([
-            transforms.Resize((512, 512)),  # Resize images and masks to 512x512 pixels.
-            transforms.ToTensor(),          # Convert images and masks to PyTorch tensors.
-            self.aug_random_apply,
-        ])
-
-        self.mask_transform = transforms.Compose([
-            transforms.Resize((512, 512)),  # Resize images and masks to 512x512 pixels.
-            transforms.ToTensor(),          # Convert images and masks to PyTorch tensors.
-        ])
-
         self.root_path = root_path
         if test:
-            self.images = sorted([root_path + "/test/" + i for i in os.listdir(root_path + "/test/")])
-            self.masks = sorted([root_path + "/test_masks/" + i for i in os.listdir(root_path + "/test_masks/")])
+            self.images = sorted([os.path.join(root_path, "test", i) for i in os.listdir(os.path.join(root_path, "test"))])
+            self.masks = sorted([os.path.join(root_path, "test_masks", i) for i in os.listdir(os.path.join(root_path, "test_masks"))])
         else:
-            self.images = sorted([root_path + "/train/" + i for i in os.listdir(root_path + "/train/")])
-            self.masks = sorted([root_path + "/train_masks/" + i for i in os.listdir(root_path + "/train_masks/")])
+            self.images = sorted([os.path.join(root_path, "train", i) for i in os.listdir(os.path.join(root_path, "train"))])
+            self.masks = sorted([os.path.join(root_path, "train_masks", i) for i in os.listdir(os.path.join(root_path, "train_masks"))])
 
     def get_transforms_dict(self):
         """
-        Create a dictionary of all the transforms applied in the dataset in a clean and dynamic format.
+        Create a dictionary of the photometric transforms applied in the dataset.
 
         Returns:
-            dict: A dictionary containing detailed and filtered image transform configurations.
+            dict: A dictionary containing image transform configurations.
         """
         transforms_dict = {}
-
         for transform in self.aug_random_apply.transforms:
             transform_name = transform.__class__.__name__.lower()
             transform_details = {}
 
-            # Extract attributes dynamically but filter out unnecessary items
             for attr in dir(transform):
                 if not attr.startswith("_") and not callable(getattr(transform, attr)):
-                    # Only include relevant attributes (filter out unnecessary ones)
                     if attr not in ["T_destination", "call_super_init", "dump_patches", "training", "threshold"]:
                         transform_details[attr] = getattr(transform, attr)
 
-            # Add a default "state" attribute to indicate that the transform is active
             transform_details["state"] = True
-
-            # Add the transform to the dictionary
             transforms_dict[transform_name] = transform_details
 
         return transforms_dict
 
     def __getitem__(self, index):
         """
-        Get the image and mask at the specified index.
-
-        This method retrieves an image and its corresponding mask from the dataset 
-        at the given index, applies necessary transformations, and returns them 
-        as tensors.
+        Get image and corresponding mask with augmentations.
 
         Args:
-            index (int): Index of the dataset item. This index corresponds to 
-                        the image and mask to be fetched.
+            index (int): Index of data item.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]: A tuple containing the transformed 
-                                            image and mask tensors. The image 
-                                            is transformed for model input, 
-                                            and the mask is a binary tensor 
-                                            suitable for segmentation tasks.
+            Tuple[Tensor, Tensor]: Transformed image and mask tensors.
         """
-        img = Image.open(self.images[index]).convert("RGB")  # Open and convert image to RGB.
-        mask = Image.open(self.masks[index]).convert("L")    # Open and convert mask to grayscale.
+        img = Image.open(self.images[index]).convert("RGB")
+        mask = Image.open(self.masks[index]).convert("L")
 
-        # Convert the PIL Image to a NumPy array
-        mask = np.array(mask)
+        # Resize
+        img = TF.resize(img, (512, 512))
+        mask = TF.resize(mask, (512, 512))
 
-        # Normalize the mask and convert it to a PyTorch tensor
-        mask = torch.round(torch.Tensor(mask) / 255.0)
+        # Geometric augmentations (synchronized)
+        if random.random() > 0.5:
+            img = TF.hflip(img)
+            mask = TF.hflip(mask)
+        if random.random() > 0.5:
+            img = TF.vflip(img)
+            mask = TF.vflip(mask)
+        if random.random() > 0.5:
+            angle = random.uniform(-15, 15)
+            img = TF.rotate(img, angle)
+            mask = TF.rotate(mask, angle)
 
-        # Convert mask back to PIL Image
-        mask = transforms.ToPILImage()(mask)
+        # Photometric augmentations (only image)
+        img = self.aug_random_apply(img)
 
-        return self.image_transform(img), self.mask_transform(mask)
+        # Convert to tensors
+        img = TF.to_tensor(img)
+        mask = TF.to_tensor(mask)
+        mask = torch.round(mask)  # Ensure binary
+
+        return img, mask
 
     def __len__(self):
         """
-        Get the total number of samples in the dataset.
+        Total number of items in the dataset.
 
         Returns:
-            int: Number of images in the dataset.
+            int: Number of images.
         """
         return len(self.images)
 
     def get_file_paths(self, idx):
         """
-        Get the file paths for the image and mask at the specified index.
+        Get file paths of image and mask.
 
         Args:
-            idx (int): Index of the dataset item.
+            idx (int): Index of data item.
 
         Returns:
-            Tuple[str, str]: File paths of the image and corresponding mask.
+            Tuple[str, str]: Image and mask file paths.
         """
         return self.images[idx], self.masks[idx]
