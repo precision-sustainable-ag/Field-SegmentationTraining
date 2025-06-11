@@ -17,7 +17,7 @@ flowchart LR
   %% Preprocess
   subgraph PRE["Preprocess Mode"]
     direction TB
-    RawImgs["Raw Images<br/>${paths.image_dir}"]
+    RawImgs["Developed Images<br/>${paths.image_dir}"]
     RawMasks["Raw Masks<br/>${paths.mask_dir}"]
     RawImgs --> PSTEP["Resize / Normalize / Crop<br/>(conf/preprocess/default.yaml)"]
     RawMasks --> PSTEP
@@ -28,7 +28,7 @@ flowchart LR
   %% MaskGen
   subgraph MASK["MaskGen Mode"]
     direction TB
-    SourceImgs["Raw Images<br/>${paths.image_dir}"]
+    SourceImgs["Developed Images<br/>${paths.image_dir}"]
     SourceImgs --> CVSTEP["Classical CV Thresholding<br/>(conf/maskgen/default.yaml)"]
     SourceImgs --> SAMSTEP["SAM Proposals<br/>(conf/maskgen/default.yaml)"]
     SourceImgs --> REFSTEP["Model Refinement<br/>checkpoint=${paths.model_save_dir}/best.ckpt"]
