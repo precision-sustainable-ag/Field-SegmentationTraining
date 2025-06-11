@@ -2,10 +2,8 @@ import os
 import yaml
 import torch
 import logging
-import numpy as np
 
 from tqdm import tqdm
-from utils.unet import UNet
 from torch import optim, nn
 from datetime import datetime
 from omegaconf import DictConfig
@@ -77,8 +75,6 @@ class TrainUNetSegmentation:
 
     def _build_model(self):
         """Initializes the U-Net model, optimizer, loss function, and metrics."""
-        self.model = UNet(in_channels=3, num_classes=1).to(device)
-
         self.model = smp.Unet(
             encoder_name="resnet34",
             encoder_weights="imagenet",
