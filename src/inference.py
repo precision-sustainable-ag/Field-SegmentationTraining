@@ -1,4 +1,3 @@
-import os
 import cv2
 import torch
 import logging
@@ -9,11 +8,10 @@ from tqdm import tqdm
 from pathlib import Path
 from ultralytics import YOLO
 from datetime import datetime
-from torch.nn import DataParallel
 from torchvision import transforms
-from src.utils.unet import UNet
 from omegaconf import DictConfig
 import matplotlib.pyplot as plt
+import segmentation_models_pytorch as smp
 
 # Configure logging
 logging.basicConfig(
@@ -76,7 +74,14 @@ class UNetInference:
 
         # Load UNet model
         log.info("Loading UNet model for segmentation.")
-        self.seg_model = UNet(in_channels=3, num_classes=1).to(device)
+
+        self.seg_model = smp.Unet(
+            encoder_name="resnet34",  # Encoder architecture
+            encoder_weights="imagenet",  # Pretrained weights for the encoder
+            in_channels=3,  # Number of input channels (RGB image)
+            classes=1,  # Number of output classes (binary segmentation)
+        ).to(device)
+
         self.seg_model.load_state_dict(torch.load(self.trained_model_path, map_location=device))
         self.seg_model.eval()
         log.info("UNet model loaded and set to evaluation mode.")
