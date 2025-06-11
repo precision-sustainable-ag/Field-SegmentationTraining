@@ -76,6 +76,35 @@ field_segmentation/                    # ← top‐level repo
 │   ├── test_lit_module.py             # 9c. Tests for Lightning training_step/validation_step logic
 │   └── test_maskgen.py                # 9d. (Optional) Tests for mask-generation code
 │
+├── projects/                          # 11. Project-specific experiment folders
+│   └── {project.name}/
+│       ├── preprocess/
+│       │   └── data/
+│       │       ├── data_stats.txt
+│       │       ├── images.txt
+│       │       └── train_val_test_split/
+│       │           ├── train/
+│       │           │   ├── images/
+│       │           │   └── masks/
+│       │           ├── val/
+│       │           │   ├── images/
+│       │           │   └── masks/
+│       │           └── test/
+│       │               ├── images/
+│       │               └── masks/
+│       │
+│       ├── train/
+│       │   └── version_0/                   # Automatically set and incremented by PyTorch Lightning
+│       │       ├── checkpoints/             # Best model and last checkpoint
+│       │       ├── batch_samples/           # Sample batch images for validation/augmentation view
+│       │       ├── metrics.csv
+│       │       ├── config.yaml              # Copy of all configs in Hydra (auto-managed)
+│       │       └── train.log                # Training log
+│       │
+│       ├── maskgen/                         # TBD
+│       ├── inference/                       # TBD
+│       └── evaluate/                        # TBD
+|
 └── .github/                           # 10. CI/CD workflows, code formatting, etc.
     └── workflows/
         └── ci.yaml                    # 10a. Run pytest, flake8, black, isort, plus any sanity checks (one-epoch train, maskgen sanity)
