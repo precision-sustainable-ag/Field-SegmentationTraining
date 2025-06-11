@@ -1,24 +1,14 @@
 # All filesystem paths, built from base_dir + project‐specific subfolders
 
-paths:
-  base_dir: ${hydra:runtime.cwd}                      # usually the repo root
-  data_dir: ${paths.base_dir}/data/${projects.field.data_subdir}
-  image_dir: ${paths.data_dir}/images
-  mask_dir: ${paths.data_dir}/masks
-  processed_image_dir: ${paths.data_dir}/processed/images
-  processed_mask_dir: ${paths.data_dir}/processed/masks
-  maskgen_output_dir: ${paths.data_dir}/maskgen_out
+base_dir: ${hydra:runtime.cwd}                      # usually the repo root
+data_dir: ${paths.base_dir}/data
 
-  model_save_dir: ${paths.base_dir}/trained_models/${projects.field.project_name}
-  inference_results_dir: ${paths.base_dir}/inference_results/${projects.field.project_name}
-  reports_dir: ${paths.base_dir}/reports/${projects.field.project_name}
+project_dir: ${paths.base_dir}/projects/${project.name}  
+project_preprocess_dir: ${paths.project_dir}/preprocess  
+project_train_dir: ${paths.project_dir}/train  
+project_maskgen_dir: ${paths.project_dir}/maskgen  
+project_inference_dir: ${paths.project_dir}/inference  
 
-  # If you keep a separate “test” set:
-  test_image_dir: ${paths.data_dir}/test/images
-  test_mask_dir: ${paths.data_dir}/test/masks
-
-  logdir: ${paths.base_dir}/logging/${projects.field.project_name}
-
-  # (Optional) any external weights you need, e.g. SAM model or YOLO:
-  sam_checkpoint: "${paths.base_dir}/external_weights/sam_vit_b.pth"
-  yolo_model_path: "${paths.base_dir}/external_weights/yolo_weed.pt"
+# (Optional) any external weights you need, e.g. SAM model or YOLO:
+sam_checkpoint: "${paths.data_dir}/external_weights/sam_vit_b.pth"
+yolo_model_path: "${paths.data_dir}/external_weights/yolo_weed.pt"

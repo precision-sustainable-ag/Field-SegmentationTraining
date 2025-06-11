@@ -1,17 +1,11 @@
 # conf/evaluation/default.yaml
-evaluation:
-  # Which metrics to compute
-  metrics:
-    - iou
-    - dice
-    - precision
-    - recall
-  # Where to read predictions and ground truth
-  pred_dir: ${paths.inference_results_dir}
-  gt_dir:   ${paths.test_mask_dir}
-  # Where to write evaluation reports and figures
-  report_dir: ${paths.reports_dir}/evaluation
-  # Visualization settings
-  vis:
-    overlay: true
-    num_samples: 10
+# Which metrics to compute
+metrics:
+  - iou
+  - dice
+  - precision
+  - recall
+# Visualization settings
+vis:
+  overlay: true
+  num_samples: 10

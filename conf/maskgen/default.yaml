@@ -1,40 +1,33 @@
 # Settings for mask‐generation / refinement. 
 # Your src/maskgen.py should read these keys and perform each step conditionally.
 
-maskgen:
-  # If true, run classical CV threshold (Otsu / fixed threshold) first.
-  classical:
-    enabled: true
-    method: "otsu"            # "otsu" or "fixed"
-    fixed_threshold: 128      # only used if method == "fixed"
-    min_area: 50              # remove connected components smaller than 50 px
-    morph:
-      open: true
-      close: true
-      kernel_size: 3
+# If true, run classical CV threshold (Otsu / fixed threshold) first.
+classical:
+  enabled: true
+  method: "otsu"            # "otsu" or "fixed"
+  fixed_threshold: 128      # only used if method == "fixed"
+  min_area: 50              # remove connected components smaller than 50 px
+  morph:
+    open: true
+    close: true
+    kernel_size: 3
 
-  # If true, run Segment Anything Model (SAM) on each image
-  sam:
-    enabled: false
-    checkpoint: ${paths.sam_checkpoint}
-    model_type: "vit_b"       # the architecture you downloaded
-    # You can supply prompts (points or boxes) in a CSV:
-    prompts_csv: ""           # e.g. data/field_data/sam_prompts.csv
-    prompt_type: "point"      # "point" or "box"
-    # if you want default fixed box around center (x1,y1,x2,y2):
-    default_box: [0, 0, 512, 512]
+# If true, run Segment Anything Model (SAM) on each image
+sam:
+  enabled: false
+  model_type: "vit_b"       # the architecture you downloaded
+  # You can supply prompts (points or boxes) in a CSV:
+  prompts_csv: ""           # e.g. data/field_data/sam_prompts.csv
+  prompt_type: "point"      # "point" or "box"
+  # if you want default fixed box around center (x1,y1,x2,y2):
+  default_box: [0, 0, 512, 512]
 
-  # If true, run a pretrained segmentation model (e.g. UNet) to propose masks
-  refine_with_model:
-    enabled: false
-    checkpoint: ${paths.model_save_dir}/best.ckpt
-    threshold: 0.5            # binarize UNet’s sigmoid output
+# If true, run a pretrained segmentation model (e.g. UNet) to propose masks
+refine_with_model:
+  enabled: false
+  threshold: 0.5            # binarize UNet’s sigmoid output
 
-  # If true, save an overlay for manual QC (image + mask side‐by‐side)
-  manual_qc:
-    enabled: true
-    output_qc_dir: ${paths.maskgen_output_dir}/qc
-    overlay_opacity: 0.5
-
-  # Where to dump final masks (unvalidated) + any intermediate files
-  output_dir: ${paths.maskgen_output_dir}
+# If true, save an overlay for manual QC (image + mask side‐by‐side)
+manual_qc:
+  enabled: true
+  overlay_opacity: 0.5

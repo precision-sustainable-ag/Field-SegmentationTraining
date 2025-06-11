@@ -1,19 +1,18 @@
 # segmentation_models.pytorch Unet config.
 # Any fields here can be overridden at CLI, e.g. model.encoder_name=resnet34
 
-model:
-  name: "unet"
-  _target_: "segmentation_models_pytorch.Unet"
+name: "unet"
+_target_: "segmentation_models_pytorch.Unet"
 
-  # UNet‐specific parameters:
-  encoder_name: "resnet34"          # e.g. resnet18, resnet34, resnet50, efficientnet-b0, etc.
-  encoder_weights: "imagenet"       # or "None"
-  in_channels: ${projects.field.input_channels}
-  classes: ${projects.field.num_classes}
-  activation: "sigmoid"             # "softmax2d" if multiclass
+# UNet‐specific parameters:
+encoder_name: "resnet34"          # e.g. resnet18, resnet34, resnet50, efficientnet-b0, etc.
+encoder_weights: "imagenet"       # or "None"
+in_channels: 3
+classes: 1
+activation: "sigmoid"             # "softmax2d" if multiclass
 
-  # (Optional) if you want to freeze the encoder:
-  encoder_freeze: false
+# (Optional) if you want to freeze the encoder:
+encoder_freeze: false
 
-  # (Optional) any decoder attention or additional args:
-  decoder_attention_type: null       # e.g., "scse", "aspp", etc. or null for none
+# (Optional) any decoder attention or additional args:
+decoder_attention_type: null       # e.g., "scse", "aspp", etc. or null for none

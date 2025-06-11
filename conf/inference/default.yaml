@@ -2,24 +2,19 @@
 # src/inference.py should load the trained model, run predictions, threshold,
 # save predicted masks, then compute IoU vs gold masks if available.
 
-inference:
-  checkpoint_path: "${paths.model_save_dir}/best.ckpt"
-  batch_size: 8
-  device: "cuda"
+batch_size: 8
+device: "cuda"
 
-  # Test‐time augmentation (TTA):
-  tta:
-    enabled: false
-    horizontal_flip: true
-    vertical_flip: false
+# Test‐time augmentation (TTA):
+tta:
+  enabled: false
+  horizontal_flip: true
+  vertical_flip: false
 
-  threshold: 0.5
-  save_masks: true
-  save_overlay: false    # if true, also save image+mask overlay under inference_results_dir/overlays
+threshold: 0.5
+save_masks: true
+save_overlay: false    # if true, also save image+mask overlay under inference_results_dir/overlays
 
-  # If you have a “test” folder, compute IoU vs ground truth automatically:
-  evaluate:
-    enabled: true
-    test_image_dir: ${paths.test_image_dir}
-    test_mask_dir: ${paths.test_mask_dir}
-    report_csv: ${paths.reports_dir}/test_metrics.csv
+# If you have a “test” folder, compute IoU vs ground truth automatically:
+evaluate:
+  enabled: true

@@ -2,10 +2,8 @@
 # Order matters: later entries can override earlier keys.
 
 defaults:
-  - projects: field            # project‐specific settings (e.g. number of classes, image size, subfolders)
   - paths: default             # all filesystem paths (data_dir, model_save_dir, etc.)
   - model: unet                # architecture group: unet (can switch to deeplabv3plus, etc.)
-  - datamodule: default        # data‐loading parameters (train/val split, augment group, etc.)
   - train: default             # training hyperparameters + Lightning Trainer settings
   - augment: default           # data augmentation transforms
   - preprocess: default        # resizing / normalization / cropping
@@ -19,10 +17,22 @@ defaults:
 project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: field
-  version: "1.0.0"
 
-pipeline:
-  mode: train                  # one of: maskgen / preprocess / train / inference
+
+mode: train                  # one of: maskgen / preprocess / train / inference
+
+tasks:
+  preprocess:
+    - normalize
+    - remap
+    - center_crop
+  maskgen:
+    - # TBD
+  train:
+    - train
+  inference:
+    - inference
+
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
