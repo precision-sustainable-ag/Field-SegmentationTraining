@@ -1,3 +1,30 @@
+"""
+Weed Detection with YOLO
+==========================
+
+This script detects weeds in images using a trained YOLO model. It processes all .jpg images in the
+'developed-images' folder and saves detection metadata (bounding box and confidence) as JSON files
+in a 'cutouts' directory.
+
+Main Components:
+----------------
+- WeedDetector: Runs YOLO on a single image and returns the top detection.
+- ProcessDetections: Handles batch processing and JSON export.
+- main(): Entry point using Hydra config.
+
+Config Requirements:
+--------------------
+- cfg.paths.mask_generation_dir: Root directory with 'developed-images/'.
+- cfg.paths.yolo_weed_detection_model: Path to YOLO model weights (.pt).
+
+Output Format:
+--------------
+{
+    "bbox": [x_min, y_min, width, height],
+    "det_pred_conf": 0.987654
+}
+"""
+
 import json
 import logging
 from pathlib import Path
