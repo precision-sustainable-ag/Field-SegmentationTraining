@@ -1,6 +1,5 @@
 import json
 import logging
-
 from pathlib import Path
 from ultralytics import YOLO
 from omegaconf import DictConfig
@@ -12,140 +11,127 @@ log = logging.getLogger(__name__)
 
 class WeedDetector:
     """
-    A class for detecting weeds in images using YOLOv5.
+    A class for detecting weeds in images using a YOLO model.
 
-    This class initializes a YOLOv5 model and provides methods for detecting weeds
-    within images, extracting bounding box coordinates, and associated confidence scores.
-    It also handles cases of no detection or multiple detections by selecting the
-    detection with the highest confidence.
+    This class loads a pretrained YOLO model and provides functionality to detect
+    weeds in images. It returns the most confident detection if multiple are found.
     """
 
-    def __init__(self, model_path: str) -> None:
+    def __init__(self, yolo_model_path: Path) -> None:
         """
-        Initializes the WeedDetector class.
+        Initializes the WeedDetector instance with a trained YOLO model.
 
         Args:
-            model_path (str): Path to the YOLOv5 model weights (e.g., 'path/to/best.pt').
+            yolo_model_path (Path): Path to the YOLO model weights.
         """
-        self.model = YOLO(model_path)
-        self.missing_detection_notes = [] # list to store missing detection notes
-    
+        self.model = YOLO(yolo_model_path)
+        self.missing_detection_notes = []  # List to store notes if detections are missing or multiple
+
     def detect_weeds(self, image_path: Path) -> Optional[Dict[str, Dict[str, int]]]:
         """
-        Detects target weeds in the given image.
+        Detects weeds in a given image using the YOLO model.
 
-        This method takes an image path, runs the YOLOv5 model to detect weeds,
-        and processes the results. If multiple detections are found, it selects
-        the one with the highest confidence. If no detections are found, it logs a warning.
+        If multiple detections are found, the one with the highest confidence score is used.
+        If no detections are found, the function returns None.
 
         Args:
-            image_path (Path): The file path to the image to be processed.
+            image_path (Path): Path to the input image.
 
         Returns:
-            Optional[Dict[str, Dict[str, int]]]: A dictionary containing detection results
-            if successful. The dictionary includes:
-                - "bbox" (list): A list of four integers [x_min, y_min, width, height]
-                  representing the bounding box of the detected weed.
-                - "det_pred_conf" (float): The confidence score of the detection,
-                  rounded to 6 decimal places.
-            Returns None if no detection is found.
+            Optional[Dict[str, Union[list, float]]]: A dictionary with:
+                - "bbox": [x_min, y_min, width, height] of the detected weed
+                - "det_pred_conf": Confidence score of the detection (float, rounded to 6 decimals)
+                Returns None if no detection is found.
         """
-        log.info("Starting weed detection.")
+        log.info(f"Detecting weeds in image: {image_path}")
         results = self.model(image_path)
 
         if not results or not results[0].boxes.xyxy.tolist():
             log.warning("No detection found.")
             self.missing_detection_notes.append("No detection found.")
-            bbox = None
-            det_pred_conf = None
-        
+            return None
+
+        boxes = results[0].boxes.xyxy.tolist()
+        confs = results[0].boxes.conf.tolist()
+
+        if len(boxes) > 1:
+            log.warning("Multiple detections found. Selecting the one with highest confidence.")
+            self.missing_detection_notes.append("Multiple detections. Selected highest confidence.")
+            max_conf_idx = confs.index(max(confs))
         else:
-            if len(results[0].boxes.xyxy.tolist()) > 1:
-                log.warning("More than one detection found. Using the one with the highest confidence.")
-                self.missing_detection_notes.append("More than one detection found. Using the one with the highest confidence.")
-                # choose the detection with the highest confidence
-                confidences = [x.conf for x in results[0].boxes]
-                max_conf_idx = confidences.index(max(confidences))
-                bbox = results[0].boxes.xyxy.tolist()[max_conf_idx]
-                # confidence of the detection
-                det_pred_conf = round(results[0].boxes.conf[max_conf_idx].item(), 6)
-            else:
-                # Extract the detection confidence score
-                det_pred_conf = round(results[0].boxes.conf.item(), 6)
-                # Extract the bounding box coordinates
-                bbox = results[0].boxes.xyxy.tolist()[0]
-            
-            x_min, y_min, x_max, y_max = map(round, bbox)
-            bbox_height = y_max - y_min
-            bbox_width = x_max - x_min
-            bbox = [x_min, y_min, bbox_width, bbox_height]
+            max_conf_idx = 0
+
+        x_min, y_min, x_max, y_max = map(round, boxes[max_conf_idx])
+        bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
+        det_pred_conf = round(confs[max_conf_idx], 6)
+
         return {
-        "bbox": bbox,
-        "det_pred_conf": det_pred_conf
+            "bbox": bbox,
+            "det_pred_conf": det_pred_conf
         }
 
 class ProcessDetections:
     """
-    A class to orchestrate the weed detection and metadata extraction process.
+    A class for batch processing of weed detection in a directory of images.
 
-    This class manages the overall workflow of detecting weeds in a directory of images,
-    saving the detection results as JSON metadata files.
+    Handles reading images, running detection using WeedDetector, and saving
+    detection metadata as JSON files.
     """
-
-    def __init__(self, yolo_model_path: Path, batch_dir: Path) -> None:
+    def __init__(self, cfg: DictConfig) -> None:
         """
         Initializes the ProcessDetections class.
 
         Args:
-            yolo_model_path (Path): Path to the YOLOv5 model weights.
-            batch_dir (Path): Path to the main input directory containing 'developed-images'.
+            cfg (DictConfig): Hydra/OmegaConf configuration with required paths.
+                Required keys: cfg.paths.mask_generation_dir, cfg.paths.yolo_weed_detection_model
         """
-        self.batch_dir = batch_dir
-        self.weed_detector = WeedDetector(yolo_model_path)
-        self.detection_save_dir = batch_dir / "cutouts" 
+        self.mask_generation_dir = Path(cfg.paths.mask_generation_dir)
+        self.weed_detector = WeedDetector(Path(cfg.paths.yolo_weed_detection_model))
+        self.detection_save_dir = self.mask_generation_dir / "cutouts"
         self.detection_save_dir.mkdir(exist_ok=True)
 
     def process_image(self, image_path: Path) -> None:
         """
-        Processes a single image by detecting weeds and saving the detection metadata.
+        Processes a single image by performing weed detection and saving metadata.
 
-        The detection results (bounding box and confidence) are saved to a JSON file
-        within a 'cutouts' subdirectory, named according to the image stem.
+        Saves results to a JSON file named after the image stem in the `cutouts` directory.
 
         Args:
-            image_path (Path): Path to the image file to be processed.
+            image_path (Path): Path to the image to be processed.
         """
-        log.info(f"Processing image: {image_path}")
-        # save the detection results in the 'cutouts' directory
-        detection_json_path = self.detection_save_dir / f"{image_path.stem}.json"
-        
-        # Get detection results
+        log.info(f"Processing image: {image_path.name}")
         detection_results = self.weed_detector.detect_weeds(image_path)
-        # Save detection results to a JSON file
+
+        detection_json_path = self.detection_save_dir / f"{image_path.stem}.json"
         with open(detection_json_path, "w") as f:
             json.dump(detection_results, f, indent=4)
+
         log.info(f"Saved detection results to: {detection_json_path}")
-    
+
     def process_dir(self) -> None:
         """
-        Processes all images within the specified input directory.
-
-        This method iterates through all JPG images in the 'developed-images' subdirectory
-        of the input directory, performs weed detection on each, and saves the results.
-        It also creates a 'cutouts' directory if it doesn't already exist to store the JSON output.
+        Processes all JPG images in the 'developed-images' folder of the root directory.
+        
+        Applies weed detection and stores output metadata in JSON format under 'cutouts/'.
         """
-        log.info(f"Processing directory: {self.batch_dir}")
-        image_dir = self.batch_dir / "developed-images"
-
-        # Loop through the images in the image directory
-        image_paths = sorted(list(image_dir.glob("*.jpg")))
+        image_dir = self.mask_generation_dir / "developed-images"
+        image_paths = sorted(image_dir.glob("*.jpg"))
+        log.info(f"Found {len(image_paths)} images in {image_dir}. Starting detection...")
 
         for image_path in image_paths:
             self.weed_detector.missing_detection_notes = []
             self.process_image(image_path)
-        log.info(f"Processed {len(image_paths)} images in {image_dir}.")
 
-yolo_model_path = Path("/home/nsingh27/Field-SegmentationTraining/mask_generation/data/field-tools/models/weed_detection/weights/best.pt")
-batch_dir = Path("/home/nsingh27/Field-SegmentationTraining/mask_generation/data/image_processing_dir")
-processdetections = ProcessDetections(yolo_model_path, batch_dir)
-processdetections.process_dir()
+        log.info("Completed processing all images.")
+
+def main(cfg: DictConfig) -> None:
+    """
+    Entry point for running the weed detection process using configuration settings.
+
+    Args:
+        cfg (DictConfig): Configuration object containing model path and image directories.
+    """
+    log.info("Starting weed detection process...")
+    detector = ProcessDetections(cfg)
+    detector.process_dir()
+    log.info("Weed detection process completed.")
