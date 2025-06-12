@@ -1,0 +1,11 @@
+# conf/evaluation/default.yaml
+# Which metrics to compute
+metrics:
+  - iou
+  - dice
+  - precision
+  - recall
+# Visualization settings
+vis:
+  overlay: true
+  num_samples: 10

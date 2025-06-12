@@ -1,0 +1,39 @@
+# Training hyperparameters & Lightning Trainer settings. 
+# “train.*” keys map to src/train.py (LightningModule + Trainer).
+
+batch_size: 8
+max_epochs: 3
+num_workers: 16
+seed: 42
+
+# Optimizer:
+optimizer:
+  _target_: "torch.optim.AdamW"
+  lr: 1e-4
+  weight_decay: 1e-5
+
+# Scheduler:
+scheduler:
+  _target_: "torch.optim.lr_scheduler.CosineAnnealingLR"
+  T_max: 50
+  eta_min: 1e-6
+
+# Lightning Trainer arguments:
+trainer:
+  accelerator: "gpu"
+  devices: 1 # TODO: implement gputil to automatically identify free gpu ids and set the number of gpus
+  precision: 16
+  deterministic: true
+
+# Checkpoint callback:
+checkpoint:
+  monitor: "val_iou"
+  mode: "max"
+  save_top_k: 3
+
+# EarlyStopping callback (optional):
+early_stop:
+  enabled: true
+  monitor: "val_iou"
+  mode: "max"
+  patience: 10

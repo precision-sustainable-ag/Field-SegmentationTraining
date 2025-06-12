@@ -1,5 +1,6 @@
 # data directory
 data
+!src/data
 
 # trained_models directory
 trained_models

@@ -1,29 +1,42 @@
-# Hydra defaults and settings
-defaults:
-  - paths: default # or your_paths_template
-  - unet_conf: default
-  - _self_
+# Top‐level Hydra configuration. Lists each config group in the "defaults:" section.
+# Order matters: later entries can override earlier keys.
 
+defaults:
+  - paths: default             # all filesystem paths (data_dir, model_save_dir, etc.)
+  - model: unet                # architecture group: unet (can switch to deeplabv3plus, etc.)
+  - train: default             # training hyperparameters + Lightning Trainer settings
+  - augment: default           # data augmentation transforms
+  - preprocess: default        # resizing / normalization / cropping
+  - maskgen: default           # mask generation/refinement settings
+  - inference: default         # inference & evaluation settings
+  - evaluation: default         # evaluation metrics and settings
+  - hydra/job_logging: custom  # a custom logging config (Hydra job logger override)
+  - _self_                     # Ensures overriding behavior
+
+# Any keys you want to sit “outside” those groups:
+project:
+  # Note: project_name typically duplicated from projects.field.project_name, but putting here
+  name: field
+
+
+mode: train                  # one of: maskgen / preprocess / train / inference
+
+tasks:
+  preprocess:
+    - normalize
+    - remap
+    - center_crop
+  maskgen:
+    - # TBD
+  train:
+    - train
+  inference:
+    - inference
+
+
+# You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
   run:
-    dir: ${paths.logdir}/${job.job_now}
-  output_subdir: ${hydra.run.dir}/hydra
-
-pipeline:
-  # - unet_segmentation
-  - evaluate
-  # - inference_for_pipeline
-
-project_name: FIELD
-task: # Leave empty as placeholder
-
-job:
-  job_now_date: &nowdir ${now:%Y-%m-%d}
-  job_now_time: ${now:%H_%M_%S}
-  job_now: ${job.job_now_date}/${job.job_now_time} 
-  jobdir: ${data.datadir}/${job.job_now}
-
-inference_for_pipeline:
-  save_mask: False # If true, the segmented image will be saved
-  overlay_comparison: False # If true, the original image and the segmented image will be overlayed
-  side_by_side_comparison: True # If true, the original image and the segmented image will be displayed side by side but greatly increases the time to process
+    dir: ${paths.base_dir}/logs/${hydra.job.name}/${hydra.job.num}
+  job_logging:
+    custom: ${hydra.job_logging.custom}

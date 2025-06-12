@@ -18,3 +18,4 @@ dependencies:
   - pip:
       - torchmetrics
       - omegaconf
+      - hydra-core
