@@ -1,10 +1,36 @@
 """
-UNet Segmentation Inference
+UNet Segmentation Inference Script
+==================================
 
-This script defines a UNetInference class that loads a pre-trained UNet model and performs image segmentation
-on a batch of images using bounding boxes provided in accompanying JSON metadata. It handles both standard and
-tile-based inference (for large images), post-processes masks to match original image sizes, and saves the 
-resulting cutouts and masks to disk.
+This script performs semantic segmentation on crop images using a pre-trained UNet model (from `segmentation_models_pytorch`).
+It reads images and bounding box metadata, crops the region of interest, predicts a segmentation mask, and saves the results.
+
+Key Features:
+-------------
+- Tile-based prediction for large images to handle memory constraints.
+- Loads YOLO-generated bounding boxes and aligns mask output accordingly.
+- Saves cropped RGB image, binary mask, and masked cutout.
+
+Inputs:
+-------
+- Developed images: Located in 'developed-images/'.
+- Bounding box JSONs: Located in 'cutouts/', matching image stem.
+
+Outputs:
+--------
+Saved in 'cutouts/' directory:
+- {image}.jpg       → Cropped image
+- {image}_mask.png  → Binary segmentation mask
+- {image}.png       → Final segmented cutout
+
+Config Keys:
+------------
+- cfg.paths.mask_generation_dir         : Root directory with developed-images and cutouts/
+- cfg.paths.unet_segmentation_model     : Path to trained UNet model (.pth)
+
+Device:
+-------
+Automatically selects GPU if available.
 
 """
 import cv2
@@ -12,7 +38,7 @@ import json
 import torch
 import logging
 import numpy as np
-
+from omegaconf import DictConfig
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
@@ -20,32 +46,29 @@ import segmentation_models_pytorch as smp
 from torchvision import transforms
 
 # Logging configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log = logging.getLogger(__name__)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class UNetInference:
     """
-    Class to perform semantic segmentation inference using a pre-trained UNet model from segmentation_models_pytorch.
+    Class to perform semantic segmentation inference using a pre-trained UNet model.
     """
 
-    def __init__(self, image_dir: Path, trained_model_path: Path):
+    def __init__(self, cfg: DictConfig):
         """
-        Initializes the UNetInference class and loads the trained UNet model.
+        Initialize UNetInference with configuration for paths and model.
 
         Args:
-            image_dir (Path): Path to the root directory containing images.
-            trained_model_path (Path): Path to the trained model (.pth) file.
+            cfg (DictConfig): Configuration object containing paths to images and trained model.
         """
-        logging.info(f"Initializing UNetInference at {datetime.now()}")
+        log.info(f"Initializing UNetInference at {datetime.now()}")
         
-        self.image_dir = image_dir
+        self.image_dir = Path(cfg.paths.mask_generation_dir)
         self.developed_images_dir = self.image_dir / "developed-images"
         self.cutout_dir = self.image_dir / "cutouts"
-        self.trained_model_path = trained_model_path
+        self.trained_model_path = Path(cfg.paths.unet_segmentation_model)
         
         # Load pre-trained UNet model
         self.seg_model = smp.Unet(
@@ -58,23 +81,20 @@ class UNetInference:
         self.seg_model.load_state_dict(torch.load(self.trained_model_path, map_location=DEVICE, weights_only=True))
         self.seg_model.eval()
 
-        # Image preprocessing transformation
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-        ])
+        self.transform = transforms.Compose([transforms.ToTensor()])
 
-    def read_metadata(self, json_path):
+    def read_metadata(self, json_path: Path):
         """
-        Reads bounding box metadata from a JSON file.
+        Load bounding box metadata from a JSON file.
 
         Args:
-            json_path (Path): Path to the JSON file.
+            json_path (Path): Path to the bounding box metadata file.
 
         Returns:
-            dict or None: Parsed JSON data or None if file is missing.
+            dict or None: Parsed JSON dictionary, or None if the file is missing.
         """
         if not json_path.exists():
-            logging.warning(f"JSON file not found: {json_path}")
+            log.warning(f"JSON file not found: {json_path}")
             return None
 
         with open(json_path, 'r') as f:
@@ -83,40 +103,39 @@ class UNetInference:
 
     def _predict_mask(self, cropped_image: np.ndarray):
         """
-        Predicts the binary segmentation mask for a given cropped image.
+        Predict the segmentation mask for a cropped image.
 
         Args:
-            cropped_image (np.ndarray): Image cropped using bounding box.
+            cropped_image (np.ndarray): The cropped RGB image.
 
         Returns:
-            np.ndarray: Predicted binary mask.
+            np.ndarray: Binary segmentation mask.
         """
         pil_image = Image.fromarray(cropped_image)
         image_tensor = self.transform(pil_image).float().to(DEVICE).unsqueeze(0)
 
         try:
-            logging.info(f"Predicting mask for image of shape: {image_tensor.shape}")
+            log.info(f"Predicting mask for image of shape: {image_tensor.shape}")
             pred_mask = self.seg_model(image_tensor)
-            pred_mask = torch.sigmoid(pred_mask)  # Convert logits to probabilities
-            pred_mask = pred_mask.squeeze(0).cpu().detach().permute(1, 2, 0)
+            pred_mask = torch.sigmoid(pred_mask).squeeze(0).cpu().detach().permute(1, 2, 0)
             pred_mask = (pred_mask > 0.5).float().numpy().squeeze(-1)
         except Exception as e:
-            logging.error(f"Error during prediction: {e}")
+            log.error(f"Error during prediction: {e}")
             raise
 
         return pred_mask
 
     def _predict_mask_in_tiles(self, image: np.ndarray, overlap_pixels=250, max_tile_size=4500):
         """
-        Splits a large image into overlapping tiles, predicts mask for each tile, and stitches them back.
+        Perform segmentation on large images using overlapping tiles.
 
         Args:
             image (np.ndarray): Original large image.
-            overlap_pixels (int): Overlap to prevent seam artifacts.
-            max_tile_size (int): Max size to keep GPU memory under control.
+            overlap_pixels (int): Overlap between tiles to reduce artifacts.
+            max_tile_size (int): Maximum tile size to control GPU memory.
 
         Returns:
-            np.ndarray: Stitched full-size mask.
+            np.ndarray: Combined binary segmentation mask.
         """
         height, width = image.shape[:2]
         step_h = min(np.ceil(height / 2).astype(int), max_tile_size - overlap_pixels)
@@ -134,15 +153,15 @@ class UNetInference:
 
     def _resize_and_pad_mask(self, pred_mask: np.ndarray, bbox: dict, full_size: tuple):
         """
-        Resizes predicted mask to bounding box size and pads it to match original image dimensions.
+        Resize and embed the predicted mask into the full-size image.
 
         Args:
-            pred_mask (np.ndarray): Predicted binary mask.
-            bbox (dict): Dictionary with min/max coordinates.
-            full_size (tuple): Original image shape.
+            pred_mask (np.ndarray): Predicted mask from cropped image.
+            bbox (dict): Bounding box with min and max coordinates.
+            full_size (tuple): Original image dimensions.
 
         Returns:
-            np.ndarray: Padded mask.
+            np.ndarray: Full-size binary mask.
         """
         x_min, x_max = bbox["x_min"], bbox["x_max"]
         y_min, y_max = bbox["y_min"], bbox["y_max"]
@@ -157,13 +176,13 @@ class UNetInference:
 
     def get_bbox_minmax(self, bbox: dict):
         """
-        Computes bounding box min and max pixel coordinates.
+        Convert YOLO-format bbox to pixel coordinates.
 
         Args:
-            bbox (dict): Bounding box in YOLO format [x, y, w, h].
+            bbox (dict): Dictionary with top-left (x, y) and width/height.
 
         Returns:
-            dict: Bounding box with keys x_min, x_max, y_min, y_max.
+            dict: Bounding box with pixel-based min and max keys.
         """
         y_min, y_max = bbox[1], bbox[1] + bbox[3]
         x_min, x_max = bbox[0], bbox[0] + bbox[2]
@@ -176,13 +195,13 @@ class UNetInference:
 
     def pred_mask(self, cropped_image: np.ndarray):
         """
-        Decides between tile-based or full-image segmentation based on image size.
+        Decide between tile-based and standard inference.
 
         Args:
-            cropped_image (np.ndarray): Image cropped to bounding box.
+            cropped_image (np.ndarray): Cropped image for segmentation.
 
         Returns:
-            np.ndarray: Predicted mask.
+            np.ndarray: Predicted binary mask.
         """
         if cropped_image.shape[0] > 4000 or cropped_image.shape[1] > 4000:
             return self._predict_mask_in_tiles(cropped_image)
@@ -190,13 +209,13 @@ class UNetInference:
 
     def save_image(self, img_path: str, image_cropped: np.ndarray, padded_cropped_mask: np.ndarray, final_cutout_rgb: np.ndarray):
         """
-        Saves the cropped image, mask, and cutout to disk.
+        Save cropped image, segmentation mask, and cutout image.
 
         Args:
-            img_path (str): Path to original image.
-            image_cropped (np.ndarray): Cropped image.
-            padded_cropped_mask (np.ndarray): Final binary mask.
-            final_cutout_rgb (np.ndarray): Image with only segmented regions retained.
+            img_path (str): Original image path.
+            image_cropped (np.ndarray): Cropped RGB image.
+            padded_cropped_mask (np.ndarray): Final mask for cropped region.
+            final_cutout_rgb (np.ndarray): RGB cutout of segmented object.
         """
         stem = Path(img_path).stem
         cropout_name = f"{stem}.jpg"
@@ -209,23 +228,18 @@ class UNetInference:
 
     def process_image(self, input_paths):
         """
-        Handles full pipeline for one image:
-        - Read JSON metadata
-        - Extract crop
-        - Predict mask
-        - Resize/pad mask
-        - Save outputs
+        Run full segmentation pipeline for a single image.
 
         Args:
-            input_paths (tuple): (image_path, json_path)
+            input_paths (tuple): Tuple containing image path and JSON metadata path.
         """
         image_path, json_path = input_paths
-        logging.info(f"Processing image: {image_path}")
+        log.info(f"Processing image: {image_path}")
 
         metadata = self.read_metadata(json_path)
         bbox = metadata["bbox"]
         if bbox is None:
-            logging.warning(f"No bounding box found for {image_path}. Skipping.")
+            log.warning(f"No bounding box found for {image_path}. Skipping.")
             return 
         
         bx = self.get_bbox_minmax(bbox)
@@ -245,19 +259,23 @@ class UNetInference:
 
     def process_directory(self):
         """
-        Processes all .jpg images in the developed-images folder with corresponding .json files in cutouts folder.
+        Process all images in the developed-images directory using corresponding bounding box metadata.
         """
         images = sorted(list(self.developed_images_dir.glob("*.jpg")))
-        logging.info(f"Processing {len(images)} images in directory: {self.developed_images_dir}.")
+        log.info(f"Processing {len(images)} images in directory: {self.developed_images_dir}.")
         
         for img_path in images:
             json_path = self.cutout_dir / f"{img_path.stem}.json"
             self.process_image((img_path, json_path))
 
-# Script Execution
-logging.info(f"Starting UNet segmentation inference.")
-image_dir = Path("/home/nsingh27/Field-SegmentationTraining/mask_generation/data/image_processing_dir")
-trained_model_path =  Path("/home/nsingh27/Field-SegmentationTraining/mask_generation/data/field-tools/models/unet/unet_segmentation.pth")
-unet_inference = UNetInference(image_dir, trained_model_path)
-unet_inference.process_directory()
-logging.info(f"UNet segmentation inference complete.")
+def main(cfg: DictConfig) -> None:
+    """
+    Entry point for running the UNet segmentation inference pipeline.
+
+    Args:
+        cfg (DictConfig): Configuration with paths to input image directory and trained model.
+    """
+    log.info(f"Starting UNet segmentation inference.")
+    unet_inference = UNetInference(cfg)
+    unet_inference.process_directory()
+    log.info(f"UNet segmentation inference complete.")
