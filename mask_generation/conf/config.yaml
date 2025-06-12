@@ -1,0 +1,23 @@
+# Hydra defaults and settings. 
+defaults:
+  - paths: default
+  - _self_
+
+hydra:
+  run:
+    dir: ${paths.logdir}/${job.job_now}
+
+pipeline:
+  - detect_weeds
+  # - sam_inference
+  # - unet_segment_weeds
+  # - post_segment_processing
+
+general:
+  task: # Leave empty as placeholder
+
+job:
+  job_now_date: &nowdir ${now:%Y-%m-%d}
+  job_now_time: ${now:%H_%M_%S}
+  job_now: ${job.job_now_date}/${job.job_now_time} 
+  jobdir: ${paths.datadir}/${job.job_now}
