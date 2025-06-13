@@ -11,3 +11,7 @@ yolo_weed_detection_model: ${paths.datadir}/field-tools/models/weed_detection/we
 unet_segmentation_model: ${paths.datadir}/field-tools/models/unet/unet_segmentation.pth
 mask_generation_dir: ${paths.datadir}/mask_generation_dir
 
+# paths for mask inspection:
+initial_mask_inspection_source: ${paths.mask_generation_dir}/cutouts
+post_processing_mask_inspection_source: ${paths.mask_generation_dir}/post_segment_processing
+voxel_inspection_results_dir : ${paths.mask_generation_dir}/mask_inspection_results

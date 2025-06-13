@@ -1,5 +1,3 @@
-dataset_name:
-
-# Soemthing here about toggling or being explicit in whether the prediction masks are being compared to original masks or not
-# If you have 2 types of masks, you'll want to set this up in the voxels inspect script
+dataset_name: testing_inspect_maskgen
 port: 5050
+
