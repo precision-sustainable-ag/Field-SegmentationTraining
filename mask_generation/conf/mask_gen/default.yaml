@@ -1,0 +1,17 @@
+
+hsv_thresholding:
+  hue: [0, 180]
+  saturation: [0, 255]
+  value: [0, 255]
+
+opening_kernel:
+  size: 3
+  shape: 'ellipse'
+
+closing_kernel:
+  size: 3
+  shape: 'ellipse'
+
+morphology_iterations:
+  opening: 1
+  closing: 1

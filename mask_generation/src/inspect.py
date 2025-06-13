@@ -1,3 +1,5 @@
+# Voxel inspection and image tagging script
+
 """
 Script to create and visualize a FiftyOne dataset for image segmentation tasks.
 
@@ -12,6 +14,7 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 from datetime import datetime
+import pandas as pd
 
 def load_samples(image_dir, ground_truth_mask_dir, prediction_mask_dir):
     """
@@ -94,6 +97,23 @@ def save_selected_samples(dataset, session, output_path):
 
     print(f"Selected samples written to {output_path}")
 
+def export_tags_to_csv(dataset, output_csv):
+    """
+    Exports image names and tags from the FiftyOne dataset to a CSV file.
+
+    Args:
+        dataset (fo.Dataset): The FiftyOne dataset.
+        output_csv (str or Path): Output CSV file path.
+    """
+    rows = []
+    for sample in dataset:
+        # If you want all tags as comma-separated in one column:
+        tags_str = ",".join(sample.tags) if sample.tags else ""
+        rows.append({"image_name": Path(sample.filepath).name, "tags": tags_str})
+    df = pd.DataFrame(rows)
+    df.to_csv(output_csv, index=False)
+    print(f"Exported image names and tags to {output_csv}")
+
 def create_fiftyone_dataset(image_dir, ground_truth_mask_dir, prediction_mask_dir, dataset_name, port):
     """
     Main pipeline to create a FiftyOne dataset and launch the app for visualization.
@@ -117,6 +137,7 @@ def create_fiftyone_dataset(image_dir, ground_truth_mask_dir, prediction_mask_di
     except KeyboardInterrupt:
         print("\nSession manually interrupted by user.")
     finally:
+        session.refresh()    # <--- Add this line
         session.close()
         print("Session closed.")
 
@@ -126,10 +147,14 @@ def create_fiftyone_dataset(image_dir, ground_truth_mask_dir, prediction_mask_di
     else:
         print("No samples were selected. No file written.")
 
+    # Export all tags for all images
+    output_csv = Path("all_image_tags_voxel51.csv")
+    export_tags_to_csv(dataset, output_csv)
+
 if __name__ == "__main__":
-    image_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/image_cropout")
-    ground_truth_mask_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/ground_truth")
-    prediction_mask_dir = Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/predicted_mask")  # <-- Set your secondary mask path here
+    image_dir = Path("/mnt/research-projects/r/raatwell/longterm_images3/del_matt_second_eye_non_green_masks/train")
+    ground_truth_mask_dir = Path("/mnt/research-projects/r/raatwell/longterm_images3/del_matt_second_eye_non_green_masks/ground_truth")  # <-- Set your ground truth mask path here
+    prediction_mask_dir = None #Path("/home/nsingh27/Field-SegmentationTraining/data/IMP_non_green_stem_issue/test_set_non_green_stem/predicted_mask")  # <-- Set your secondary mask path here
     dataset_name = "IMP_non_green_stem_issue6"
     port = 5152
 

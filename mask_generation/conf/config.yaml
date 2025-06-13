@@ -1,11 +1,14 @@
 # Hydra defaults and settings. 
 defaults:
   - paths: default
+  - mask_gen: default
   - _self_
 
 hydra:
   run:
     dir: ${paths.logdir}/${job.job_now}
+project:
+  name: first_test_001
 
 pipeline:
   - detect_weeds
