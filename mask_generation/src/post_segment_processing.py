@@ -3,11 +3,14 @@ import logging
 import numpy as np
 from pathlib import Path
 import skimage.morphology as morph
-from utils_post_seg import make_exg
+from utils.utils_post_seg import make_exg
+from omegaconf import DictConfig
 
-logging.basicConfig(level=logging.INFO)
+# Logging configuration
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log = logging.getLogger(__name__)
 
-class PostSegmentProcessing:
+class PostSegmentationProcessing:
     """
     Class for post-segmentation image processing using ExG thresholding and white pixel filtering.
 
@@ -19,43 +22,27 @@ class PostSegmentProcessing:
     - Saving the output
     """
 
-    def __init__(self, cropped_image: Path, mask_image: Path):
+    def __init__(self, cfg: DictConfig):
         """
         Initialize the processor with the path to the image.
 
         Args:
             image_path (Path): Path to the input image.
         """
-        self.cropped_image = cropped_image
-        self.unet_mask_image = mask_image
-        self.image = None
+        # Set up output directories
+        self.mask_generation_dir = Path(cfg.paths.mask_generation_dir)
+        self.developed_images_dir = self.mask_generation_dir / "developed-images"
+        self.cutout_dir = self.mask_generation_dir / "cutouts"
+        self.post_processing_save_dir = self.mask_generation_dir / "post_segment_processing"
+        self.post_processing_save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set up images and masks
+        self.cropout_image = None
         self.exg_mask = None
         self.white_mask = None
         self.gray_mask = None
         self.non_green_stem_mask = None
         self.red_rgb_mask = None
-
-        # Set up output directory
-        output_folder = self.cropped_image.parent.parent / "post_segment_processing"
-        output_folder.mkdir(parents=True, exist_ok=True)
-        self.output_image_path = output_folder / self.cropped_image.name
-
-    def load_image(self):
-        """
-        Load the image from disk into memory.
-        """
-        self.image = cv2.imread(str(self.cropped_image))
-        if self.image is None:
-            raise ValueError(f"Failed to load image: {self.cropped_image}")
-
-    def load_mask(self):
-        """
-        Load the mask image from disk into memory.
-        This method is not currently used but can be implemented if needed.
-        """
-        self.unet_mask_image = cv2.imread(str(self.unet_mask_image), cv2.IMREAD_GRAYSCALE)
-        if self.unet_mask_image is None:
-            raise ValueError(f"Failed to load mask image: {self.unet_mask_image}")
 
     def generate_exg_mask(self, threshold: int = 20):
         """
@@ -85,11 +72,11 @@ class PostSegmentProcessing:
         gray_mask = cv2.inRange(hsv_image, lower_gray, upper_gray)
         return gray_mask
 
-    def generate_non_green_stem_mask_reddish(self):
+    def generate_non_green_stem_mask_reddish(self, image: np.ndarray):
         """
         Generate a non-green stem mask from the original image.
         """
-        hsv_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         # Lower red
         red_lower1 = (0, 100, 30) # works best: (0, 100, 40)
         red_upper1 = (179, 255, 255) # works best: (179, 255, 255)
@@ -97,14 +84,13 @@ class PostSegmentProcessing:
 
         return non_green_stem_mask
 
-    def refine_mask(self):
+    def refine_mask(self, mask):
         """
         Apply morphological operations to clean up the combined mask.
         """
-        combined_mask = morph.dilation(self.combined_mask)
-        combined_mask = morph.opening(self.combined_mask, morph.disk(3))
-        combined_mask = morph.closing(self.combined_mask, morph.disk(4))
-        combined_mask = morph.erosion(combined_mask, morph.disk(3))
+        combined_mask = morph.opening(mask, morph.disk(3))
+        combined_mask = morph.closing(mask, morph.disk(4))
+        combined_mask = morph.erosion(mask, morph.disk(3))
         return combined_mask
     
     def plot_side_by_side(self, title1: str, image1: np.ndarray, title2: str, image2: np.ndarray):
@@ -133,7 +119,7 @@ class PostSegmentProcessing:
         plt.tight_layout()
         plt.savefig(str(self.output_image_path).replace(".jpg", "_comparison.png"))
 
-    def overlay_mask(self, mask: np.ndarray):
+    def overlay_mask(self, image: np.ndarray, mask: np.ndarray):
         """
         Overlay the mask on the original image for visualization.
 
@@ -144,71 +130,77 @@ class PostSegmentProcessing:
             np.ndarray: The image with the mask overlay.
         """
         # Create a red mask where mask > 0
-        red_mask = np.zeros_like(self.image)
+        red_mask = np.zeros_like(image)
         red_mask[mask > 0] = [0, 0, 255]  # BGR for red
         return cv2.addWeighted(self.image, 0.7, red_mask, 0.7, 0)
     
-    def process_image(self):
+    def process_single_image(self, cropout_image_path: Path, mask_image_path: Path):
         """
         Main method to run the full post-segmentation processing pipeline.
         """
-        logging.info(f"Starting post-segmentation processing for: {self.cropped_image}")
-        self.load_image()
-        self.load_mask()
+        logging.info(f"Starting post-segmentation processing for: {self.cropout_image}")
+        self.cropout_image = cv2.cvtColor(cv2.imread(str(cropout_image_path)), cv2.COLOR_BGR2RGB)
+        self.cropout_mask = cv2.imread(str(mask_image_path), cv2.IMREAD_GRAYSCALE)
+
         # self.exg_mask = self.generate_exg_mask()
         # self.white_mask = self.generate_white_mask()
         # self.gray_mask = self.generate_gray_mask()
-        self.non_green_stem_mask = self.generate_non_green_stem_mask_reddish()
+        self.non_green_stem_mask = self.generate_non_green_stem_mask_reddish(self.cropout_image)
 
-        self.combined_mask = cv2.bitwise_or(self.unet_mask_image, self.non_green_stem_mask)
-        self.combined_mask = self.refine_mask()
-        self.combined_mask = np.where(self.combined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
+        combined_mask = cv2.bitwise_or(self.cropout_mask, self.non_green_stem_mask)
+        combined_mask = self.refine_mask(combined_mask)
+        combined_mask = np.where(combined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
 
         # final_cutout_image = cv2.bitwise_and(self.image, self.image, mask=self.combined_mask)
-        final_cutout_image = cv2.bitwise_and(self.image, self.image, mask=self.combined_mask)
+        final_cutout_image = cv2.bitwise_and(self.cropout_image, self.cropout_image, mask=combined_mask)
 
-        mask_output_path = Path(str(self.output_image_path).replace(".jpg", "_mask.png"))
+        # Image and mask paths for saving
+        output_image_path = self.post_processing_save_dir / cropout_image_path.name
+        mask_output_path = Path(str(output_image_path).replace(".jpg", "_mask.png"))
 
         # Plot the original image and final mask side by side
-        self.plot_side_by_side("Original Image", self.image, "Final Mask", final_cutout_image)
+        self.plot_side_by_side("Original Image", self.cropout_image, "Final Mask", final_cutout_image)
 
         # Overlay the mask on the original image and save it
-        overlaid_image = self.overlay_mask(self.combined_mask)
-        cv2.imwrite(str(self.output_image_path).replace(".jpg", "_overlaid.jpg"), overlaid_image)
+        overlaid_image = self.overlay_mask(self.cropout_image, combined_mask)
+        cv2.imwrite(str(output_image_path).replace(".jpg", "_overlaid.jpg"), overlaid_image)
 
         # Save the final mask
         logging.info(f"Saving final mask to: {mask_output_path}")
-        cv2.imwrite(str(mask_output_path), self.combined_mask)
+        cv2.imwrite(str(mask_output_path), combined_mask)
 
         # Save the final cutout image
         # logging.info(f"Saving final image to: {self.output_image_path}")
         # cv2.imwrite(str(self.output_image_path), final_cutout_image)
-        logging.info(f"Post-segmentation processing complete for: {self.cropped_image}")
+        logging.info(f"Post-segmentation processing complete for: {self.cropout_image}")
 
-if __name__ == "__main__":
-    input_folder = Path("/home/nsingh27/Field-AnnotationPipeline/data/temp/non_green_stem/cutouts")
-    
-    # Create a dictionary to match images and masks
-    images = {}
-    for file in input_folder.glob("*"):
-        stem = file.stem.replace("_mask", "")
-        if stem not in images:
-            images[stem] = {}
-        if file.name.endswith(".jpg"):
-            images[stem]["image"] = file
-        elif file.name.endswith("_mask.png"):
-            images[stem]["mask"] = file
+    def process_cutout_dir(self):
+        """
+        Process all image and mask pairs in the input folder using PostSegmentationProcessing.
+        """
+        logging.info(f"Processing all images in folder: {self.cutout_dir}")
+        # Create a dictionary to match images and masks
+        # Find all image and mask pairs in the cutout directory
+        cropout_image_paths = list(self.cutout_dir.glob("*.jpg"))
+        cropout_mask_paths = list(self.cutout_dir.glob("*_mask.png"))
 
-    for stem, pair in images.items():
-        cropout_image = pair.get("image")
-        mask_image = pair.get("mask")
-        if not cropout_image or not mask_image:
-            logging.warning(f"Skipping incomplete pair: {stem}")
-            continue
-        
-        print(f"Cropout image: {cropout_image}, Mask image: {mask_image}")
-        
-        post_segment_processor = PostSegmentProcessing(cropout_image, mask_image)
-        post_segment_processor.process_image()
-    
-    logging.info(f"All images processed in folder: {input_folder}.")
+        # Create a mapping from stem (without _mask) to file paths
+        cropout_image_paths_map = {img.stem: img for img in cropout_image_paths}
+        cropout_mask_paths_map = {mask.stem.replace("_mask", ""): mask for mask in cropout_mask_paths}
+
+        # Process only pairs where both image and mask exist
+        for stem in sorted(cropout_image_paths_map.keys() & cropout_mask_paths_map.keys()):
+            cropout_image_path = cropout_image_paths_map[stem]
+            mask_image_path = cropout_mask_paths_map[stem]
+            self.process_single_image(cropout_image_path, mask_image_path)
+                    
+def main(cfg: DictConfig) -> None:
+    """
+    Entry point for running the UNet segmentation inference pipeline.
+
+    Args:
+        cfg (DictConfig): Configuration with paths to input image directory and trained model.
+    """
+    post_seg_processor = PostSegmentationProcessing(cfg)
+    post_seg_processor.process_cutout_dir()
+    logging.info("Post-segmentation processing completed successfully.")
