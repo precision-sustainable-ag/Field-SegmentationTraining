@@ -1,37 +1,8 @@
 """
 UNet Segmentation Inference Script
 ==================================
-
-This script performs semantic segmentation on crop images using a pre-trained UNet model (from `segmentation_models_pytorch`).
+This script performs semantic segmentation on crop images using a pre-trained UNet model.
 It reads images and bounding box metadata, crops the region of interest, predicts a segmentation mask, and saves the results.
-
-Key Features:
--------------
-- Tile-based prediction for large images to handle memory constraints.
-- Loads YOLO-generated bounding boxes and aligns mask output accordingly.
-- Saves cropped RGB image, binary mask, and masked cutout.
-
-Inputs:
--------
-- Developed images: Located in 'developed-images/'.
-- Bounding box JSONs: Located in 'cutouts/', matching image stem.
-
-Outputs:
---------
-Saved in 'cutouts/' directory:
-- {image}.jpg       → Cropped image
-- {image}_mask.png  → Binary segmentation mask
-- {image}.png       → Final segmented cutout
-
-Config Keys:
-------------
-- cfg.paths.mask_generation_dir         : Root directory with developed-images and cutouts/
-- cfg.paths.unet_segmentation_model     : Path to trained UNet model (.pth)
-
-Device:
--------
-Automatically selects GPU if available.
-
 """
 import cv2
 import json
