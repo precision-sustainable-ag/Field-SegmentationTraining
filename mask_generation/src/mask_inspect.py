@@ -9,7 +9,7 @@ Functionality:
 - Wraps these files into FiftyOne samples with labeled segmentation fields.
 - Launches the FiftyOne App for interactive selection and tagging.
 - Saves the selected image names and associated tags into a CSV file.
-- Optionally moves tagged "good" images to a long-term storage (LTS) location for future use.
+- Moves tagged "good" images to a long-term storage (LTS) location for future use.
 """
 
 import fiftyone as fo
@@ -46,9 +46,19 @@ class FiftyOneMaskInspector:
         Args:
             cfg (DictConfig): Configuration object with the required fields:
         """
+        # Initialize and validate all required paths from the configuration
         self.initial_mask_inspection_source = Path(cfg.paths.initial_mask_inspection_source)
         self.refined_masks_dir_source = Path(cfg.paths.refined_masks_dir)
+
+        self.lts_good_images_masks_destination_dir = Path(cfg.paths.lts_good_images_masks_destination_dir)
+        self.lts_good_images_masks_destination_dir.mkdir(parents=True, exist_ok=True)
+
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
+        self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
+
+        self.voxel_inspection_results_csv = Path(cfg.paths.voxel_inspection_results_csv)
+
+        # Other configuration parameters
         self.port = cfg.inspect.port
         self.dataset_name = cfg.inspect.dataset_name
 
@@ -122,29 +132,50 @@ class FiftyOneMaskInspector:
         df = pd.DataFrame(rows)
         df.to_csv(output_csv, index=False)
 
-    def move_good_images_masks_to_lts(self, source_dir: str, image_names_csv: str, dest_dir: str):
+    def move_good_images_masks_to_lts(self, initial_mask_source_dir: Path, refined_masks_source_dir: Path, dest_dir: str):
         """
-        Moves images tagged as 'good' from a source directory to a long-term storage directory.
+        Moves images tagged as "good" along with their corresponding masks to a destination directory.
+
+        This function reads voxel inspection results from a CSV file and identifies images marked with
+        the tag "good". It then searches for corresponding masks, prioritizing refined masks if available,
+        and moves both the image and its mask to a structured directory for training purposes.
 
         Args:
-            source_dir (str): Path to the directory containing the original images.
-            image_names_csv (str): Path to a CSV file with 'image_name' and 'tag' columns.
-            dest_dir (str): Destination directory for moving selected images.
+            initial_mask_source_dir (Path): Directory containing the original images and masks.
+            refined_masks_source_dir (Path): Directory containing refined masks (if available).
+            dest_dir (str): Path to the destination directory where images and masks will be moved.
         """
-        df = pd.read_csv(image_names_csv, header=None, names=["image_name", "tag"])
-        good_images = df[df["tag"] == "good"]["image_name"].tolist()
+        df_voxel_results = pd.read_csv(self.voxel_inspection_results_csv)
+        if df_voxel_results.empty:
+            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_csv}.")
+            return
 
-        os.makedirs(dest_dir, exist_ok=True)
+        # Extract images tagged "good" from the DataFrame
+        good_images = df_voxel_results[df_voxel_results['tags'].str.contains("good", na=False)]['image_name'].tolist() 
 
+        # Move images and masks (refined or initial masks) from source directory to the destination directory
         for image_name in good_images:
-            source_image_path = os.path.join(source_dir, image_name)
-            dest_image_path = os.path.join(dest_dir, image_name)
-
-            if os.path.exists(source_image_path):
-                shutil.move(source_image_path, dest_image_path)
-                print(f"Moved {image_name} to {dest_dir}")
+            source_image_path = Path(initial_mask_source_dir) / image_name  # Source image path
+            # Check if the mask exists in the refined masks source directory first
+            if image_name in refined_masks_source_dir.glob("*.png"):
+                log.info(f"Refined mask found for {image_name}. Moving from refined masks source directory.")
+                source_mask_path = Path(refined_masks_source_dir) / f"{Path(image_name).stem}_mask.png"  
+            # If not found, use the initial mask source directory
             else:
-                print(f"Image {image_name} not found in {source_dir}")
+                log.info(f"Refined mask not found for {image_name}. Using initial mask source directory.")
+                source_mask_path = Path(initial_mask_source_dir) / f"{Path(image_name).stem}_mask.png" 
+
+            dest_images_dir = Path(dest_dir) / "train_images" # Destination images directory
+            dest_masks_dir = Path(dest_dir) / "train_masks" # Destination masks directory
+            dest_images_dir.mkdir(parents=True, exist_ok=True)
+            dest_masks_dir.mkdir(parents=True, exist_ok=True)
+
+            dest_image_path = dest_images_dir / image_name
+            dest_mask_path = dest_masks_dir / f"{Path(image_name).stem}_mask.png"
+
+            shutil.move(str(source_image_path), str(dest_image_path))
+            shutil.move(str(source_mask_path), str(dest_mask_path))
+            log.info(f"Moved {image_name} and its mask to {dest_dir}")
 
     def run_voxel_inspection(self) -> None:
         """
@@ -155,6 +186,7 @@ class FiftyOneMaskInspector:
         - Launches the FiftyOne App for user-driven tagging.
         - Waits for the session to close (Ctrl+C).
         - Exports tags to a CSV in the results directory.
+        - Moves tagged "good" images and masks to a long-term storage directory.
         """
         samples = self.load_samples()
         self.dataset = self.create_dataset(samples)
@@ -178,10 +210,15 @@ class FiftyOneMaskInspector:
             print("Session closed.")
 
         # Save the voxel inspection results
-        self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
-        output_csv_path = self.voxel_inspection_results_dir / f"{self.dataset_name}.csv"
-        self.export_tags_to_csv(output_csv_path)
-        log.info(f"Tags saved to csv: {output_csv_path}")
+        self.export_tags_to_csv(self.voxel_inspection_results_csv)
+        log.info(f"Tags saved to csv: {self.voxel_inspection_results_csv}")
+
+        # Move 'good' images to long-term storage if specified
+        self.move_good_images_masks_to_lts(
+            self.initial_mask_inspection_source,
+            self.refined_masks_dir_source,
+            self.lts_good_images_masks_destination_dir
+        )
 
 def main(cfg: DictConfig) -> None:
     """
