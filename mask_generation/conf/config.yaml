@@ -1,7 +1,7 @@
 # Hydra defaults and settings. 
 defaults:
   - paths: default
-  - mask_gen: default
+  - mask_refine: default
   - inspect: default
   - _self_
 
@@ -14,8 +14,8 @@ project:
 pipeline:
   # - detect_weeds
   # - unet_segment_weeds
-  - mask_inspect
-  # - post_segment_processing
+  # - mask_inspect
+  - mask_refine
 
 general:
   task: # Leave empty as placeholder
