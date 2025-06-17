@@ -30,6 +30,7 @@ checkpoint:
   monitor: "val_iou"
   mode: "max"
   save_top_k: 3
+  dirpath: ${hydra.run.dir}/checkpoints
 
 # EarlyStopping callback (optional):
 early_stop:
@@ -37,3 +38,9 @@ early_stop:
   monitor: "val_iou"
   mode: "max"
   patience: 10
+
+logger:
+  - _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra.run.dir}
+    name: ""
+    version: ""
