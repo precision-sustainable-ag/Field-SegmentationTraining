@@ -18,3 +18,7 @@ refined_masks_dir: ${paths.mask_generation_dir}/refined_masks
 voxel_inspection_results_dir: ${paths.mask_generation_dir}/mask_inspection_results
 voxel_inspection_results_csv: ${paths.voxel_inspection_results_dir}/voxel_inspection_results.csv
 lts_good_images_masks_destination_dir: ${paths.longterm_storage}/field-tools/mask_inspection_results/
+
+
+# test paths
+test_dir: ${paths.workdir}/test/

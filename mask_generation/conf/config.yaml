@@ -11,11 +11,19 @@ hydra:
 project:
   name: first_test_001
 
-pipeline:
+mode: mask_gen
+
+tasks:
   # - detect_weeds
   # - unet_segment_weeds
   # - mask_inspect
   - mask_refine
+
+test:
+  enabled: true
+
+mask_inspect:
+  save2lts: false
 
 general:
   task: # Leave empty as placeholder
