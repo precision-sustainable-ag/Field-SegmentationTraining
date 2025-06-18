@@ -1,5 +1,6 @@
 # data directory
 data
+projects
 !src/data
 
 # trained_models directory
