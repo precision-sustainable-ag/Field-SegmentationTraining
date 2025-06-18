@@ -30,11 +30,11 @@ class FieldDataset(Dataset):
 
         # Determine image/mask directories based on mode
         if mode in ("train", "val"):
-            img_dir = Path(cfg.preprocess.processed_image_dir)
-            mask_dir = Path(cfg.preprocess.processed_mask_dir)
+            img_dir = Path(cfg.paths.train_images_dir)
+            mask_dir = Path(cfg.paths.train_masks_dir)
         elif mode == "test":
-            img_dir = Path(cfg.paths.test_image_dir)
-            mask_dir = Path(cfg.paths.test_mask_dir)
+            img_dir = Path(cfg.paths.test_images_dir)
+            mask_dir = Path(cfg.paths.test_masks_dir)
         else:
             raise ValueError(f"Unsupported mode: {mode!r}. Choose from 'train','val','test'.")
 
@@ -50,8 +50,8 @@ class FieldDataset(Dataset):
             )
 
         # Build the joint transform function (returns img_tensor, mask_tensor)
-        from data.augmentation import build_transforms
-        self.transform = build_transforms(self.cfg_pre, self.cfg_aug)
+        # from data.augmentation import build_transforms
+        # self.transform = build_transforms(self.cfg_pre, self.cfg_aug)
 
     def __len__(self):
         """
@@ -77,7 +77,10 @@ class FieldDataset(Dataset):
         mask = Image.open(self.masks[idx]).convert("L")  # single channel mask
 
         # Apply the combined preprocessing + augmentation transforms
-        img_tensor, mask_tensor = self.transform(img, mask)
+        from torchvision import transforms
+        img_tensor = transforms.ToTensor()(img)
+        mask_tensor = transforms.ToTensor()(mask)
+
 
         # Ensure mask is binary: any value >0.5 becomes 1.0, else 0.0
         mask_tensor = (mask_tensor > 0.5).float()

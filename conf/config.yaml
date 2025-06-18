@@ -37,9 +37,9 @@ tasks:
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
   run:
-    dir: ${paths.project_dir}/train
+    dir: ${paths.project_train_dir}
   sweep:
-    dir: ${paths.project_dir}/multirun
+    dir: ${paths.project_train_dir}/multirun
   output_subdir: version
     # dir: ${paths.base_dir}/logs/${hydra.job.name}/${hydra.job.num}
   # job_logging:

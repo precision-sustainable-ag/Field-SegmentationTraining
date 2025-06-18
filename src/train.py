@@ -2,6 +2,8 @@
 
 from omegaconf import DictConfig
 import hydra
+import hydra.utils
+import torch
 from torch.utils.data import random_split, DataLoader
 from models.lit_segmentation import LitSegmentation
 from data.dataset import FieldDataset
@@ -31,12 +33,8 @@ def train_entry(cfg: DictConfig):
     model = LitSegmentation(cfg)
 
     # 4) Logger
+    # Dynamically instantiate all configured loggers
     loggers = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
-    logger = WandbLogger(
-        project=cfg.train.logger.project,
-        entity=cfg.train.logger.entity,
-        log_model=cfg.train.logger.log_model
-    )
 
     # 5) Callbacks
     ckpt_conf = cfg.train.checkpoint
@@ -44,7 +42,6 @@ def train_entry(cfg: DictConfig):
         monitor=ckpt_conf.monitor,
         mode=ckpt_conf.mode,
         save_top_k=ckpt_conf.save_top_k,
-        dirpath=ckpt_conf.dirpath
     )
     es_conf = cfg.train.early_stop
     earlystop_cb = EarlyStopping(
@@ -60,9 +57,9 @@ def train_entry(cfg: DictConfig):
         precision=cfg.train.trainer.precision,
         max_epochs=cfg.train.max_epochs,
         deterministic=cfg.train.trainer.deterministic,
-        logger=logger,
+        logger=loggers,
         callbacks=[checkpoint_cb, earlystop_cb],
-        default_root_dir=cfg.paths.model_save_dir
+        default_root_dir=cfg.paths.project_train_dir
     )
 
     # 7) Fit

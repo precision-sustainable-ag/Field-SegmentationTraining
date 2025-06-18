@@ -44,7 +44,7 @@ class LitSegmentation(pl.LightningModule):
 
 
         # Learning rate
-        self.lr = cfg.train.learning_rate
+        self.lr = cfg.train.optimizer.lr
 
     def forward(self, x):
         return self.model(x)

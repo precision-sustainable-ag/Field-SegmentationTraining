@@ -4,6 +4,8 @@
 batch_size: 8
 max_epochs: 3
 num_workers: 16
+train_val_split: 0.8
+pin_memory: true
 seed: 42
 
 # Optimizer:
@@ -27,20 +29,23 @@ trainer:
 
 # Checkpoint callback:
 checkpoint:
-  monitor: "val_iou"
+  monitor: "val/iou"
   mode: "max"
   save_top_k: 3
-  dirpath: ${hydra.run.dir}/checkpoints
 
 # EarlyStopping callback (optional):
 early_stop:
   enabled: true
-  monitor: "val_iou"
+  monitor: "val/iou"
   mode: "max"
   patience: 10
 
 logger:
   - _target_: pytorch_lightning.loggers.CSVLogger
-    save_dir: ${hydra.run.dir}
+    save_dir: ${paths.project_train_dir}
     name: ""
     version: ""
+  - _target_: pytorch_lightning.loggers.WandbLogger
+    project: ${project.name}
+    entity: sbaghba
+    log_model: true
