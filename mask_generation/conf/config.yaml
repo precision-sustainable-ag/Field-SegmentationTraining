@@ -13,7 +13,7 @@ project:
 
 mode: mask_gen
 
-tasks:
+pipeline:
   # - detect_weeds
   # - unet_segment_weeds
   # - mask_inspect

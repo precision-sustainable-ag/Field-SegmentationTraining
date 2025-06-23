@@ -16,6 +16,11 @@ import skimage.morphology as morph
 from omegaconf import DictConfig
 import pandas as pd
 
+from mask_gen_utils.missing_red  import MissingRed
+from mask_gen_utils.missing_white import MissingWhite
+from mask_gen_utils.present_mat import PresentMat
+from mask_gen_utils.morph_cleaned_mask import MorphCleanedMask
+
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
@@ -138,16 +143,16 @@ class RefineMask:
 
         if tag == "missing_red":
             logging.info("Processing missing red regions.")
-            refined_mask = self.process_missing_red(self.cropout_image)
+            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.red_missing_lower, self.red_missing_upper)
         elif tag == "missing_white":
             logging.info("Processing missing white regions.")
-            refined_mask = self.process_missing_white(self.cropout_image)
+            refined_mask = MissingWhite.process_missing_white(self.cropout_image, self.white_missing_lower, self.white_missing_upper)
         elif tag == "present_mat":
             logging.info("Processing present mat regions.")
-            refined_mask = self.process_present_mat(self.cropout_image)
+            refined_mask = PresentMat.process_present_mat(self.cropout_image, self.mat_present_lower, self.mat_present_upper)
 
         combined_mask = cv2.bitwise_or(self.cropout_mask, refined_mask) # Combine the original mask with the refined mask
-        combined_mask = self.morph_cleaned_mask(combined_mask) # Apply morphological operations to clean the mask
+        combined_mask = MorphCleanedMask.morph_cleaned_mask(combined_mask, self.morph_opening_size, self.morph_closing_size, self.morph_erosion_size) # Apply morphological operations to clean the mask
         combined_mask = np.where(combined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
 
         output_image_path = self.mask_refine_save_dir / cropout_image_path.name
