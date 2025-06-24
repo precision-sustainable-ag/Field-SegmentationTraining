@@ -1,4 +1,6 @@
 # Hydra defaults and settings. 
+mode: ??? # Options: test, run_pipeline
+
 defaults:
   - paths: default
   - mask_refine: default
@@ -8,16 +10,15 @@ defaults:
 hydra:
   run:
     dir: ${paths.logdir}/${job.job_now}
+   
 project:
   name: first_test_001
-
-mode: mask_gen
 
 pipeline:
   # - detect_weeds
   # - unet_segment_weeds
-  # - mask_inspect
-  - mask_refine
+  - mask_inspect
+  # - mask_refine
 
 test:
   enabled: true

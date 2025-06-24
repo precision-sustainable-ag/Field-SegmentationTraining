@@ -20,7 +20,6 @@ from pathlib import Path
 from datetime import datetime
 import pandas as pd
 import logging
-import os
 import shutil
 
 # Logging configuration
@@ -36,7 +35,7 @@ class FiftyOneMaskInspector:
     - Create and manage FiftyOne datasets.
     - Launch FiftyOne UI for visual inspection and tagging.
     - Export tagging results to a CSV.
-    - Optionally move selected images (e.g., tagged as 'good') to a directory in lts.
+    - Move images tagged as 'good' to a directory in lts or test directory based on mode.
     """
 
     def __init__(self, cfg: DictConfig) -> None:
@@ -50,8 +49,13 @@ class FiftyOneMaskInspector:
         self.initial_mask_inspection_source = Path(cfg.paths.initial_mask_inspection_source)
         self.refined_masks_dir_source = Path(cfg.paths.refined_masks_dir)
 
+        # for mode "run_pipeline"
         self.lts_good_images_masks_destination_dir = Path(cfg.paths.lts_good_images_masks_destination_dir)
         self.lts_good_images_masks_destination_dir.mkdir(parents=True, exist_ok=True)
+
+        # for mode "test"
+        self.test_good_images_masks_destination_dir = Path(cfg.paths.test_good_images_masks_destination_dir)
+        self.test_good_images_masks_destination_dir.mkdir(parents=True, exist_ok=True)
 
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
         self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
@@ -61,6 +65,9 @@ class FiftyOneMaskInspector:
         # Other configuration parameters
         self.port = cfg.inspect.port
         self.dataset_name = cfg.inspect.dataset_name
+
+        # pipeline mode
+        self.mode = cfg.mode
 
     def load_samples(self) -> list:
         """
@@ -213,12 +220,22 @@ class FiftyOneMaskInspector:
         self.export_tags_to_csv(self.voxel_inspection_results_csv)
         log.info(f"Tags saved to csv: {self.voxel_inspection_results_csv}")
 
-        # Move 'good' images to long-term storage if specified
-        self.move_good_images_masks_to_lts(
-            self.initial_mask_inspection_source,
-            self.refined_masks_dir_source,
-            self.lts_good_images_masks_destination_dir
-        )
+        if self.mode == "test":
+            # Move 'good' images/masks to test directory if in test mode
+            self.move_good_images_masks_to_lts(
+                self.initial_mask_inspection_source,
+                self.refined_masks_dir_source,
+                self.test_good_images_masks_destination_dir
+            )
+            log.info(f"Good images and masks moved to test directory: {self.test_good_images_masks_destination_dir}")
+        elif self.mode == "run_pipeline":
+            # Move 'good' images/masks to long-term storage if specified
+            self.move_good_images_masks_to_lts(
+                self.initial_mask_inspection_source,
+                self.refined_masks_dir_source,
+                self.lts_good_images_masks_destination_dir
+            )
+            log.info(f"Good images and masks moved to LTS directory: {self.lts_good_images_masks_destination_dir}")
 
 def main(cfg: DictConfig) -> None:
     """

@@ -22,6 +22,8 @@ def main(cfg: DictConfig) -> None:
     Raises:
         Exception: If any task fails during processing.
     """
+    log.info(f"Running mode: {cfg.mode}")
+
     cfg = OmegaConf.create(cfg)
     whoami = getpass.getuser()
 
