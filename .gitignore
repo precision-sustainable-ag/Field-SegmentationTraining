@@ -1,7 +1,9 @@
 # data directory
 data
-projects
+projects/field/train
+!projects/field/preprocess
 !src/data
+scripts/crop_images.py
 
 # trained_models directory
 trained_models

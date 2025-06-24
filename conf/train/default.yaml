@@ -4,9 +4,9 @@
 batch_size: 8
 max_epochs: 3
 num_workers: 16
-train_val_split: 0.8
+# train_val_split: 0.8
 pin_memory: true
-seed: 42
+# seed: 42
 
 # Optimizer:
 optimizer:
@@ -21,9 +21,12 @@ scheduler:
   eta_min: 1e-6
 
 # Lightning Trainer arguments:
+use_multi_gpu: true
+num_gpus: 2  # Set between 1 and 3
+
 trainer:
   accelerator: "gpu"
-  devices: 1 # TODO: implement gputil to automatically identify free gpu ids and set the number of gpus
+  devices: null  # Will be dynamically set by GPU utility
   precision: 16
   deterministic: true
 
