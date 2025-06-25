@@ -1,43 +1,31 @@
-import getpass
 import logging
-import sys 
-import hydra 
-from hydra.utils import get_method
-from omegaconf import DictConfig, OmegaConf
+import hydra
+from omegaconf import DictConfig
+from omegaconf import OmegaConf  # Do not confuse with dataclass.MISSING
 
-sys.path.append("src")
+# Import the task functions
+from src.mask_gen import main as mask_gen
 
-# set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
+
+# Define a registry of tasks
+TASK_REGISTRY = {
+    "mask_gen": mask_gen,
+    # "train": train, # For when we incorporate training into the pipeline
+    # Add more tasks here as needed
+}
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    """
-    Main function to run the post-segmentation processing pipeline.
-    
-    Args:
-        cfg (DictConfig): Configuration object containing paths and parameters.
-    
-    Raises:
-        Exception: If any task fails during processing.
-    """
-    log.info(f"Running mode: {cfg.mode}")
-
     cfg = OmegaConf.create(cfg)
-    whoami = getpass.getuser()
-
-    tasks = cfg.pipeline
-    log.info(f"Running {' ,'.join(tasks)} as {whoami}")
-
-    for task in tasks:
-        cfg.general.task = task
-        try:
-            task = get_method(f"{task}.main")
-            task(cfg)
-        except Exception as e:
-            log.exception("Error in task %s: %s", task, e)
-            sys.exit(1)
+    mode = cfg.mode
+    log.info(f"Starting {mode}")
+    
+    if mode not in TASK_REGISTRY:
+        log.error(f"Task {mode} not found in task registry")
+        return
+    
+    TASK_REGISTRY[mode](cfg)
 
 if __name__ == "__main__":
     main()

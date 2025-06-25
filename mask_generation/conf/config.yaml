@@ -1,5 +1,5 @@
 # Hydra defaults and settings. 
-mode: ??? # Options: test, run_pipeline
+mode: ??? # Options: mask_gen
 
 defaults:
   - paths: default
@@ -14,11 +14,13 @@ hydra:
 project:
   name: first_test_001
 
-pipeline:
-  # - detect_weeds
-  # - unet_segment_weeds
-  - mask_inspect
-  # - mask_refine
+
+tasks:
+  sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
+  detect_weeds: true
+  unet_segment_weeds: false
+  mask_inspect: false
+  mask_refine: false
 
 test:
   enabled: true

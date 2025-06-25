@@ -16,10 +16,10 @@ import skimage.morphology as morph
 from omegaconf import DictConfig
 import pandas as pd
 
-from mask_gen_utils.missing_red  import MissingRed
-from mask_gen_utils.missing_white import MissingWhite
-from mask_gen_utils.present_mat import PresentMat
-from mask_gen_utils.morph_cleaned_mask import MorphCleanedMask
+from src.mask_gen_utils.missing_red  import MissingRed
+from src.mask_gen_utils.missing_white import MissingWhite
+from src.mask_gen_utils.present_mat import PresentMat
+from src.mask_gen_utils.morph_cleaned_mask import MorphCleanedMask
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
