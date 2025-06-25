@@ -1,0 +1,6 @@
+# Ignore everything
+*
+!.gitignore
+# Except the test directory and its contents
+!test/
+!test/**
