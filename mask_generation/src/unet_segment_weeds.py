@@ -189,9 +189,9 @@ class UNetInference:
             final_cutout_rgb (np.ndarray): RGB cutout of segmented object.
         """
         stem = Path(img_path).stem
-        cropout_name = f"{stem}.jpg"
-        final_mask_name = f"{stem}_mask.png"
-        cutout_name = f"{stem}.png"
+        cropout_name = f"{stem}_0.jpg"
+        final_mask_name = f"{stem}_0_mask.png"
+        cutout_name = f"{stem}_0.png"
 
         cv2.imwrite(str(self.cutout_dir / cropout_name), image_cropped.astype(np.uint8), [cv2.IMWRITE_JPEG_QUALITY, 100])
         cv2.imwrite(str(self.cutout_dir / final_mask_name), (padded_cropped_mask * 255).astype(np.uint8))

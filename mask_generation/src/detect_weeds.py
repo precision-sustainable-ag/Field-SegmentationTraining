@@ -111,7 +111,7 @@ class ProcessDetections:
         log.info(f"Processing image: {image_path.name}")
         detection_results = self.weed_detector.detect_weeds(image_path)
 
-        detection_json_path = self.detection_save_dir / f"{image_path.stem}.json"
+        detection_json_path = self.detection_save_dir / f"{image_path.stem}_0.json"
         with open(detection_json_path, "w") as f:
             json.dump(detection_results, f, indent=4)
 
