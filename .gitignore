@@ -5,6 +5,9 @@ projects/test_project/train
 !src/data
 scripts/crop_images.py
 
+# WandB
+wandb/
+
 # trained_models directory
 trained_models
 

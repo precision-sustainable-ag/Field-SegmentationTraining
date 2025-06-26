@@ -5,8 +5,8 @@ from pathlib import Path
 
 import hydra
 import hydra.utils
-from utils.gpu_utils import select_available_gpus
-from utils.seed import set_seed, seed_worker
+from src.utils.gpu_utils import select_available_gpus
+from src.utils.seed import set_seed, seed_worker
 import torch
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -14,12 +14,12 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import Logger
 
-from models.lit_segmentation import LitSegmentation
-from data.dataset import FieldDataset
+from src.models.lit_segmentation import LitSegmentation
+from src.data.dataset import FieldDataset
 
 
 @hydra.main(config_path="../conf", config_name="config")
-def train_entry(cfg: DictConfig) -> None:
+def train(cfg: DictConfig) -> None:
     """
     Entry point for training a segmentation model using PyTorch Lightning.
 
@@ -107,6 +107,7 @@ def train_entry(cfg: DictConfig) -> None:
     # === 7. Train ===
     trainer.fit(model, train_loader, val_loader)
 
+    # === 8. TODO: Save final model state ===
 
 if __name__ == "__main__":
-    train_entry()
+    train()
