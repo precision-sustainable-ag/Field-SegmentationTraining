@@ -1,4 +1,4 @@
-name: field_segmentation_training
+name: Field_SegmentationTraining
 channels:
   - conda-forge
   - defaults
@@ -8,14 +8,25 @@ dependencies:
   - numpy
   - pandas
   - matplotlib
-  - pillow 
+  - pillow
   - pytorch
   - torchvision
   - tqdm
   - pyyaml
-  - ultralytics  
-  
+  - cudatoolkit  # version matching your CUDA + A100
   - pip:
-      - torchmetrics
+
+      # Logging / Config
+      - wandb
       - omegaconf
       - hydra-core
+
+      # Segmentation & Metrics
+      - segmentation-models-pytorch
+      - torchmetrics
+
+      # GPU utility
+      - gputil
+
+      # Optional / Future use
+      - ultralytics  # only needed if you explicitly use YOLO-based models

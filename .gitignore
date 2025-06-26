@@ -1,7 +1,7 @@
 # data directory
 data
-projects/field/train
-!projects/field/preprocess
+projects/test_project/train
+!projects/test_project/preprocess
 !src/data
 scripts/crop_images.py
 

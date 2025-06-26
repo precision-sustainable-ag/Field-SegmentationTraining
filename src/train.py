@@ -6,6 +6,7 @@ from pathlib import Path
 import hydra
 import hydra.utils
 from utils.gpu_utils import select_available_gpus
+from utils.seed import set_seed, seed_worker
 import torch
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -32,24 +33,36 @@ def train_entry(cfg: DictConfig) -> None:
     Args:
         cfg (DictConfig): Hydra configuration object.
     """
+    # === 0. Seed === 
+    # Set seed before anything else
+    set_seed(cfg.train.seed)
+
     # === 1. Datasets ===
     train_ds = FieldDataset(cfg, mode="train")
     val_ds = FieldDataset(cfg, mode="val")
 
     # === 2. DataLoaders ===
+    generator = torch.Generator()
+    generator.manual_seed(cfg.train.seed)
+
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg.train.batch_size,
         shuffle=True,
         num_workers=cfg.train.num_workers,
         pin_memory=cfg.train.pin_memory,
+        worker_init_fn=seed_worker,
+        generator=generator,
     )
+
     val_loader = DataLoader(
         val_ds,
         batch_size=cfg.train.batch_size,
         shuffle=False,
         num_workers=cfg.train.num_workers,
         pin_memory=cfg.train.pin_memory,
+        worker_init_fn=seed_worker,
+        generator=generator,
     )
 
     # === 3. Model ===
@@ -64,6 +77,7 @@ def train_entry(cfg: DictConfig) -> None:
         monitor=cfg.train.checkpoint.monitor,
         mode=cfg.train.checkpoint.mode,
         save_top_k=cfg.train.checkpoint.save_top_k,
+        save_last=cfg.train.checkpoint.save_last,
     )
     earlystop_cb = EarlyStopping(
         monitor=cfg.train.early_stop.monitor,
