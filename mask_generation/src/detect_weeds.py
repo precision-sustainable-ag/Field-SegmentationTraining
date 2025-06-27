@@ -92,11 +92,11 @@ class ProcessDetections:
 
         Args:
             cfg (DictConfig): Hydra/OmegaConf configuration with required paths.
-                Required keys: cfg.paths.mask_generation_dir, cfg.paths.yolo_weed_detection_model
+                Required keys: cfg.paths.mask_gen_dir, cfg.paths.yolo_weed_detection_model
         """
-        self.mask_generation_dir = Path(cfg.paths.mask_generation_dir)
+        self.mask_gen_dir = Path(cfg.paths.mask_gen_dir)
         self.weed_detector = WeedDetector(Path(cfg.paths.yolo_weed_detection_model))
-        self.detection_save_dir = self.mask_generation_dir / "cutouts"
+        self.detection_save_dir = self.mask_gen_dir / "cutouts"
         self.detection_save_dir.mkdir(exist_ok=True)
 
     def process_image(self, image_path: Path) -> None:
@@ -123,7 +123,7 @@ class ProcessDetections:
         
         Applies weed detection and stores output metadata in JSON format under 'cutouts/'.
         """
-        image_dir = self.mask_generation_dir / "developed-images"
+        image_dir = self.mask_gen_dir / "developed-images"
         image_paths = sorted(image_dir.glob("*.jpg"))
         log.info(f"Found {len(image_paths)} images in {image_dir}. Starting detection...")
 

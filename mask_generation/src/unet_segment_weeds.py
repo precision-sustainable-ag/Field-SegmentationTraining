@@ -36,7 +36,7 @@ class UNetInference:
         """
         log.info(f"Initializing UNetInference at {datetime.now()}")
         
-        self.image_dir = Path(cfg.paths.mask_generation_dir)
+        self.image_dir = Path(cfg.paths.mask_gen_dir)
         self.developed_images_dir = self.image_dir / "developed-images"
         self.cutout_dir = self.image_dir / "cutouts"
         self.trained_model_path = Path(cfg.paths.unet_segmentation_model)
@@ -208,11 +208,12 @@ class UNetInference:
         log.info(f"Processing image: {image_path}")
 
         metadata = self.read_metadata(json_path)
-        bbox = metadata["bbox"]
-        if bbox is None:
-            log.warning(f"No bounding box found for {image_path}. Skipping.")
-            return 
-        
+        try:
+            bbox = metadata["bbox"]
+        except Exception as e:
+            log.warning(f"No bounding box found for {image_path}. Skipping. Error details: {e}")
+            return
+
         bx = self.get_bbox_minmax(bbox)
         image = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
         image_cropped = image[bx["y_min"]:bx["y_max"], bx["x_min"]:bx["x_max"]]
@@ -236,7 +237,7 @@ class UNetInference:
         log.info(f"Processing {len(images)} images in directory: {self.developed_images_dir}.")
         
         for img_path in images:
-            json_path = self.cutout_dir / f"{img_path.stem}.json"
+            json_path = self.cutout_dir / f"{img_path.stem}_0.json"
             self.process_image((img_path, json_path))
 
 def main(cfg: DictConfig) -> None:

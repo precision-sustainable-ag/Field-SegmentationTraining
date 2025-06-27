@@ -2,6 +2,7 @@
 workdir: ${hydra:runtime.cwd}
 logdir: ${paths.workdir}/logging
 datadir: ${paths.workdir}/data
+project_dir: ${paths.workdir}/projects
 
 # longterm storage paths for field images
 longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
@@ -10,16 +11,16 @@ selected_dataset_for_training_dir: ${paths.longterm_storage}/field-tools/trainin
 # model paths
 yolo_weed_detection_model: ${paths.datadir}/field-tools/models/weed_detection/weights/best.pt
 unet_segmentation_model: ${paths.datadir}/field-tools/models/unet/unet_segmentation.pth
-mask_generation_dir: ${paths.datadir}/mask_generation_dir
+mask_gen_dir: ${paths.project_dir}/mask_gen
 
 # paths for mask inspection:
-initial_mask_inspection_source: ${paths.mask_generation_dir}/cutouts
-refined_masks_dir: ${paths.mask_generation_dir}/refined_masks
-voxel_inspection_results_dir: ${paths.mask_generation_dir}/mask_inspection_results
+initial_mask_inspection_source: ${paths.mask_gen_dir}/cutouts
+refined_masks_dir: ${paths.mask_gen_dir}/refined_masks
+voxel_inspection_results_dir: ${paths.mask_gen_dir}/mask_inspection_results
 voxel_inspection_results_csv: ${paths.voxel_inspection_results_dir}/voxel_inspection_results.csv
 
 # for mode "run_pipeline"
 lts_good_images_masks_destination_dir: ${paths.longterm_storage}/field-tools/mask_inspection_results
 
 # for mode "test"
-test_good_images_masks_destination_dir: ${paths.mask_generation_dir}/test_mask_inspection_results
+test_good_images_masks_destination_dir: ${paths.mask_gen_dir}/test_mask_inspection_results

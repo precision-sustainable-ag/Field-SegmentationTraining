@@ -192,7 +192,6 @@ class FiftyOneMaskInspector:
         - Launches the FiftyOne App for user-driven tagging.
         - Waits for the session to close (Ctrl+C).
         - Exports tags to a CSV in the results directory.
-        - Moves tagged "good" images and masks to a long-term storage directory.
         """
         samples = self.load_samples()
         self.dataset = self.create_dataset(samples)
@@ -203,7 +202,7 @@ class FiftyOneMaskInspector:
                 "1. On the left bar, click on the LABELS tab and select desired labels\n"
                 "2. Click on the box of each image to select samples (images) of interest\n"
                 "3. Click on 'Tag samples or Labels' icon in the bar above the samples\n"
-                "4. Enter the desired tag name: 'good', 'red_missing', 'white_missing', or 'other'\n"
+                "4. Enter the desired tag name: 'good', 'bad', 'red_missing', 'white_missing', 'mat_present' or 'other'\n"
                 "5. Click 'ADD...' and then 'APPLY'\n"
                 "6. Repeat steps 2–5 for additional tags\n"
                 "7. Press Ctrl+C in the terminal to end the session and save the tags\n")
@@ -218,23 +217,6 @@ class FiftyOneMaskInspector:
         # Save the voxel inspection results
         self.export_tags_to_csv(self.voxel_inspection_results_csv)
         log.info(f"Tags saved to csv: {self.voxel_inspection_results_csv}")
-
-        if self.mode == "test":
-            # Move 'good' images/masks to test directory if in test mode
-            self.move_good_images_masks_to_lts(
-                self.initial_mask_inspection_source,
-                self.refined_masks_dir_source,
-                self.test_good_images_masks_destination_dir
-            )
-            log.info(f"Good images and masks moved to test directory: {self.test_good_images_masks_destination_dir}")
-        elif self.mode == "run_pipeline":
-            # Move 'good' images/masks to long-term storage if specified
-            self.move_good_images_masks_to_lts(
-                self.initial_mask_inspection_source,
-                self.refined_masks_dir_source,
-                self.lts_good_images_masks_destination_dir
-            )
-            log.info(f"Good images and masks moved to LTS directory: {self.lts_good_images_masks_destination_dir}")
 
 def main(cfg: DictConfig) -> None:
     """
