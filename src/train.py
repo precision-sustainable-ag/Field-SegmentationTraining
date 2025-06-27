@@ -121,8 +121,8 @@ def train(cfg: DictConfig) -> None:
         best_ckpt = torch.load(best_ckpt_path, map_location="cpu", weights_only=False)
         model_weights = best_ckpt["state_dict"]
 
-        # Use checkpoint filename (e.g., 'epoch=2-step=100.ckpt') → 'epoch=2-step=100.pth'
-        ckpt_filename = Path(best_ckpt_path).stem + ".pth"
+        # Name "best" for consistency across other future tasks
+        ckpt_filename = "best.pth"
 
         # Create model export path
         export_path = Path(cfg.paths.project_train_dir) / "model"
