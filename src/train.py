@@ -1,5 +1,11 @@
 # src/train.py
 
+import sys
+from pathlib import Path
+
+# Add project root to sys.path so that `src` becomes importable
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from typing import List
 from pathlib import Path
 
@@ -106,8 +112,28 @@ def train(cfg: DictConfig) -> None:
 
     # === 7. Train ===
     trainer.fit(model, train_loader, val_loader)
+    if trainer.is_global_zero:
+        print("Training complete.")
 
-    # === 8. TODO: Save final model state ===
+    # === 8. Save best model weights as .pth ===
+    best_ckpt_path = checkpoint_cb.best_model_path
+    if best_ckpt_path:
+        best_ckpt = torch.load(best_ckpt_path, map_location="cpu", weights_only=False)
+        model_weights = best_ckpt["state_dict"]
+
+        # Use checkpoint filename (e.g., 'epoch=2-step=100.ckpt') → 'epoch=2-step=100.pth'
+        ckpt_filename = Path(best_ckpt_path).stem + ".pth"
+
+        # Create model export path
+        export_path = Path(cfg.paths.project_train_dir) / "model"
+        export_path.mkdir(parents=True, exist_ok=True)
+        torch.save(model_weights, export_path / ckpt_filename)
+        if trainer.is_global_zero:
+            print(f"Best model weights saved to: {export_path / ckpt_filename}")
+    else:
+        if trainer.is_global_zero:
+            print("No best checkpoint found. Skipping .pth export.")
+
 
 if __name__ == "__main__":
     train()
