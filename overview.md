@@ -79,19 +79,18 @@ field_segmentation/                    # ← top‐level repo
 ├── projects/                          # 11. Project-specific experiment folders
 │   └── {project.name}/
 │       ├── preprocess/
-│       │   └── data/
-│       │       ├── data_stats.txt
-│       │       ├── images.txt
-│       │       └── train_val_test_split/
-│       │           ├── train/
-│       │           │   ├── images/
-│       │           │   └── masks/
-│       │           ├── val/
-│       │           │   ├── images/
-│       │           │   └── masks/
-│       │           └── test/
-│       │               ├── images/
-│       │               └── masks/
+│       │   ├── data_stats.txt
+│       │   ├── images.txt
+│       │   └── train_val_test_split/
+│       │       ├── train/
+│       │       │   ├── images/
+│       │       │   └── masks/
+│       │       ├── val/
+│       │       │   ├── images/
+│       │       │   └── masks/
+│       │       └── test/
+│       │           ├── images/
+│       │           └── masks/
 │       │
 │       ├── train/
 │       │   └── version_0/                   # Automatically set and incremented by PyTorch Lightning

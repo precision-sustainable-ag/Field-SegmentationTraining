@@ -1,10 +1,9 @@
 # segmentation_models.pytorch Unet config.
 # Any fields here can be overridden at CLI, e.g. model.encoder_name=resnet34
 
-name: "unet"
-_target_: "segmentation_models_pytorch.Unet"
-
 # UNet‐specific parameters:
+arch_name: "Unet"
+name: "unet"
 encoder_name: "resnet34"          # e.g. resnet18, resnet34, resnet50, efficientnet-b0, etc.
 encoder_weights: "imagenet"       # or "None"
 in_channels: 3

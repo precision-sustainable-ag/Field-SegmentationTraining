@@ -8,7 +8,9 @@ normalize:
 
 center_crop:
   enabled: false
-  size:  ${projects.field.image_size.height}
+  size:
+    height: 512
+    width: 512
 
 # If you want to remap mask values (e.g. 0→0, 255→1):
 remap_mask:

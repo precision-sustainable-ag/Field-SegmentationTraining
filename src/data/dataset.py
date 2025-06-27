@@ -1,40 +1,46 @@
 # src/data/dataset.py
 
 from pathlib import Path
+from typing import Tuple, Dict, Any
+
 from PIL import Image
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset
-from omegaconf import OmegaConf
+from torchvision import transforms
+from omegaconf import OmegaConf, DictConfig
 
 class FieldDataset(Dataset):
     """
-    A Dataset for field segmentation tasks.
+    Dataset for field segmentation tasks using image-mask pairs.
 
-    - For 'train'/'val' modes, reads from processed directories.
-    - For 'test' mode, reads from raw test directories.
+    - For 'train'/'val'/'test' modes, reads from preprocess directory.
     - Applies joint preprocessing + augmentation transforms.
     - Provides utility methods to inspect applied transforms and file paths.
     """
 
-    def __init__(self, cfg, mode: str = "train"):
+    def __init__(self, cfg: DictConfig, mode: str = "train") -> None:
         """
-        Initialize the dataset.
+        Initialize the dataset by reading image and mask paths and setting up transforms.
 
         Args:
-            cfg: Hydra config object.
-            mode: One of "train", "val", or "test". Determines which folders to read.
+            cfg (DictConfig): Hydra configuration.
+            mode (str): Dataset split to load: 'train', 'val', or 'test'.
         """
         # Keep references to the preprocess and augment config blocks
         self.cfg_pre = cfg.preprocess
         self.cfg_aug = cfg.augment
 
         # Determine image/mask directories based on mode
-        if mode in ("train", "val"):
-            img_dir = Path(cfg.preprocess.processed_image_dir)
-            mask_dir = Path(cfg.preprocess.processed_mask_dir)
+        if mode in ("train"):
+            img_dir = Path(cfg.paths.train_images_dir)
+            mask_dir = Path(cfg.paths.train_masks_dir)
+        elif mode == "val":
+            img_dir = Path(cfg.paths.val_images_dir)
+            mask_dir = Path(cfg.paths.val_masks_dir)
         elif mode == "test":
-            img_dir = Path(cfg.paths.test_image_dir)
-            mask_dir = Path(cfg.paths.test_mask_dir)
+            img_dir = Path(cfg.paths.test_images_dir)
+            mask_dir = Path(cfg.paths.test_masks_dir)
         else:
             raise ValueError(f"Unsupported mode: {mode!r}. Choose from 'train','val','test'.")
 
@@ -50,17 +56,17 @@ class FieldDataset(Dataset):
             )
 
         # Build the joint transform function (returns img_tensor, mask_tensor)
-        from data.augmentation import build_transforms
-        self.transform = build_transforms(self.cfg_pre, self.cfg_aug)
+        # from data.augmentation import build_transforms
+        # self.transform = build_transforms(self.cfg_pre, self.cfg_aug)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Returns:
             int: Total number of image/mask pairs.
         """
         return len(self.images)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         """
         Fetch the image and mask at index `idx`, apply transforms, and return tensors.
 
@@ -77,14 +83,17 @@ class FieldDataset(Dataset):
         mask = Image.open(self.masks[idx]).convert("L")  # single channel mask
 
         # Apply the combined preprocessing + augmentation transforms
-        img_tensor, mask_tensor = self.transform(img, mask)
+        from torchvision import transforms
+        img_tensor = transforms.ToTensor()(img)
+        mask_tensor = transforms.ToTensor()(mask)
+
 
         # Ensure mask is binary: any value >0.5 becomes 1.0, else 0.0
         mask_tensor = (mask_tensor > 0.5).float()
 
         return img_tensor, mask_tensor
 
-    def get_transforms_dict(self):
+    def get_transforms_dict(self) -> Dict[str, Any]:
         """
         Return the active preprocess and augment configurations as plain dictionaries.
 
@@ -101,7 +110,7 @@ class FieldDataset(Dataset):
             "augment":    OmegaConf.to_container(self.cfg_aug, resolve=True),
         }
 
-    def get_file_paths(self, idx):
+    def get_file_paths(self, idx: int) -> Tuple[str, str]:
         """
         Retrieve the original file paths for a given index.
 
