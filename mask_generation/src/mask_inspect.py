@@ -58,8 +58,7 @@ class FiftyOneMaskInspector:
 
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
         self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
-
-        self.voxel_inspection_results_csv = Path(cfg.paths.voxel_inspection_results_csv)
+        self.voxel_inspection_results_db = cfg.paths.voxel_inspection_results_db
 
         # Other configuration parameters
         self.port = cfg.inspect.port
@@ -151,9 +150,9 @@ class FiftyOneMaskInspector:
             refined_masks_source_dir (Path): Directory containing refined masks (if available).
             dest_dir (str): Path to the destination directory where images and masks will be moved.
         """
-        df_voxel_results = pd.read_csv(self.voxel_inspection_results_csv)
+        df_voxel_results = pd.read_csv(self.voxel_inspection_results_db)
         if df_voxel_results.empty:
-            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_csv}.")
+            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_db}.")
             return
 
         # Extract images tagged "good" from the DataFrame
@@ -215,8 +214,8 @@ class FiftyOneMaskInspector:
             print("Session closed.")
 
         # Save the voxel inspection results
-        self.export_tags_to_csv(self.voxel_inspection_results_csv)
-        log.info(f"Tags saved to csv: {self.voxel_inspection_results_csv}")
+        self.export_tags_to_csv(self.voxel_inspection_results_db)
+        log.info(f"Tags saved to csv: {self.voxel_inspection_results_db}")
 
 def main(cfg: DictConfig) -> None:
     """

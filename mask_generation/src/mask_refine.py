@@ -54,7 +54,7 @@ class RefineMask:
         self.cutout_dir = self.mask_generation_dir / "cutouts"
         self.mask_refine_save_dir = self.mask_generation_dir / "refined_masks"
         self.mask_refine_save_dir.mkdir(parents=True, exist_ok=True)
-        self.voxel_inspection_results_csv = Path(cfg.paths.voxel_inspection_results_csv)
+        self.voxel_inspection_results_db = Path(cfg.paths.voxel_inspection_results_db)
 
         # Initialize variables for image and mask processing
         self.cropout_image = None
@@ -169,9 +169,9 @@ class RefineMask:
         """
         logging.info(f"Processing all images in folder: {self.cutout_dir} that have been tagged with issues in the voxel inspection results.")
         # read db
-        df_voxel_results = pd.read_csv(self.voxel_inspection_results_csv)
+        df_voxel_results = pd.read_csv(self.voxel_inspection_results_db)
         if df_voxel_results.empty:
-            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_csv}.")
+            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_db}.")
             return
         
         # Create lists of file names based on tags in the DataFrame
