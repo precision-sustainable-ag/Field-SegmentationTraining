@@ -48,14 +48,6 @@ class FiftyOneMaskInspector:
         self.initial_mask_inspection_source = Path(cfg.paths.initial_mask_inspection_source)
         self.refined_masks_dir_source = Path(cfg.paths.refined_masks_dir)
 
-        # for mode "run_pipeline"
-        self.lts_good_images_masks_destination_dir = Path(cfg.paths.lts_good_images_masks_destination_dir)
-        self.lts_good_images_masks_destination_dir.mkdir(parents=True, exist_ok=True)
-
-        # for mode "test"
-        self.test_good_images_masks_destination_dir = Path(cfg.paths.test_good_images_masks_destination_dir)
-        self.test_good_images_masks_destination_dir.mkdir(parents=True, exist_ok=True)
-
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
         self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
         self.voxel_inspection_results_db = cfg.paths.voxel_inspection_results_db
