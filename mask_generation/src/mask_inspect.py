@@ -52,9 +52,11 @@ class FiftyOneMaskInspector:
         self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
         self.voxel_inspection_results_db = cfg.paths.voxel_inspection_results_db
 
-        # Other configuration parameters
+        # Configuration parameters for FiftyOne Voxel
         self.port = cfg.inspect.port
         self.dataset_name = cfg.inspect.dataset_name
+        self.dataset = None
+        self.session = None
 
         # pipeline mode
         self.mode = cfg.mode
@@ -114,65 +116,30 @@ class FiftyOneMaskInspector:
         dataset.add_samples(samples)
         return dataset
 
-    def export_tags_to_csv(self, output_csv: Path) -> None:
+    def save_tags_to_db(self, output_csv: Path) -> None:
         """
-        Exports the image filenames and their associated tags to a CSV file.
+        Saves image filenames, their associated tags, and a flag indicating whether to use a refined mask for reprocessing into a CSV file.
 
-        Args:
-            output_csv (Path): Destination path for the CSV file.
+        For each sample in the dataset, this method:
+        - Extracts the image filename and associated tags.
+        - Sets 'use_refined_mask_to_reprocess' to "false" if the tags contain "good" or "bad", otherwise "true".
+        - Writes the collected data to a CSV file at the specified output path.
         """
         rows = []
         for sample in self.dataset:
             tags_str = ",".join(sample.tags) if sample.tags else ""
-            rows.append({"image_name": Path(sample.filepath).name, "tags": tags_str})
+            if "good" in sample.tags or "bad" in sample.tags:
+                use_refined_mask_to_reprocess = "false"
+            else:
+                use_refined_mask_to_reprocess = "true"
+            rows.append({
+                "image_name": Path(sample.filepath).name,
+                "voxel tags": tags_str,
+                "use_refined_mask_to_reprocess": use_refined_mask_to_reprocess
+            })
 
         df = pd.DataFrame(rows)
         df.to_csv(output_csv, index=False)
-
-    def move_good_images_masks_to_lts(self, initial_mask_source_dir: Path, refined_masks_source_dir: Path, dest_dir: str):
-        """
-        Moves images tagged as "good" along with their corresponding masks to a destination directory.
-
-        This function reads voxel inspection results from a CSV file and identifies images marked with
-        the tag "good". It then searches for corresponding masks, prioritizing refined masks if available,
-        and moves both the image and its mask to a structured directory for training purposes.
-
-        Args:
-            initial_mask_source_dir (Path): Directory containing the original images and masks.
-            refined_masks_source_dir (Path): Directory containing refined masks (if available).
-            dest_dir (str): Path to the destination directory where images and masks will be moved.
-        """
-        df_voxel_results = pd.read_csv(self.voxel_inspection_results_db)
-        if df_voxel_results.empty:
-            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_db}.")
-            return
-
-        # Extract images tagged "good" from the DataFrame
-        good_images = df_voxel_results[df_voxel_results['tags'].str.contains("good", na=False)]['image_name'].tolist() 
-
-        # Move images and masks (refined or initial masks) from source directory to the destination directory
-        for image_name in good_images:
-            source_image_path = Path(initial_mask_source_dir) / image_name  # Source image path
-            # Check if the mask exists in the refined masks source directory first
-            if image_name in refined_masks_source_dir.glob("*.png"):
-                log.info(f"Refined mask found for {image_name}. Moving from refined masks source directory.")
-                source_mask_path = Path(refined_masks_source_dir) / f"{Path(image_name).stem}_mask.png"  
-            # If not found, use the initial mask source directory
-            else:
-                log.info(f"Refined mask not found for {image_name}. Using initial mask source directory.")
-                source_mask_path = Path(initial_mask_source_dir) / f"{Path(image_name).stem}_mask.png" 
-
-            dest_images_dir = Path(dest_dir) / "train_images" # Destination images directory
-            dest_masks_dir = Path(dest_dir) / "train_masks" # Destination masks directory
-            dest_images_dir.mkdir(parents=True, exist_ok=True)
-            dest_masks_dir.mkdir(parents=True, exist_ok=True)
-
-            dest_image_path = dest_images_dir / image_name
-            dest_mask_path = dest_masks_dir / f"{Path(image_name).stem}_mask.png"
-
-            shutil.move(str(source_image_path), str(dest_image_path))
-            shutil.move(str(source_mask_path), str(dest_mask_path))
-            log.info(f"Moved {image_name} and its mask to {dest_dir}")
 
     def run_voxel_inspection(self) -> None:
         """
@@ -190,13 +157,14 @@ class FiftyOneMaskInspector:
 
         try:
             print("\n\nFollow these instructions in the FiftyOne app:\n\n"
-                "1. On the left bar, click on the LABELS tab and select desired labels\n"
-                "2. Click on the box of each image to select samples (images) of interest\n"
-                "3. Click on 'Tag samples or Labels' icon in the bar above the samples\n"
-                "4. Enter the desired tag name: 'good', 'bad', 'red_missing', 'white_missing', 'mat_present' or 'other'\n"
-                "5. Click 'ADD...' and then 'APPLY'\n"
-                "6. Repeat steps 2–5 for additional tags\n"
-                "7. Press Ctrl+C in the terminal to end the session and save the tags\n")
+                "1. On the left bar, click on the LABELS tab and select desired labels: 'initial masks' or 'refined masks'\n"
+                "2. On the left bar, click on the TAGS and then select 'sample tags'\n"
+                "3. Click on the box of each image to select samples (images) of interest\n"
+                "4. Click on 'Tag samples or Labels' icon in the bar above the samples\n"
+                "5. Enter one of these tag names: 'good', 'bad', 'red_missing', 'white_missing', 'mat_present' or 'other'\n"
+                "6. Click 'ADD...' and then 'APPLY'\n"
+                "7. Repeat steps 2–6 for additional tags\n"
+                "8. Press Ctrl+C in the terminal to end the session and save the tags\n")
             self.session.wait()
         except KeyboardInterrupt:
             print("\nSession manually interrupted by user.")
@@ -206,8 +174,8 @@ class FiftyOneMaskInspector:
             print("Session closed.")
 
         # Save the voxel inspection results
-        self.export_tags_to_csv(self.voxel_inspection_results_db)
-        log.info(f"Tags saved to csv: {self.voxel_inspection_results_db}")
+        self.save_tags_to_db(self.voxel_inspection_results_db)
+        log.info(f"Tags saved to database: {self.voxel_inspection_results_db}")
 
 def main(cfg: DictConfig) -> None:
     """

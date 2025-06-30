@@ -16,11 +16,5 @@ mask_gen_dir: ${paths.project_dir}/mask_gen
 # paths for mask inspection:
 initial_mask_inspection_source: ${paths.mask_gen_dir}/cutouts
 refined_masks_dir: ${paths.mask_gen_dir}/refined_masks
-voxel_inspection_results_dir: ${paths.mask_gen_dir}/mask_inspection_results
-voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}.csv
-
-# for mode "run_pipeline"
-lts_good_images_masks_destination_dir: ${paths.longterm_storage}/field-tools/mask_inspection_results
-
-# for mode "test"
-test_good_images_masks_destination_dir: ${paths.mask_gen_dir}/test_mask_inspection_results
+voxel_inspection_results_dir: ${paths.mask_gen_dir}/mask_inspection_db
+voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
