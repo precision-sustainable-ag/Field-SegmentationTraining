@@ -211,11 +211,10 @@ class RefineMask:
         refined_mask_path = self.mask_refine_save_dir / mask_filename
         initial_mask_path = self.cutout_dir / mask_filename
 
-        # Remove mask for "bad" or "other" tags and return early
-        if tag in {"bad", "other"}:
-            if refined_mask_path.exists():
-                os.remove(refined_mask_path)
-                logging.info(f"Removed mask for tag '{tag}': {refined_mask_path}")
+        if tag in {"bad", "other"}: # mask with bad tag gets removed ##### figure out OTHER tag
+            for path in [refined_mask_path, initial_mask_path]:
+                os.remove(path) if path.exists() else None
+            logging.info(f"Removed mask for tag '{tag}': {refined_mask_path}")
         elif tag in {"missing_red", "missing_white", "present_mat"}:
             # Prefer refined mask if it exists, else use default
             mask_path = refined_mask_path if refined_mask_path.exists() else initial_mask_path
