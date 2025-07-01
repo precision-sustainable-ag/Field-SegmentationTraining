@@ -73,6 +73,7 @@ class FiftyOneMaskInspector:
         samples = []
         for image_path in self.initial_mask_inspection_source.glob("*.jpg"):
             stem = image_path.stem
+            print(stem)
             initial_mask_path = self.initial_mask_inspection_source / f"{stem}_mask.png"
 
             if not initial_mask_path.exists():
@@ -93,6 +94,7 @@ class FiftyOneMaskInspector:
             samples.append(sample)
 
         log.info(f"Loaded {len(samples)} samples.")
+        print(samples[0])
         return samples
 
     def create_dataset(self, samples) -> fo.Dataset:
@@ -153,7 +155,7 @@ class FiftyOneMaskInspector:
         """
         samples = self.load_samples()
         self.dataset = self.create_dataset(samples)
-        self.session = fo.launch_app(self.dataset, port=self.port)
+        self.session = fo.launch_app(self.dataset)
 
         try:
             print("\n\nFollow these instructions in the FiftyOne app:\n\n"

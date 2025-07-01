@@ -4,10 +4,10 @@ from omegaconf import DictConfig
 
 # Import the task functions
 # TODO: move these into a subdirectory src/mask_gen when incorporating into larger pipeline
-from src.detect_weeds import main as detect_weeds
-from src.unet_segment_weeds import main as unet_segment_weeds
-from src.mask_inspect import main as mask_inspect
-from src.mask_refine import main as mask_refine
+from src.mask_gen_utils.detect_weeds import main as detect_weeds
+from src.mask_gen_utils.unet_segment_weeds import main as unet_segment_weeds
+from src.mask_gen_utils.mask_inspect import main as mask_inspect
+from src.mask_gen_utils.mask_refine import main as mask_refine
 
 
 log = logging.getLogger(__name__)
