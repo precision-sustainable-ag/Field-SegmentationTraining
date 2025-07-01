@@ -203,32 +203,25 @@ class RefineMask:
         Args:
             image_path (Path): The file path to the image being processed.
             tag (str): The tag associated with the image, indicating how it should be handled.
-        Behavior:
-            - If the tag is "bad" or "other", removes the corresponding refined mask file if it exists and logs the action.
-            - If the tag is not one of {"missing_red", "missing_white", "present_mat"}, raises a ValueError to halt processing.
-            - For valid tags, selects the refined mask if available; otherwise, uses the default mask, and processes the image accordingly.
         Raises:
             ValueError: If the tag is not recognized as a valid processing tag.
         """
         stem = image_path.stem
         mask_filename = f"{stem}_mask.png"
         refined_mask_path = self.mask_refine_save_dir / mask_filename
-        default_mask_path = self.cutout_dir / mask_filename
+        initial_mask_path = self.cutout_dir / mask_filename
 
         # Remove mask for "bad" or "other" tags and return early
         if tag in {"bad", "other"}:
             if refined_mask_path.exists():
                 os.remove(refined_mask_path)
                 logging.info(f"Removed mask for tag '{tag}': {refined_mask_path}")
-            return
-
-        # Validate tag
-        if tag not in {"missing_red", "missing_white", "present_mat"}:
+        elif tag in {"missing_red", "missing_white", "present_mat"}:
+            # Prefer refined mask if it exists, else use default
+            mask_path = refined_mask_path if refined_mask_path.exists() else initial_mask_path
+            self.process_single_image(image_path, mask_path, tag)
+        else:
             raise ValueError(f"Unknown tag '{tag}' encountered for image {image_path}. Stopping processing.")
-
-        # Prefer refined mask if it exists, else use default
-        mask_path = refined_mask_path if refined_mask_path.exists() else default_mask_path
-        self.process_single_image(image_path, mask_path, tag)
 
     def process_cutout_dir(self) -> None:
         """
