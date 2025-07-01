@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9
+  - python=3.11
   - opencv
   - numpy
   - scikit-image
@@ -18,6 +18,4 @@ dependencies:
   - pip
   - pip:
       - ultralytics
-      - segment-anything-hq
       - segmentation-models-pytorch
-version: 1.0

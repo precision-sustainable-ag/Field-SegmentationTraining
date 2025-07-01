@@ -79,17 +79,18 @@ field_segmentation/                    # ← top‐level repo
 ├── mask_generation/   
 │   └── projects/                      # 11. Project-specific experiment folders
 │       └── {project.name}/
-│            ├── developed-images/
-│            │   └── TXC08723.jpg
-│            ├── cutouts/
-│            │   ├── TXC08723_0.jpg
-│            │   ├── TXC08723_0.png
-│            │   ├── TXC08723_0.json
-│            │   └── TXC08723_0_mask.png
-│            ├── refined_masks/
-│            │   └── TXC08723_0_mask.png
-│            └── db/
-│                └── {project.name}.csv
+│           └── mask_gen/
+│               ├── developed-images/  # Original developed images (e.g. scanned or processed)
+│               │   └── TXC08723.jpg
+│               ├── cutouts/           # Cropped regions, masks, and metadata for each image
+│               │   ├── TXC08723_0.jpg
+│               │   ├── TXC08723_0.png
+│               │   ├── TXC08723_0.json
+│               │   └── TXC08723_0_mask.png
+│               ├── refined_masks/     # Post-processed/refined masks
+│               │   └── TXC08723_0_mask.png
+│               └── db/                # Project-specific database (e.g. CSV with metadata)
+│                   └── {project.name}.csv
 └── .github/                           # 10. CI/CD workflows, code formatting, etc.
     └── workflows/
         └── ci.yaml                    # 10a. Run pytest, flake8, black, isort, plus any sanity checks (one-epoch train, maskgen sanity)
