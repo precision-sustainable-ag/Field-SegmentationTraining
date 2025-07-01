@@ -1,0 +1,17 @@
+# Morphological operations and HSV color ranges for mask generation.
+hsv_missing_red:
+  lower: [0, 100, 100]
+  upper: [179, 255, 255]
+
+hsv_missing_white:
+  lower: [0, 0, 30]
+  upper: [180, 30, 255]
+
+hsv_present_mat: #gray or black pixels
+  lower: [15, 54, 46]
+  upper: [21, 94, 150]
+
+opening_kernel_size: 3
+closing_kernel_size: 4
+erosion_kernel_size: 3
+exg_threshold: 20

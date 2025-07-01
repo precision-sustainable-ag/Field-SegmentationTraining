@@ -1,0 +1,21 @@
+name: mask_generation_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - opencv
+  - numpy
+  - scikit-image
+  - pillow
+  - pathlib
+  - pytorch
+  - torchvision
+  - pandas
+  - hydra-core
+  - omegaconf
+  - fiftyone
+  - pip
+  - pip:
+      - ultralytics
+      - segmentation-models-pytorch
