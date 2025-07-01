@@ -1,30 +1,30 @@
 # src/train.py
 
 import sys
+from typing import List
 from pathlib import Path
 
 # Add project root to sys.path so that `src` becomes importable
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from typing import List
-from pathlib import Path
-
 import hydra
 import hydra.utils
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig
+
 from src.utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed, seed_worker
+from src.models.lit_segmentation import LitSegmentation
+from src.data.dataset import FieldDataset
+
 import torch
-from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import Logger
 
-from src.models.lit_segmentation import LitSegmentation
-from src.data.dataset import FieldDataset
 
-
-@hydra.main(config_path="../conf", config_name="config")
+@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def train(cfg: DictConfig) -> None:
     """
     Entry point for training a segmentation model using PyTorch Lightning.
@@ -122,10 +122,10 @@ def train(cfg: DictConfig) -> None:
         model_weights = best_ckpt["state_dict"]
 
         # Name "best" for consistency across other future tasks
-        ckpt_filename = "best.pth"
+        ckpt_filename = Path(best_ckpt_path).stem + ".pth"
 
         # Create model export path
-        export_path = Path(cfg.paths.project_train_dir) / "model"
+        export_path = Path(HydraConfig.get().runtime.output_dir) / "model"
         export_path.mkdir(parents=True, exist_ok=True)
         torch.save(model_weights, export_path / ckpt_filename)
         if trainer.is_global_zero:

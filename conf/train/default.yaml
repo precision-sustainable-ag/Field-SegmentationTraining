@@ -45,11 +45,12 @@ early_stop:
 
 logger:
   - _target_: pytorch_lightning.loggers.CSVLogger
-    save_dir: ${paths.project_train_dir}
+    save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
     name: ""
     version: ""
+
   - _target_: pytorch_lightning.loggers.WandbLogger
     project: ${project.name}
     entity: sbaghba # Optional: your WandB entity
     log_model: true
-    save_dir: ${paths.project_train_dir}
+    save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
