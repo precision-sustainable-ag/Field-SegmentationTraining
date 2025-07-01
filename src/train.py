@@ -16,6 +16,7 @@ from src.utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed, seed_worker
 from src.models.lit_segmentation import LitSegmentation
 from src.data.dataset import FieldDataset
+from src.utils.augmentation_logger import log_augmentation_batch
 
 import torch
 from torch.utils.data import DataLoader
@@ -77,6 +78,7 @@ def train(cfg: DictConfig) -> None:
     # === 4. Loggers ===
     # Dynamically instantiate all configured loggers
     loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
+    log_augmentation_batch(train_loader, cfg.train.logger, num_samples=4)
 
     # === 5. Callbacks ===
     checkpoint_cb = ModelCheckpoint(
