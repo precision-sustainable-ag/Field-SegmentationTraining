@@ -2,7 +2,7 @@
 mode: ??? # Options: mask_gen
 
 project:
-  name: mask_gen
+  name: test
 
 defaults:
   - paths: default

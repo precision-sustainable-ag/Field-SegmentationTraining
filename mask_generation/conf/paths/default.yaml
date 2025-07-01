@@ -2,19 +2,16 @@
 workdir: ${hydra:runtime.cwd}
 logdir: ${paths.workdir}/logging
 datadir: ${paths.workdir}/data
-project_dir: ${paths.workdir}/projects
+main_projects_dir: ${paths.workdir}/projects
+project_dir: ${paths.main_projects_dir}/${project.name}
 
-# longterm storage paths for field images
-longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
-selected_dataset_for_training_dir: ${paths.longterm_storage}/field-tools/training_dataset_non_green_stem_issue
-
-# model paths
-yolo_weed_detection_model: ${paths.datadir}/field-tools/models/weed_detection/weights/best.pt
-unet_segmentation_model: ${paths.datadir}/field-tools/models/unet/unet_segmentation.pth
+# paths for mask_gen mode:
 mask_gen_dir: ${paths.project_dir}/mask_gen
-
-# paths for mask inspection:
 initial_mask_inspection_source: ${paths.mask_gen_dir}/cutouts
 refined_masks_dir: ${paths.mask_gen_dir}/refined_masks
 voxel_inspection_results_dir: ${paths.mask_gen_dir}/mask_inspection_db
 voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
+
+# model paths
+yolo_weed_detection_model: ${paths.datadir}/field-tools/models/weed_detection/weights/best.pt
+unet_segmentation_model: ${paths.datadir}/field-tools/models/unet/unet_segmentation.pth
