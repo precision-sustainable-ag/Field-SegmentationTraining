@@ -1,29 +1,36 @@
-# Hydra defaults and settings
+# Hydra defaults and settings. 
+mode: ??? # Options: mask_gen
+
+project:
+  name: test
+
 defaults:
-  - paths: default # or your_paths_template
-  - unet_conf: default
+  - paths: default
+  - mask_gen: default
   - _self_
 
 hydra:
   run:
     dir: ${paths.logdir}/${job.job_now}
-  output_subdir: ${hydra.run.dir}/hydra
 
-pipeline:
-  # - unet_segmentation
-  - evaluate
-  # - inference_for_pipeline
+tasks:
+  sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
+  detect_weeds: true
+  unet_segment_weeds: true
+  mask_inspect: true
+  mask_refine: true
 
-project_name: FIELD
-task: # Leave empty as placeholder
+test:
+  enabled: true
+
+mask_inspect:
+  save2lts: false
+
+general:
+  task: # Leave empty as placeholder
 
 job:
   job_now_date: &nowdir ${now:%Y-%m-%d}
   job_now_time: ${now:%H_%M_%S}
   job_now: ${job.job_now_date}/${job.job_now_time} 
-  jobdir: ${data.datadir}/${job.job_now}
-
-inference_for_pipeline:
-  save_mask: False # If true, the segmented image will be saved
-  overlay_comparison: False # If true, the original image and the segmented image will be overlayed
-  side_by_side_comparison: True # If true, the original image and the segmented image will be displayed side by side but greatly increases the time to process
+  jobdir: ${paths.datadir}/${job.job_now}

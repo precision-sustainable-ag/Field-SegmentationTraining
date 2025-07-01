@@ -1,36 +1,31 @@
-#!/usr/bin/env python3
-import getpass
 import logging
-import sys
-
 import hydra
-from hydra.utils import get_method
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+from omegaconf import OmegaConf  # Do not confuse with dataclass.MISSING
 
-sys.path.append("src")
+# Import the task functions
+from src.mask_gen import main as mask_gen
 
 log = logging.getLogger(__name__)
-# Get the logger for the Azure SDK
-azlogger = logging.getLogger("azure")
-# Set the logging level to CRITICAL to turn off regular logging
-azlogger.setLevel(logging.WARN)
+
+# Define a registry of tasks
+TASK_REGISTRY = {
+    "mask_gen": mask_gen,
+    # "train": train, # For when we incorporate training into the pipeline
+    # Add more tasks here as needed
+}
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
-def main(cfg : DictConfig) -> None:
+def main(cfg: DictConfig) -> None:
     cfg = OmegaConf.create(cfg)
-    whoami = getpass.getuser()
+    mode = cfg.mode
+    log.info(f"Starting {mode}")
+    
+    if mode not in TASK_REGISTRY:
+        log.error(f"Task {mode} not found in task registry")
+        return
+    
+    TASK_REGISTRY[mode](cfg)
 
-    tasks = cfg.pipeline
-    log.info(f"Running {' ,'.join(tasks)} as {whoami}")
-    for task in tasks:
-        cfg.task = task
-        try:
-            task = get_method(f"{task}.main")
-            task(cfg)
-
-        except Exception as e:
-            log.exception("Failed")
-            sys.exit(1)
-            
 if __name__ == "__main__":
     main()

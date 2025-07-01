@@ -66,18 +66,18 @@ class RefineMask:
         self.cropout_mask = None
 
         # HSV thresholds for different color masks
-        self.red_missing_lower = np.array(cfg.mask_refine.hsv_missing_red.lower, dtype=np.uint8)
-        self.red_missing_upper = np.array(cfg.mask_refine.hsv_missing_red.upper, dtype=np.uint8)
-        self.white_missing_lower = np.array(cfg.mask_refine.hsv_missing_white.lower, dtype=np.uint8)
-        self.white_missing_upper = np.array(cfg.mask_refine.hsv_missing_white.upper, dtype=np.uint8)
-        self.mat_present_lower = np.array(cfg.mask_refine.hsv_present_mat.lower, dtype=np.uint8)
-        self.mat_present_upper = np.array(cfg.mask_refine.hsv_present_mat.upper, dtype=np.uint8)
+        self.red_missing_lower = np.array(cfg.mask_gen.refine.hsv_missing_red.lower, dtype=np.uint8)
+        self.red_missing_upper = np.array(cfg.mask_gen.refine.hsv_missing_red.upper, dtype=np.uint8)
+        self.white_missing_lower = np.array(cfg.mask_gen.refine.hsv_missing_white.lower, dtype=np.uint8)
+        self.white_missing_upper = np.array(cfg.mask_gen.refine.hsv_missing_white.upper, dtype=np.uint8)
+        self.mat_present_lower = np.array(cfg.mask_gen.refine.hsv_present_mat.lower, dtype=np.uint8)
+        self.mat_present_upper = np.array(cfg.mask_gen.refine.hsv_present_mat.upper, dtype=np.uint8)
 
         # Morphological operation parameters
-        self.morph_opening_size = cfg.mask_refine.opening_kernel_size
-        self.morph_closing_size = cfg.mask_refine.closing_kernel_size
-        self.morph_erosion_size = cfg.mask_refine.erosion_kernel_size
-        self.exg_threshold = cfg.mask_refine.exg_threshold
+        self.morph_opening_size = cfg.mask_gen.refine.opening_kernel_size
+        self.morph_closing_size = cfg.mask_gen.refine.closing_kernel_size
+        self.morph_erosion_size = cfg.mask_gen.refine.erosion_kernel_size
+        self.exg_threshold = cfg.mask_gen.refine.exg_threshold
     
     def process_missing_white(self, image: np.ndarray) -> np.ndarray:
         """
