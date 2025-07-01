@@ -1,13 +1,22 @@
 """
-Mask Refinement Module for Post-Segmentation Cleanup
+Mask Refinement Module 
 
 This module defines the `RefineMask` class which processes segmented images and refines
 their corresponding binary masks using HSV thresholding and morphological operations.
-It reads tagged image metadata from a CSV (voxel inspection results) and applies the
-appropriate refinement based on whether the issue is red-missing, white-missing, or mat-present.
 
-The refined masks are saved in a dedicated output directory for downstream use.
+Functionality:
+- Reads tagged image metadata from a voxel inspection CSV.
+- Identifies image issues based on tags:
+    * Red-missing (masks where red plant parts are not detected)
+    * White-missing (masks where white plant parts are not detected)
+    * Mat-present (masks with black/gray mat background present)
+    * Bad (masks marked as bad in voxel inspection and need to be removed)
+    * Other tags (masks with other issues)
+- Applies region-specific refinements and morphological operations.
+- Combines original and refined masks for final output.
+- Saves the refined masks in a dedicated output directory for downstream use.
 """
+import os
 import cv2
 import logging
 import numpy as np
@@ -27,19 +36,15 @@ log = logging.getLogger(__name__)
 
 class RefineMask:
     """
-    Class for refining segmentation masks based on identified issues using HSV filtering and 
+    Refines segmentation masks based on voxel-inspection tags using HSV filtering and 
     morphological operations.
 
-    This class supports detecting and correcting common segmentation mask problems such as:
-    - Missing red regions (e.g., red targets not detected)
-    - Missing white regions (e.g., white targets or tape)
-    - Mat presence (e.g., black/gray mat detected in background)
-
-    It performs:
-    - HSV thresholding to identify issue regions
-    - Morphological cleanup (opening, closing, erosion)
-    - Merging refined masks with original segmentation masks
-    - Batch processing of images tagged via voxel inspection
+    Supported tags and operations:
+    - "missing_red": Detects red regions using HSV and adds to mask.
+    - "missing_white": Detects white regions using HSV and adds to mask.
+    - "present_mat": Detects background mat presence and removes it from mask.
+    - "bad": if present, removes the refined masks so initial mask is used in next steps.
+    - "other": skips processing for images with other tags.
     """
     def __init__(self, cfg: DictConfig) -> None:
         """
@@ -130,14 +135,15 @@ class RefineMask:
 
     def process_single_image(self, cropout_image_path: Path, mask_image_path: Path, tag: str) -> None:
         """
-        Processes a single image and its mask by combining it with a red-missing HSV mask,
-        applying morphological refinements, and saving the final result.
+        Processes a single image-mask pair based on the associated tag.
+        Combines the original mask with HSV-refined mask and applies cleanup.
 
         Args:
-            cropout_image_path (Path): Path to the original cropped RGB image.
+            cropout_image_path (Path): Path to the cropped RGB image.
             mask_image_path (Path): Path to the initial binary mask.
+            tag (str): Issue type tag ("missing_red", "missing_white", "present_mat", "bad", or "other").
         """
-        logging.info(f"Starting post-segmentation processing for: {cropout_image_path}")
+        logging.info(f"Refining mask for: {cropout_image_path}")
         self.cropout_image = cv2.cvtColor(cv2.imread(str(cropout_image_path)), cv2.COLOR_BGR2RGB)
         self.cropout_mask = cv2.imread(str(mask_image_path), cv2.IMREAD_GRAYSCALE)
 
@@ -160,39 +166,85 @@ class RefineMask:
 
         logging.info(f"Saving final mask to: {mask_output_path}")
         cv2.imwrite(str(mask_output_path), combined_mask)
-        logging.info(f"Mask generation complete for: {cropout_image_path}")
+        logging.info(f"Refining completed for: {cropout_image_path}")
+
+    def _load_voxel_tag_map(self) -> dict:
+        """
+        Loads voxel inspection CSV and returns a mapping of image names to their issue tags.
+        """
+        if not Path(self.voxel_inspection_results_db).exists():
+            logging.exception(f"Voxel inspection CSV not found at {self.voxel_inspection_results_db}")
+            return {}
+
+        df = pd.read_csv(self.voxel_inspection_results_db)
+        if df.empty:
+            logging.exception("Voxel inspection results file is empty.")
+            return {}
+
+        tag_keywords = {
+            "missing_red": "red",
+            "missing_white": "white",
+            "present_mat": "mat",
+            "bad": "bad",
+            "other": "other"
+        }
+
+        tag_map = {}
+        for tag_label, keyword in tag_keywords.items():
+            matched = df[df["voxel tags"].str.contains(keyword, na=False)]["image_name"]
+            tag_map.update({name: tag_label for name in matched})
+
+        return tag_map
+
+    def _handle_tagged_image(self, image_path: Path, tag: str) -> None:
+        """
+        Processes a single image based on its associated tag by either removing its mask or refining it.
+
+        Args:
+            image_path (Path): The file path to the image being processed.
+            tag (str): The tag associated with the image, indicating how it should be handled.
+        Behavior:
+            - If the tag is "bad" or "other", removes the corresponding refined mask file if it exists and logs the action.
+            - If the tag is not one of {"missing_red", "missing_white", "present_mat"}, raises a ValueError to halt processing.
+            - For valid tags, selects the refined mask if available; otherwise, uses the default mask, and processes the image accordingly.
+        Raises:
+            ValueError: If the tag is not recognized as a valid processing tag.
+        """
+        stem = image_path.stem
+        mask_filename = f"{stem}_mask.png"
+        refined_mask_path = self.mask_refine_save_dir / mask_filename
+        default_mask_path = self.cutout_dir / mask_filename
+
+        # Remove mask for "bad" or "other" tags and return early
+        if tag in {"bad", "other"}:
+            if refined_mask_path.exists():
+                os.remove(refined_mask_path)
+                logging.info(f"Removed mask for tag '{tag}': {refined_mask_path}")
+            return
+
+        # Validate tag
+        if tag not in {"missing_red", "missing_white", "present_mat"}:
+            raise ValueError(f"Unknown tag '{tag}' encountered for image {image_path}. Stopping processing.")
+
+        # Prefer refined mask if it exists, else use default
+        mask_path = refined_mask_path if refined_mask_path.exists() else default_mask_path
+        self.process_single_image(image_path, mask_path, tag)
 
     def process_cutout_dir(self) -> None:
         """
-        Processes all crop-out images and their corresponding masks in the cutout directory,
-        refines each mask, and saves the output to the specified directory.
+        Iterates over all cropout images and applies refinement if they are tagged.
+        Images without voxel tags are skipped.
         """
-        logging.info(f"Processing all images in folder: {self.cutout_dir} that have been tagged with issues in the voxel inspection results.")
-        # read db
-        df_voxel_results = pd.read_csv(self.voxel_inspection_results_db)
-        if df_voxel_results.empty:
-            logging.exception(f"No voxel inspection results found in {self.voxel_inspection_results_db}.")
+        logging.info(f"Processing images in folder: {self.cutout_dir} with issues from voxel inspection.")
+        tag_map = self._load_voxel_tag_map()
+        if not tag_map:
             return
-        
-        # Create lists of file names based on tags in the DataFrame
-        missing_red_images = df_voxel_results[df_voxel_results['tags'].str.contains("red", na=False)]['image_name'].tolist()
-        missing_white_images = df_voxel_results[df_voxel_results['tags'].str.contains("white", na=False)]['image_name'].tolist()
-        present_mat_images = df_voxel_results[df_voxel_results['tags'].str.contains("mat", na=False)]['image_name'].tolist()
 
-        # Match and process image-mask pairs based on stem names and tags
         for image_path in sorted(self.cutout_dir.glob("*.jpg")):
-            tag = None
-            if image_path.name in missing_red_images:
-                tag = "missing_red"
-            elif image_path.name in missing_white_images:
-                tag = "missing_white"
-            elif image_path.name in present_mat_images:
-                tag = "present_mat"
-
-            if tag is not None:
-                stem = image_path.stem
-                mask_path = self.cutout_dir / f"{stem}_mask.png"
-                self.process_single_image(image_path, mask_path, tag)
+            tag = tag_map.get(image_path.name)
+            if not tag:
+                continue
+            self._handle_tagged_image(image_path, tag)
 
 def main(cfg: DictConfig) -> None:
     """
