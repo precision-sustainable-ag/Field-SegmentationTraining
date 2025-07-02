@@ -3,24 +3,25 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.10
   - opencv
   - numpy
   - pandas
   - matplotlib
   - pillow
-  - pytorch
-  - torchvision
   - tqdm
   - pyyaml
   - scikit-image
   - hydra-core
   - wandb
   - omegaconf
-  - cudatoolkit  # version matching your CUDA + A100
   - fiftyone
+  - pip
   - pip:
       # Segmentation & Metrics
+      - torch
+      - torchvision
+      - pytorch-lightning
       - segmentation-models-pytorch
       - torchmetrics
       # GPU utility
