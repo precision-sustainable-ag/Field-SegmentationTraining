@@ -1,0 +1,28 @@
+# All data‐augmentation transforms. Your datamodule should read these keys 
+# and apply the appropriate torchvision / albumentations transforms.
+
+horizontal_flip: true
+vertical_flip: false
+
+random_rotate:
+  enabled: true
+  degrees: 15
+
+color_jitter:
+  enabled: true
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  hue: 0.05
+
+# (Optional) random scale + crop:
+random_resized_crop:
+  enabled: false
+  scale: [0.8, 1.0]
+  ratio: [0.75, 1.33]
+
+# (Optional) blur / gaussian noise
+gaussian_blur:
+  enabled: false
+  kernel_size: 5
+  sigma: 1.0

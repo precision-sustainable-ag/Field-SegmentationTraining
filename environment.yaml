@@ -1,21 +1,30 @@
-name: mask_generation_env
+name: field_train
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.10
   - opencv
   - numpy
-  - scikit-image
-  - pillow
-  - pathlib
-  - pytorch
-  - torchvision
   - pandas
+  - matplotlib
+  - pillow
+  - tqdm
+  - pyyaml
+  - scikit-image
   - hydra-core
+  - wandb
   - omegaconf
   - fiftyone
   - pip
   - pip:
-      - ultralytics
+      # Segmentation & Metrics
+      - torch
+      - torchvision
+      - pytorch-lightning
       - segmentation-models-pytorch
+      - torchmetrics
+      # GPU utility
+      - gputil
+      # Optional / Future use
+      - ultralytics  # only needed if you explicitly use YOLO-based models

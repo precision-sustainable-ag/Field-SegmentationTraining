@@ -1,17 +1,36 @@
-# directories
-workdir: ${hydra:runtime.cwd}
-logdir: ${paths.workdir}/logging
-datadir: ${paths.workdir}/data
-main_projects_dir: ${paths.workdir}/projects
-project_dir: ${paths.main_projects_dir}/${project.name}
+# All filesystem paths, built from base_dir + project‐specific subfolders
+
+base_dir: ${hydra:runtime.cwd}                      # usually the repo root
+data_dir: ${paths.base_dir}/data
+
+project_dir: ${paths.base_dir}/projects/${project.name}
+
+project_preprocess_dir: ${paths.project_dir}/preprocess 
+preprocess_split_dir: ${paths.project_preprocess_dir}/train_val_test_split 
+
+# Preprocess stats and image list files
+preprocess_stats_file: ${paths.project_preprocess_dir}/data_stats.txt
+preprocess_image_list_file: ${paths.project_preprocess_dir}/images.txt
+
+# Train, validation, and test directories for both images and masks
+train_images_dir: ${paths.preprocess_split_dir}/train/images
+train_masks_dir: ${paths.preprocess_split_dir}/train/masks
+val_images_dir: ${paths.preprocess_split_dir}/val/images
+val_masks_dir: ${paths.preprocess_split_dir}/val/masks
+test_images_dir: ${paths.preprocess_split_dir}/test/images
+test_masks_dir: ${paths.preprocess_split_dir}/test/masks
+
+
+project_train_dir: ${paths.project_dir}/train  
+project_maskgen_dir: ${paths.project_dir}/mask_gen
+project_inference_dir: ${paths.project_dir}/inference  
 
 # paths for mask_gen mode:
-mask_gen_dir: ${paths.project_dir}/mask_gen
-initial_mask_inspection_source: ${paths.mask_gen_dir}/cutouts
-refined_masks_dir: ${paths.mask_gen_dir}/refined_masks
-voxel_inspection_results_dir: ${paths.mask_gen_dir}/mask_inspection_db
+initial_mask_inspection_source: ${paths.project_maskgen_dir}/cutouts
+refined_masks_dir: ${paths.project_maskgen_dir}/refined_masks
+voxel_inspection_results_dir: ${paths.project_maskgen_dir}/mask_inspection_db
 voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
 
 # model paths
-yolo_weed_detection_model: ${paths.datadir}/field-tools/models/weed_detection/weights/best.pt
-unet_segmentation_model: ${paths.datadir}/field-tools/models/unet/unet_segmentation.pth
+yolo_weed_detection_model: ${paths.data_dir}/field-tools/models/weed_detection/weights/best.pt
+unet_segmentation_model: ${paths.data_dir}/field-tools/models/unet/unet_segmentation.pth

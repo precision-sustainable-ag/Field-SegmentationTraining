@@ -1,0 +1,14 @@
+# Example for a future DeeplabV3+ option. Not used in “field” initially,
+# but in case you want multiple architectures you can swap to: model=deeplabv3plus
+
+# conf/model/deeplabv3plus.yaml
+
+arch_name: "DeepLabV3Plus"        # NEW — used by smp.create_model
+name: "deeplabv3plus"             # Optional label
+encoder_name: "resnet50"
+encoder_weights: "imagenet"
+in_channels: 3
+classes: 1
+activation: "sigmoid"
+decoder_attention_type: null      # Optional if you support it in UNet
+

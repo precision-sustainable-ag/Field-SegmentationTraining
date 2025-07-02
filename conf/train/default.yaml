@@ -1,0 +1,56 @@
+# Training hyperparameters & Lightning Trainer settings. 
+# “train.*” keys map to src/train.py (LightningModule + Trainer).
+
+batch_size: 8
+max_epochs: 3
+num_workers: 16
+pin_memory: true
+seed: 42
+
+# Optimizer:
+optimizer:
+  _target_: "torch.optim.AdamW"
+  lr: 1e-4
+  weight_decay: 1e-5
+
+# Scheduler:
+scheduler:
+  _target_: "torch.optim.lr_scheduler.CosineAnnealingLR"
+  T_max: 50
+  eta_min: 1e-6
+
+# Lightning Trainer arguments:
+use_multi_gpu: true
+num_gpus: 2  # Set between 1 and 3
+
+trainer:
+  accelerator: "gpu"
+  devices: null  # Will be dynamically set by GPU utility
+  precision: 16-mixed
+  deterministic: true
+
+# Checkpoint callback:
+checkpoint:
+  monitor: "val/iou"
+  mode: "max"
+  save_top_k: 1
+  save_last: true
+
+# EarlyStopping callback (optional):
+early_stop:
+  enabled: true
+  monitor: "val/iou"
+  mode: "max"
+  patience: 10
+
+logger:
+  - _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
+    name: ""
+    version: ""
+
+  - _target_: pytorch_lightning.loggers.WandbLogger
+    project: ${project.name}
+    entity: mkutu # Optional: your WandB entity
+    log_model: true
+    save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}

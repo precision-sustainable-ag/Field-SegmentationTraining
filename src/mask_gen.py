@@ -24,10 +24,10 @@ TASK_REGISTRY = {
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """ Main entry point for the application """
-    log.info(f"Starting preprocessing tasks...")
+    log.info(f"Starting mask gen tasks...")
     
-    task_dict = cfg.tasks # TODO: change this to cfg.mask_gen.tasks when incorporating into larger pipeline
-
+    task_dict = cfg.tasks.maskgen # TODO: change this to cfg.mask_gen.tasks when incorporating into larger pipeline
+    
     for task, enabled in task_dict.items():
 
         if enabled:

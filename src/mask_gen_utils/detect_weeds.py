@@ -92,9 +92,9 @@ class ProcessDetections:
 
         Args:
             cfg (DictConfig): Hydra/OmegaConf configuration with required paths.
-                Required keys: cfg.paths.mask_gen_dir, cfg.paths.yolo_weed_detection_model
+                Required keys: cfg.paths.project_maskgen_dir, cfg.paths.yolo_weed_detection_model
         """
-        self.mask_gen_dir = Path(cfg.paths.mask_gen_dir)
+        self.mask_gen_dir = Path(cfg.paths.project_maskgen_dir)
         self.weed_detector = WeedDetector(Path(cfg.paths.yolo_weed_detection_model))
         self.detection_save_dir = self.mask_gen_dir / "cutouts"
         self.detection_save_dir.mkdir(exist_ok=True)

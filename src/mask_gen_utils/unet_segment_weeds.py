@@ -36,7 +36,7 @@ class UNetInference:
         """
         log.info(f"Initializing UNetInference at {datetime.now()}")
         
-        self.image_dir = Path(cfg.paths.mask_gen_dir)
+        self.image_dir = Path(cfg.paths.project_maskgen_dir)
         self.developed_images_dir = self.image_dir / "developed-images"
         self.cutout_dir = self.image_dir / "cutouts"
         self.trained_model_path = Path(cfg.paths.unet_segmentation_model)
