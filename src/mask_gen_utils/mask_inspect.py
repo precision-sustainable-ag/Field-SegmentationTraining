@@ -53,8 +53,8 @@ class FiftyOneMaskInspector:
         self.voxel_inspection_results_db = cfg.paths.voxel_inspection_results_db
 
         # Configuration parameters for FiftyOne Voxel
-        self.port = cfg.inspect.port
-        self.dataset_name = cfg.inspect.dataset_name
+        self.port = cfg.mask_gen.inspect.port
+        self.dataset_name = cfg.mask_gen.inspect.dataset_name
         self.dataset = None
         self.session = None
 
@@ -94,7 +94,6 @@ class FiftyOneMaskInspector:
             samples.append(sample)
 
         log.info(f"Loaded {len(samples)} samples.")
-        print(samples[0])
         return samples
 
     def create_dataset(self, samples) -> fo.Dataset:

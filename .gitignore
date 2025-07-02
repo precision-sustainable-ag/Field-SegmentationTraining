@@ -4,9 +4,6 @@ data
 # trained_models directory
 trained_models
 
-# project directories
-projects
-!mask_generation/projects
 
 # logging
 logging

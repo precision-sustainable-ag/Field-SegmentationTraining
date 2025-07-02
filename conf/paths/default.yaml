@@ -1,11 +1,17 @@
-workdir: ${hydra:runtime.cwd}  # where the code is executed
+# directories
+workdir: ${hydra:runtime.cwd}
 logdir: ${paths.workdir}/logging
-data_dir: ${paths.workdir}/data
-model_save_dir: ${paths.workdir}/trained_models
-test_dir: ${paths.data_dir}/test
-# test_dir: ${paths.data_dir}/test_full_size_images_temp
-test_masks_dir: ${paths.data_dir}/test_masks
-inference_results_dir: ${paths.data_dir}/inference_results
-yolo_weed_detection_model: ${paths.model_save_dir}/yolo_weed_detection/weights/best.pt
-unet_segmentation_model: ${paths.model_save_dir}/best_unet_segmentation_model/weights/unet_segmentation.pth
-persistent_table_path: ${paths.data_dir}/persistent_tables/merged_blobs_tables_metadata_permanent.csv
+datadir: ${paths.workdir}/data
+main_projects_dir: ${paths.workdir}/projects
+project_dir: ${paths.main_projects_dir}/${project.name}
+
+# paths for mask_gen mode:
+mask_gen_dir: ${paths.project_dir}/mask_gen
+initial_mask_inspection_source: ${paths.mask_gen_dir}/cutouts
+refined_masks_dir: ${paths.mask_gen_dir}/refined_masks
+voxel_inspection_results_dir: ${paths.mask_gen_dir}/mask_inspection_db
+voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
+
+# model paths
+yolo_weed_detection_model: ${paths.datadir}/field-tools/models/weed_detection/weights/best.pt
+unet_segmentation_model: ${paths.datadir}/field-tools/models/unet/unet_segmentation.pth
