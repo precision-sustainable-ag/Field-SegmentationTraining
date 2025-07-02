@@ -54,7 +54,7 @@ class RefineMask:
             cfg (DictConfig): Hydra configuration object containing paths and HSV/morph settings.
         """
         # Setup directories
-        self.mask_generation_dir = Path(cfg.paths.mask_gen_dir)
+        self.mask_generation_dir = Path(cfg.paths.project_maskgen_dir)
         self.developed_images_dir = self.mask_generation_dir / "developed-images"
         self.cutout_dir = self.mask_generation_dir / "cutouts"
         self.mask_refine_save_dir = self.mask_generation_dir / "refined_masks"
