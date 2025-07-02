@@ -8,12 +8,15 @@ from hydra.core.hydra_config import HydraConfig
 
 from src.utils.pipeline_log import PipelineLogger
 from src.train import train
+from src.mask_gen import main as mask_gen
 
 log = logging.getLogger(__name__)
 
 # Define a registry of tasks
 TASK_REGISTRY = {
     "train": train,
+    "mask_gen": mask_gen,
+    # "train": train, # For when we incorporate training into the pipeline
     # Add more tasks here as needed
 }
 

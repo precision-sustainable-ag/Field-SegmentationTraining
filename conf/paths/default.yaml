@@ -25,6 +25,12 @@ project_train_dir: ${paths.project_dir}/train
 project_maskgen_dir: ${paths.project_dir}/maskgen  
 project_inference_dir: ${paths.project_dir}/inference  
 
-# (Optional) any external weights you need, e.g. SAM model or YOLO:
-sam_checkpoint: "${paths.data_dir}/external_weights/sam_vit_b.pth"
-yolo_model_path: "${paths.data_dir}/external_weights/yolo_weed.pt"
+# paths for mask_gen mode:
+initial_mask_inspection_source: ${paths.project_maskgen_dir}/cutouts
+refined_masks_dir: ${paths.project_maskgen_dir}/refined_masks
+voxel_inspection_results_dir: ${paths.project_maskgen_dir}/mask_inspection_db
+voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
+
+# model paths
+yolo_weed_detection_model: ${paths.data_dir}/field-tools/models/weed_detection/weights/best.pt
+unet_segmentation_model: ${paths.data_dir}/field-tools/models/unet/unet_segmentation.pth

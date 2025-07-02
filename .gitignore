@@ -8,6 +8,7 @@ scripts/crop_images.py
 # trained_models directory
 trained_models
 
+
 # logging
 logging
 

@@ -1,6 +1,6 @@
 # Top‐level Hydra configuration. Lists each config group in the "defaults:" section.
 # Order matters: later entries can override earlier keys.
-
+# Hydra defaults and settings. 
 defaults:
   - paths: default             # all filesystem paths (data_dir, model_save_dir, etc.)
   - model: unet                # architecture group: unet (can switch to deeplabv3plus, etc.)
@@ -10,6 +10,7 @@ defaults:
   - maskgen: default           # mask generation/refinement settings
   - inference: default         # inference & evaluation settings
   - evaluation: default         # evaluation metrics and settings
+  - mask_gen: default
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 
@@ -21,18 +22,21 @@ project:
 
 mode: train                  # one of: maskgen / preprocess / train / inference
 
-tasks:
+tasks: # TODO: make the other tasks bool key/values
   preprocess:
     - normalize
     - remap
     - center_crop
   maskgen:
-    - # TBD
+    sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
+    detect_weeds: true
+    unet_segment_weeds: true
+    mask_inspect: true
+    mask_refine: true
   train:
     - train
   inference:
     - inference
-
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
@@ -41,6 +45,15 @@ hydra:
     dir: ${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}
   sweep:
     dir: ${paths.project_train_dir}/multirun
-    # dir: ${paths.base_dir}/logs/${hydra.job.name}/${hydra.job.num}
-  # job_logging:
-    # custom: ${hydra.job_logging.custom}
+
+test:
+  enabled: true
+
+mask_inspect: # TODO: what is this for?
+  save2lts: false
+
+job:
+  job_now_date: &nowdir ${now:%Y-%m-%d}
+  job_now_time: ${now:%H_%M_%S}
+  job_now: ${job.job_now_date}/${job.job_now_time} 
+  jobdir: ${paths.data_dir}/${job.job_now}
