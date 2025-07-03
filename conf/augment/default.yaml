@@ -26,3 +26,7 @@ gaussian_blur:
   enabled: false
   kernel_size: 5
   sigma: 1.0
+
+augmentation_logger:
+  enabled: true
+  num_samples: 8
