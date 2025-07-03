@@ -17,7 +17,7 @@ defaults:
 # Any keys you want to sit “outside” those groups:
 project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
-  name: test_project # or field
+  name: test # or field
 
 
 mode: train                  # one of: maskgen / preprocess / train / inference

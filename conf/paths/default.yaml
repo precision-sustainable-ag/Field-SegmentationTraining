@@ -22,7 +22,8 @@ test_masks_dir: ${paths.preprocess_split_dir}/test/masks
 
 
 project_train_dir: ${paths.project_dir}/train  
-project_maskgen_dir: ${paths.project_dir}/mask_gen  
+
+project_maskgen_dir: ${paths.project_dir}/mask_gen
 project_inference_dir: ${paths.project_dir}/inference  
 
 # paths for mask_gen mode:
