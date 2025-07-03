@@ -86,19 +86,6 @@ class UNetInference:
             transforms.ToTensor(),
         ])
 
-    def _convert_to_rgb(self, image_path: str) -> np.ndarray:
-        """
-        Converts the given image to RGB format.
-
-        Args:
-            image_path (str): Path to the input image.
-
-        Returns:
-            np.ndarray: Image as a numpy array in RGB format.
-        """
-        image = cv2.imread(str(image_path))
-        return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
     def _detect_weeds(self, image_path: str):
         """
         Detects target weed in the given image using a pretrained model.
@@ -110,7 +97,9 @@ class UNetInference:
             tuple or None: Bounding box coordinates (x_min, y_min, x_max, y_max) if detection is successful; otherwise, None.
         """
         log.info("Starting weed detection.")
-        image = self._convert_to_rgb(image_path)
+        image = cv2.imread(str(image_path))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
         results = self.target_weed_detection_model(image)
 
         if not results or not results[0].boxes.xyxy.tolist():
@@ -130,7 +119,9 @@ class UNetInference:
         Returns:
             tuple: Cropped image, bounding box, and original image.
         """
-        image_full_size = self._convert_to_rgb(image_path)
+        image_full_size = cv2.imread(str(image_path))
+        image_full_size = cv2.cvtColor(image_full_size, cv2.COLOR_BGR2RGB)
+
         bbox = self._detect_weeds(image_path)
         if bbox is None:
             log.error(f"Could not detect weed in image: {image_path}")
@@ -150,7 +141,7 @@ class UNetInference:
         """
         log.info(f"Processing image: {image_path}")
         image_name = Path(image_path).stem
-        cropped_image, bbox, image_full_size = self._process_image(image_path)
+        cropped_image, bbox, image_full_size = self._crop_image_bbox(image_path)
         cropped_image_shape = cropped_image.shape
 
         log.info(f"Size of cropped image: {cropped_image_shape}")
@@ -176,11 +167,6 @@ class UNetInference:
 
         log.info(f"Processing completed for {image_name}")
     
-    def _process_image(self, image_path: str):
-        """Crop the image and return the cropped image, bounding box, and full-size image."""
-        cropped_image_bbox, bbox, image_full_size = self._crop_image_bbox(image_path)
-        return cropped_image_bbox, bbox, image_full_size
-
     def _predict_mask(self, cropped_image: np.ndarray):
         """Perform segmentation inference on the cropped image."""
         pil_image = Image.fromarray(cropped_image)

@@ -1,32 +1,30 @@
-name: Field_SegmentationTraining
+name: field_train
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.10
-  - pip
+  - python=3.11
+  - opencv
   - numpy
   - pandas
   - matplotlib
   - pillow
-  - pytorch
-  - torchvision
   - tqdm
   - pyyaml
-  - cudatoolkit  # version matching your CUDA + A100
+  - scikit-image
+  - hydra-core
+  - wandb
+  - omegaconf
+  - pip
   - pip:
-
-      # Logging / Config
-      - wandb
-      - omegaconf
-      - hydra-core
-
+      - fiftyone
       # Segmentation & Metrics
+      - torch
+      - torchvision
+      - pytorch-lightning
       - segmentation-models-pytorch
       - torchmetrics
-
       # GPU utility
       - gputil
-
       # Optional / Future use
       - ultralytics  # only needed if you explicitly use YOLO-based models

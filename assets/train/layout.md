@@ -36,31 +36,35 @@ flowchart LR
     QCSTEP --> FinalMasks["Final Masks<br/>${paths.maskgen_output_dir}"]
   end
 
-  %% Train
+  %% Train + Logging
   subgraph TRAIN["Train Mode"]
     direction TB
     ProcImgs --> AUGSTEP["Augmentation<br/>(conf/augment/default.yaml)"]
-    AUGSTEP --> DATALOAD["Dataset & DataLoader<br/>data/augmentation.py + data/dataset.py"]
-    DATALOAD --> LITMOD["LitSegmentation Module<br/>(models/lit_segmentation.py)"]
+    AUGSTEP --> DATALOAD["Dataset & DataLoader<br/>src/data/augmentation.py + src/data/dataset.py"]
+    DATALOAD --> PRELOG["One-off Aug Logger<br/>src/utils/augmentation_logger.py"]
+    PRELOG --> AugImgs["aug_inputs.png<br/>${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}/image_logs"]
+    DATALOAD --> LITMOD["LitSegmentation Module<br/>src/models/lit_segmentation.py"]
     LITMOD --> FITSTEP["Trainer.fit()<br/>(conf/train/default.yaml)"]
-    FITSTEP --> Checkpoints["Save Checkpoints & Logs<br/>${paths.model_save_dir}, ${paths.logdir}"]
+    FITSTEP --> PIPELOG["PipelineLogger<br/>pipeline_log.yaml<br/>${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}"]
+    FITSTEP --> CSVLOG["CSVLogger<br/>metrics.csv<br/>${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}"]
+    FITSTEP --> WANDBLOG["WandBLogger<br/>local:/wandb/run-*/<br/>${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}"]
   end
 
   %% Inference
   subgraph INF["Inference Mode"]
     direction TB
-    Checkpoints --> INFMOD["Inference Module<br/>(src/inference/inference.py)"]
+    CSVLOG --> INFMOD["Inference Module<br/>(src/inference/inference.py)"]
     ProcImgs --> INFMOD
     INFMOD --> PredMasks["Predicted Masks<br/>${paths.inference_results_dir}"]
     PredMasks --> SaveOut["Save to directory"]
-    INFMOD --> MetricsOut["Compute & Save Metrics<br/>(conf/inference.evaluate)"]
+    INFMOD --> MetricsOut["Compute & Save Metrics<br/>(conf/inference/evaluate)"]
   end
 
   %% Evaluation
   subgraph EVAL["Evaluation Mode"]
     direction TB
     PredMasks --> EvalStep["Compute Metrics<br/>(conf/evaluation/default.yaml)"]
-    GroundTruth["Ground‐Truth Masks<br/>${paths.test_mask_dir}"] --> EvalStep
+    GroundTruth["Ground-Truth Masks<br/>${paths.test_mask_dir}"] --> EvalStep
     EvalStep --> ReportOut["Save Reports<br/>${paths.reports_dir}/evaluation"]
     EvalStep --> VizOut["Generate Visualizations"]
   end

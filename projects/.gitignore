@@ -1,0 +1,8 @@
+# Ignore everything
+*
+# Except the test directory and its contents
+!.gitignore
+!test
+!test/mask_gen
+!test/mask_gen/developed-images/
+!test/mask_gen/developed-images/**
