@@ -78,7 +78,7 @@ def train(cfg: DictConfig) -> None:
     # === 4. Loggers ===
     # Dynamically instantiate all configured loggers
     loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
-    log_augmentation_batch(train_loader, cfg.train.logger, num_samples=4)
+    log_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_logger.num_samples)
 
     # === 5. Callbacks ===
     checkpoint_cb = ModelCheckpoint(
