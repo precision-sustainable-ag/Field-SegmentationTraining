@@ -73,7 +73,6 @@ class FiftyOneMaskInspector:
         samples = []
         for image_path in self.initial_mask_inspection_source.glob("*.jpg"):
             stem = image_path.stem
-            print(stem)
             initial_mask_path = self.initial_mask_inspection_source / f"{stem}_mask.png"
 
             if not initial_mask_path.exists():
@@ -123,20 +122,14 @@ class FiftyOneMaskInspector:
 
         For each sample in the dataset, this method:
         - Extracts the image filename and associated tags.
-        - Sets 'use_refined_mask_to_reprocess' to "false" if the tags contain "good" or "bad", otherwise "true".
         - Writes the collected data to a CSV file at the specified output path.
         """
         rows = []
         for sample in self.dataset:
             tags_str = ",".join(sample.tags) if sample.tags else ""
-            if "good" in sample.tags or "bad" in sample.tags:
-                use_refined_mask_to_reprocess = "false"
-            else:
-                use_refined_mask_to_reprocess = "true"
             rows.append({
                 "image_name": Path(sample.filepath).name,
                 "voxel tags": tags_str,
-                "use_refined_mask_to_reprocess": use_refined_mask_to_reprocess
             })
 
         df = pd.DataFrame(rows)

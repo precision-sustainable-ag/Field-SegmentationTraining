@@ -1,20 +1,26 @@
 import cv2
 import numpy as np
+from .morph_cleaned_mask import MorphCleanedMask
 
 class PresentMat:
-    """Class for generating a binary mask for black/gray regions of mat-present in an image.
-    Uses HSV color space for thresholding.
     """
-    
-    def process_present_mat(image: np.ndarray, mat_present_lower: np.ndarray, mat_present_upper: np.ndarray) -> np.ndarray:
+    Class for refining binary masks to detect present mat regions in images.
+    """
+    def process_present_mat(image: np.ndarray, cropout_mask: np.ndarray, mat_present_lower: np.ndarray, mat_present_upper: np.ndarray, morph_opening_size: int, morph_closing_size: int, morph_erosion_size: int) -> np.ndarray:
         """
-        Generate a binary mask for detecting mat-present (gray or black) regions using HSV thresholding.
+        Generate a binary mask for detecting mat-present regions using HSV thresholding.
 
         Args:
             image (np.ndarray): RGB image.
 
         Returns:
-            np.ndarray: Binary mask with mat-present regions as 255.
+            np.ndarray: Binary mask with mat-present regions as 0.
+
         """
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        return cv2.inRange(hsv_image, mat_present_lower, mat_present_upper)
+        refined_mask_for_mat = cv2.bitwise_not(cv2.inRange(hsv_image, mat_present_lower, mat_present_upper))  # Exclude pixels in this range to avoid mat present regions
+        combined_refined_mask = cv2.bitwise_and(cropout_mask, refined_mask_for_mat) # Combine the original mask with the refined mask
+        morphcleaned_combined_refined_mask = MorphCleanedMask.morph_cleaned_mask(combined_refined_mask, morph_opening_size, morph_closing_size, morph_erosion_size) # Apply morphological operations to clean the mask
+        morphcleaned_combined_refined_mask_binary = np.where(morphcleaned_combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
+
+        return morphcleaned_combined_refined_mask_binary

@@ -146,26 +146,25 @@ class RefineMask:
         logging.info(f"Refining mask for: {cropout_image_path}")
         self.cropout_image = cv2.cvtColor(cv2.imread(str(cropout_image_path)), cv2.COLOR_BGR2RGB)
         self.cropout_mask = cv2.imread(str(mask_image_path), cv2.IMREAD_GRAYSCALE)
-
+        
         if tag == "missing_red":
-            logging.info("Processing missing red regions.")
-            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.red_missing_lower, self.red_missing_upper)
+            log.info("Processing missing red regions.")
+            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.cropout_mask, self.red_missing_lower, self.red_missing_upper, self.morph_opening_size, self.morph_closing_size, self.morph_erosion_size)
         elif tag == "missing_white":
-            logging.info("Processing missing white regions.")
-            refined_mask = MissingWhite.process_missing_white(self.cropout_image, self.white_missing_lower, self.white_missing_upper)
+            log.info("Processing missing white regions.")
+            refined_mask = MissingWhite.process_missing_white(self.cropout_image, self.cropout_mask, self.white_missing_lower, self.white_missing_upper, self.morph_opening_size, self.morph_closing_size, self.morph_erosion_size)
         elif tag == "present_mat":
-            logging.info("Processing present mat regions.")
-            refined_mask = PresentMat.process_present_mat(self.cropout_image, self.mat_present_lower, self.mat_present_upper)
-
-        combined_mask = cv2.bitwise_or(self.cropout_mask, refined_mask) # Combine the original mask with the refined mask
-        combined_mask = MorphCleanedMask.morph_cleaned_mask(combined_mask, self.morph_opening_size, self.morph_closing_size, self.morph_erosion_size) # Apply morphological operations to clean the mask
-        combined_mask = np.where(combined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
-
+            log.info("Processing present mat regions.")
+            refined_mask = PresentMat.process_present_mat(self.cropout_image, self.cropout_mask, self.mat_present_lower, self.mat_present_upper, self.morph_opening_size, self.morph_closing_size, self.morph_erosion_size)
+        else:
+            log.warning(f"Unknown tag '{tag}' for image {cropout_image_path}. Skipping refinement.")
+            return
+        
         output_image_path = self.mask_refine_save_dir / cropout_image_path.name
         mask_output_path = Path(str(output_image_path).replace(".jpg", "_mask.png"))
 
         logging.info(f"Saving final mask to: {mask_output_path}")
-        cv2.imwrite(str(mask_output_path), combined_mask)
+        cv2.imwrite(str(mask_output_path), refined_mask)
         logging.info(f"Refining completed for: {cropout_image_path}")
 
     def _load_voxel_tag_map(self) -> dict:
