@@ -50,7 +50,7 @@ class FiftyOneMaskInspector:
 
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
         self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
-        self.voxel_inspection_results_db = cfg.paths.voxel_inspection_results_db
+        self.voxel_inspection_results_db = Path(cfg.paths.voxel_inspection_results_db)
 
         # Configuration parameters for FiftyOne Voxel
         self.port = cfg.mask_gen.inspect.port
@@ -81,13 +81,13 @@ class FiftyOneMaskInspector:
 
             initial_mask_array = np.array(Image.open(initial_mask_path).convert("L"), dtype=np.uint8)
             sample = fo.Sample(filepath=str(image_path))
-            sample["initial masks"] = fo.Segmentation(mask=initial_mask_array)
+            sample["initial_mask"] = fo.Segmentation(mask=initial_mask_array)
 
             if self.refined_masks_dir_source:
                 refined_mask_path = self.refined_masks_dir_source / f"{stem}_mask.png"
                 if refined_mask_path.exists():
                     refined_mask_array = np.array(Image.open(refined_mask_path).convert("L"), dtype=np.uint8)
-                    sample["prediction"] = fo.Segmentation(mask=refined_mask_array)
+                    sample["refined_mask"] = fo.Segmentation(mask=refined_mask_array)
                 else:
                     log.warning(f"Note: Refined mask not found for {image_path.name}.")
             samples.append(sample)
@@ -118,21 +118,50 @@ class FiftyOneMaskInspector:
 
     def save_tags_to_db(self, output_csv: Path) -> None:
         """
-        Saves image filenames, their associated tags, and a flag indicating whether to use a refined mask for reprocessing into a CSV file.
-
-        For each sample in the dataset, this method:
-        - Extracts the image filename and associated tags.
-        - Writes the collected data to a CSV file at the specified output path.
+        Updates a CSV file with image filenames and their associated tags from self.dataset.
+        Only replaces tags if they have changed; otherwise, keeps the existing tags.
+        Appends new images if not already present.
         """
-        rows = []
-        for sample in self.dataset:
-            tags_str = ",".join(sample.tags) if sample.tags else ""
-            rows.append({
-                "image_name": Path(sample.filepath).name,
-                "voxel tags": tags_str,
-            })
+        output_csv = Path(output_csv)
 
-        df = pd.DataFrame(rows)
+        # Create a dictionary from the current dataset
+        current_data = {
+            Path(sample.filepath).name: ",".join(sample.tags) if sample.tags else ""
+            for sample in self.dataset
+        }
+
+        if output_csv.exists():
+            # Load existing CSV
+            df = pd.read_csv(output_csv)
+
+            # Create a map from the current CSV
+            existing_data = dict(zip(df["image_name"], df["voxel tags"]))
+
+            # Update only if tags have changed
+            for idx, row in df.iterrows():
+                image_name = row["image_name"]
+                if image_name in current_data:
+                    new_tags = current_data[image_name]
+                    old_tags = str(row["voxel tags"]) if pd.notna(row["voxel tags"]) else ""
+                    if new_tags and new_tags != old_tags:
+                        df.at[idx, "voxel tags"] = new_tags
+                    # If new_tags is empty or unchanged, keep the old tags
+
+            # Append new rows (not in the original CSV)
+            for image_name, tags_str in current_data.items():
+                if image_name not in existing_data:
+                    df = pd.concat([df, pd.DataFrame([{
+                        "image_name": image_name,
+                        "voxel tags": tags_str
+                    }])], ignore_index=True)
+        else:
+            # Create new DataFrame if CSV doesn't exist
+            df = pd.DataFrame([
+                {"image_name": image_name, "voxel tags": tags_str}
+                for image_name, tags_str in current_data.items()
+            ])
+
+        # Save the updated DataFrame
         df.to_csv(output_csv, index=False)
 
     def run_voxel_inspection(self) -> None:
