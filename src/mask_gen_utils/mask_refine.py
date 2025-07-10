@@ -79,60 +79,6 @@ class RefineMask:
         self.morph_erosion_size = cfg.mask_gen.refine.erosion_kernel_size
         self.exg_threshold = cfg.mask_gen.refine.exg_threshold
     
-    def process_missing_white(self, image: np.ndarray) -> np.ndarray:
-        """
-        Generate a binary mask for detecting white-colored regions using HSV thresholding.
-
-        Args:
-            image (np.ndarray): RGB image.
-
-        Returns:
-            np.ndarray: Binary mask with white regions as 255.
-        """
-        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        return cv2.inRange(hsv_image, self.white_missing_lower, self.white_missing_upper)
-
-    def process_present_mat(self, image: np.ndarray) -> np.ndarray:
-        """
-        Generate a binary mask for detecting mat-present (gray or black) regions using HSV thresholding.
-
-        Args:
-            image (np.ndarray): RGB image.
-
-        Returns:
-            np.ndarray: Binary mask with mat-present regions as 255.
-        """
-        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        return cv2.inRange(hsv_image, self.mat_present_lower, self.mat_present_upper)
-
-    def process_missing_red(self, image: np.ndarray) -> np.ndarray:
-        """
-        Generate a binary mask for detecting red-colored regions using HSV thresholding.
-
-        Args:
-            image (np.ndarray): RGB image.
-
-        Returns:
-            np.ndarray: Binary mask with red-missing regions as 255.
-        """
-        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        return cv2.inRange(hsv_image, self.red_missing_lower, self.red_missing_upper)
-
-    def morph_cleaned_mask(self, mask: np.ndarray) -> np.ndarray:
-        """
-        Apply morphological operations (opening, closing, erosion) to clean up the mask.
-
-        Args:
-            mask (np.ndarray): Binary mask to refine.
-
-        Returns:
-            np.ndarray: Refined binary mask.
-        """
-        combined_mask = morph.opening(mask, morph.disk(self.morph_opening_size))
-        combined_mask = morph.closing(combined_mask, morph.disk(self.morph_closing_size))
-        combined_mask = morph.erosion(combined_mask, morph.disk(self.morph_erosion_size))
-        return combined_mask
-
     def process_single_image(self, cropout_image_path: Path, mask_image_path: Path, tag: str) -> None:
         """
         Processes a single image-mask pair based on the associated tag.
@@ -162,6 +108,10 @@ class RefineMask:
         
         output_image_path = self.mask_refine_save_dir / cropout_image_path.name
         mask_output_path = Path(str(output_image_path).replace(".jpg", "_mask.png"))
+
+        # Delete previous mask if it exists
+        if mask_output_path.exists():
+            os.remove(mask_output_path)
 
         logging.info(f"Saving final mask to: {mask_output_path}")
         cv2.imwrite(str(mask_output_path), refined_mask)
