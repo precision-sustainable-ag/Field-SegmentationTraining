@@ -77,7 +77,6 @@ class RefineMask:
         self.morph_opening_size = cfg.mask_gen.refine.opening_kernel_size
         self.morph_closing_size = cfg.mask_gen.refine.closing_kernel_size
         self.morph_erosion_size = cfg.mask_gen.refine.erosion_kernel_size
-        self.exg_threshold = cfg.mask_gen.refine.exg_threshold
     
     def process_single_image(self, cropout_image_path: Path, mask_image_path: Path, tag: str) -> None:
         """
