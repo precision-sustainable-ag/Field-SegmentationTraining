@@ -100,6 +100,7 @@ class FiftyOneMaskInspector:
         Creates a FiftyOne dataset with the given samples.
 
         If a dataset with the same name exists, it will be deleted before creation.
+        Loads tags from self.voxel_inspection_results_db if available.
 
         Args:
             samples (list): A list of FiftyOne samples.
@@ -111,6 +112,25 @@ class FiftyOneMaskInspector:
         if self.dataset_name in fo.list_datasets():
             log.info(f"Dataset '{self.dataset_name}' already exists. Deleting it.")
             fo.delete_dataset(self.dataset_name)
+
+        # Load tags from CSV if available
+        tags_map = {}
+        if self.voxel_inspection_results_db.exists():
+            df = pd.read_csv(self.voxel_inspection_results_db)
+            for _, row in df.iterrows():
+                image_name = str(row["image_name"])
+                tags_str = str(row["voxel tags"]) if pd.notna(row["voxel tags"]) else ""
+                tags = [t.strip() for t in tags_str.split(",") if t.strip()]
+                tags_map[image_name] = tags
+            log.info(f"Loaded tags for {len(tags_map)} images from {self.voxel_inspection_results_db}")
+        else:
+            log.info(f"No existing tags found in {self.voxel_inspection_results_db}. Starting fresh.")
+
+        # Assign tags to samples
+        for sample in samples:
+            image_name = Path(sample.filepath).name
+            if image_name in tags_map:
+                sample.tags = tags_map[image_name]
 
         dataset = fo.Dataset(self.dataset_name)
         dataset.add_samples(samples)
