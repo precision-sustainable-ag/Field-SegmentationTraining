@@ -66,20 +66,22 @@ class RefineMask:
         self.cropout_mask = None
 
         # refine parameters for missing red
-        self.red_missing_lower = np.array(cfg.mask_gen.refine.missing_red.hsv_lower, dtype=np.uint8)
-        self.red_missing_upper = np.array(cfg.mask_gen.refine.missing_red.hsv_upper, dtype=np.uint8)
+        self.red_missing_hsv_lower = np.array(cfg.mask_gen.refine.missing_red.hsv_lower, dtype=np.uint8)
+        self.red_missing_hsv_upper = np.array(cfg.mask_gen.refine.missing_red.hsv_upper, dtype=np.uint8)
         self.red_opening_size = cfg.mask_gen.refine.missing_red.opening_kernel_size
         self.red_closing_size = cfg.mask_gen.refine.missing_red.closing_kernel_size
         self.red_erosion_size = cfg.mask_gen.refine.missing_red.erosion_kernel_size
 
-        self.white_missing_lower = np.array(cfg.mask_gen.refine.missing_white.hsv_lower, dtype=np.uint8)
-        self.white_missing_upper = np.array(cfg.mask_gen.refine.missing_white.hsv_upper, dtype=np.uint8)
+        # refine parameters for missing white
+        self.white_missing_hsv_lower = np.array(cfg.mask_gen.refine.missing_white.hsv_lower, dtype=np.uint8)
+        self.white_missing_hsv_upper = np.array(cfg.mask_gen.refine.missing_white.hsv_upper, dtype=np.uint8)
         self.white_opening_size = cfg.mask_gen.refine.missing_white.opening_kernel_size
         self.white_closing_size = cfg.mask_gen.refine.missing_white.closing_kernel_size
         self.white_erosion_size = cfg.mask_gen.refine.missing_white.erosion_kernel_size
 
-        self.mat_present_lower = np.array(cfg.mask_gen.refine.present_mat.hsv_lower, dtype=np.uint8)
-        self.mat_present_upper = np.array(cfg.mask_gen.refine.present_mat.hsv_upper, dtype=np.uint8)
+        # refine parameters for present mat
+        self.mat_present_hsv_lower = np.array(cfg.mask_gen.refine.present_mat.hsv_lower, dtype=np.uint8)
+        self.mat_present_hsv_upper = np.array(cfg.mask_gen.refine.present_mat.hsv_upper, dtype=np.uint8)
         self.mat_opening_size = cfg.mask_gen.refine.present_mat.opening_kernel_size
         self.mat_closing_size = cfg.mask_gen.refine.present_mat.closing_kernel_size
         self.mat_erosion_size = cfg.mask_gen.refine.present_mat.erosion_kernel_size
@@ -102,17 +104,17 @@ class RefineMask:
 
         if tag == "missing_red":
             log.info("Processing missing red regions.")
-            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.cropout_mask, self.red_missing_lower, self.red_missing_upper, self.red_opening_size, self.red_closing_size, self.red_erosion_size)  
+            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.cropout_mask, self.red_missing_hsv_lower, self.red_missing_hsv_upper, self.red_opening_size, self.red_closing_size, self.red_erosion_size)  
             if mask_output_path.exists():
                 os.remove(mask_output_path) # Delete previous mask if it exists
         elif tag == "missing_white":
             log.info("Processing missing white regions.")
-            refined_mask = MissingWhite.process_missing_white(self.cropout_image, self.cropout_mask, self.white_missing_lower, self.white_missing_upper, self.white_opening_size, self.white_closing_size, self.white_erosion_size)
+            refined_mask = MissingWhite.process_missing_white(self.cropout_image, self.cropout_mask, self.white_missing_hsv_lower, self.white_missing_hsv_upper, self.white_opening_size, self.white_closing_size, self.white_erosion_size)
             if mask_output_path.exists():
                 os.remove(mask_output_path) # Delete previous mask if it exists        
         elif tag == "present_mat":
             log.info("Processing present mat regions.")
-            refined_mask = PresentMat.process_present_mat(self.cropout_image, self.cropout_mask, self.mat_present_lower, self.mat_present_upper, self.mat_opening_size, self.mat_closing_size, self.mat_erosion_size)
+            refined_mask = PresentMat.process_present_mat(self.cropout_image, self.cropout_mask, self.mat_present_hsv_lower, self.mat_present_hsv_upper, self.mat_opening_size, self.mat_closing_size, self.mat_erosion_size)
             if mask_output_path.exists():
                 os.remove(mask_output_path) # Delete previous mask if it exists
         else:
