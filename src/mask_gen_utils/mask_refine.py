@@ -173,8 +173,7 @@ class RefineMask:
             logging.info(f"Removed mask for tag '{tag}': {refined_mask_path}")
         elif tag in {"missing_red", "missing_white", "present_mat"}:
             # Prefer refined mask if it exists, else use default
-            mask_path = refined_mask_path if refined_mask_path.exists() else initial_mask_path
-            self.process_single_image(image_path, mask_path, tag)
+            self.process_single_image(image_path, initial_mask_path, tag)
         else:
             raise ValueError(f"Unknown tag '{tag}' encountered for image {image_path}. Stopping processing.")
 
