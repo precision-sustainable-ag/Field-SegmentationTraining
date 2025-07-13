@@ -65,9 +65,11 @@ class RefineMask:
         self.cropout_image = None
         self.cropout_mask = None
 
-        # refine parameters for missing red
-        self.red_missing_hsv_lower = np.array(cfg.mask_gen.refine.missing_red.hsv_lower, dtype=np.uint8)
-        self.red_missing_hsv_upper = np.array(cfg.mask_gen.refine.missing_red.hsv_upper, dtype=np.uint8)
+        # refine parameters for missing red; HUE for red is split into two ranges to cover the full spectrum
+        self.red_missing_hsv_lower_1 = np.array(cfg.mask_gen.refine.missing_red.hsv_lower_1, dtype=np.uint8)
+        self.red_missing_hsv_upper_1 = np.array(cfg.mask_gen.refine.missing_red.hsv_upper_1, dtype=np.uint8)
+        self.red_missing_hsv_lower_2 = np.array(cfg.mask_gen.refine.missing_red.hsv_lower_2, dtype=np.uint8)
+        self.red_missing_hsv_upper_2 = np.array(cfg.mask_gen.refine.missing_red.hsv_upper_2, dtype=np.uint8)
         self.red_opening_size = cfg.mask_gen.refine.missing_red.opening_kernel_size
         self.red_closing_size = cfg.mask_gen.refine.missing_red.closing_kernel_size
         self.red_erosion_size = cfg.mask_gen.refine.missing_red.erosion_kernel_size
@@ -104,7 +106,7 @@ class RefineMask:
 
         if tag == "missing_red":
             log.info("Processing missing red regions.")
-            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.cropout_mask, self.red_missing_hsv_lower, self.red_missing_hsv_upper, self.red_opening_size, self.red_closing_size, self.red_erosion_size)  
+            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.cropout_mask, self.red_missing_hsv_lower_1, self.red_missing_hsv_upper_1, self.red_missing_hsv_lower_2, self.red_missing_hsv_upper_2, self.red_opening_size, self.red_closing_size, self.red_erosion_size)
             if mask_output_path.exists():
                 os.remove(mask_output_path) # Delete previous mask if it exists
         elif tag == "missing_white":

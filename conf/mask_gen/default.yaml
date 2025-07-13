@@ -6,20 +6,20 @@ inspect:
 refine:
   # Morphological operations and HSV color ranges for mask generation.
   missing_red:
-    hsv_lower: [0, 100, 100]
-    hsv_upper: [179, 255, 255]
-    opening_kernel_size: 3
-    closing_kernel_size: 4
-    erosion_kernel_size: 3
-
-  missing_white:
-    hsv_lower: [0, 0, 150]
-    hsv_upper: [180, 255, 255]
-    # lower: [0, 0, 200]
-    # upper: [180, 30, 255]
-    opening_kernel_size: 3
+    hsv_lower_1: [0, 120, 70]
+    hsv_upper_1: [10, 255, 255]
+    hsv_lower_2: [170, 120, 70]
+    hsv_upper_2: [180, 255, 255]
+    opening_kernel_size: 0
     closing_kernel_size: 0
-    erosion_kernel_size: 3
+    erosion_kernel_size: 0
+
+  missing_white: # focus of v value
+    hsv_lower: [0, 0, 240]
+    hsv_upper: [180, 255, 255]
+    opening_kernel_size: 0
+    closing_kernel_size: 0
+    erosion_kernel_size: 0
 
   present_mat: #gray or black pixels
     hsv_lower: [15, 54, 46]
