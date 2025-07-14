@@ -19,9 +19,9 @@ class MissingRed:
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         refined_mask_for_red_1 = cv2.inRange(hsv_image, red_missing_lower_1, red_missing_upper_1)
         refined_mask_for_red_2 = cv2.inRange(hsv_image, red_missing_lower_2, red_missing_upper_2)
-        combined_refined_mask = cv2.bitwise_or(cropout_mask, refined_mask_for_red_1)
-        combined_refined_mask = cv2.bitwise_or(combined_refined_mask, refined_mask_for_red_2)
-        morphcleaned_combined_refined_mask = MorphCleanedMask.morph_cleaned_mask(combined_refined_mask, morph_opening_size, morph_closing_size, morph_erosion_size)
-        morphcleaned_combined_refined_mask_binary = np.where(morphcleaned_combined_refined_mask > 0, 255, 0).astype(np.uint8)
+        refined_mask_red_final = cv2.bitwise_or(refined_mask_for_red_1, refined_mask_for_red_2)
+        morphcleaned_refined_mask_red_final = MorphCleanedMask.morph_cleaned_mask(refined_mask_red_final, morph_opening_size, morph_closing_size, morph_erosion_size)
+        combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_refined_mask_red_final)
+        combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8)
 
-        return morphcleaned_combined_refined_mask_binary
+        return combined_refined_mask_binary

@@ -18,10 +18,8 @@ class MissingWhite:
         """
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         refined_mask_for_white = cv2.inRange(hsv_image, white_missing_lower, white_missing_upper)
-        combined_refined_mask = cv2.bitwise_or(cropout_mask, refined_mask_for_white) # Combine the original mask with the refined mask
-        morphcleaned_combined_refined_mask = MorphCleanedMask.morph_cleaned_mask(combined_refined_mask, morph_opening_size, morph_closing_size, morph_erosion_size) # Apply morphological operations to clean the mask
-        morphcleaned_combined_refined_mask_binary = np.where(morphcleaned_combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
+        morphcleaned_refined_white_mask = MorphCleanedMask.morph_cleaned_mask(refined_mask_for_white, morph_opening_size, morph_closing_size, morph_erosion_size) # Apply morphological operations to clean the mask
+        combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_refined_white_mask) # Combine the original mask with the refined mask
+        combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
 
-        return morphcleaned_combined_refined_mask_binary
-
-    
+        return combined_refined_mask_binary

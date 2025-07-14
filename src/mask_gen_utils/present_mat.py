@@ -19,8 +19,8 @@ class PresentMat:
         """
         hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         refined_mask_for_mat = cv2.bitwise_not(cv2.inRange(hsv_image, mat_present_lower, mat_present_upper))  # Exclude pixels in this range to avoid mat present regions
-        combined_refined_mask = cv2.bitwise_and(cropout_mask, refined_mask_for_mat) # Combine the original mask with the refined mask
-        morphcleaned_combined_refined_mask = MorphCleanedMask.morph_cleaned_mask(combined_refined_mask, morph_opening_size, morph_closing_size, morph_erosion_size) # Apply morphological operations to clean the mask
-        morphcleaned_combined_refined_mask_binary = np.where(morphcleaned_combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
+        morph_cleaned_mask_for_mat = MorphCleanedMask.morph_cleaned_mask(refined_mask_for_mat, morph_opening_size, morph_closing_size, morph_erosion_size)  # Apply morphological operations to clean the mask
+        combined_refined_mask = cv2.bitwise_and(cropout_mask, morph_cleaned_mask_for_mat) # Combine the original mask with the refined mask
+        combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
 
-        return morphcleaned_combined_refined_mask_binary
+        return combined_refined_mask_binary
