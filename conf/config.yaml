@@ -20,13 +20,13 @@ project:
   name: test # or field
 
 
-mode: train                  # one of: maskgen / preprocess / train / inference
+mode: preprocess                  # one of: maskgen / preprocess / train / inference
 
 tasks: # TODO: make the other tasks bool key/values
   preprocess:
-    - normalize
-    - remap
-    - center_crop
+    # - normalize
+    # - remap
+    # - center_crop
   maskgen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
     detect_weeds: true

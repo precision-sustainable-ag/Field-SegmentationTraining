@@ -16,3 +16,33 @@ center_crop:
 remap_mask:
   enabled: true
   mapping: { "0": 0, "255": 1 }
+
+# ─── New settings for pad/gridcrop/resize ─────────────────────────────────────
+# Target size that all cutouts & masks will be standardized to:
+
+size:
+  height: 1024
+  width: 1024
+
+pad:
+  enabled: true
+  # If True, pads images smaller than target size to target size
+  # (e.g. 512x512) using the specified padding mode:
+  mode: constant
+  fill: 0  # e.g. black padding
+
+# If enabled, any image larger than `size` will be
+# broken into overlapping tiles of `size` using this stride:
+grid_crop:
+  enabled: true
+  stride: 512  # if False, uses size.height as stride
+  # only grid-crop if at least this many times larger than target:
+  threshold: 2.5     # e.g. if width/height ≥ 2× target, then grid-crop
+
+# Resize settings: if True, resize images that are
+# larger than target but below threshold; interpolation methods configurable
+resize:
+  enabled: true
+  interpolation:
+    image: BILINEAR   # options: NEAREST, BILINEAR, BICUBIC, LANCZOS
+    mask: NEAREST     # NEAREST is recommended for label masks
