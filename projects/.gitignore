@@ -5,4 +5,7 @@
 !test
 !test/mask_gen
 !test/mask_gen/developed-images/
-!test/mask_gen/developed-images/**
+!test/mask_gen/developed-images/*downscaled*
+!test/mask_gen/cutouts
+!test/mask_gen/cutouts/*mask.png
+!test/mask_gen/cutouts/*.jpg
