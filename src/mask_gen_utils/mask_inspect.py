@@ -195,8 +195,8 @@ class FiftyOneMaskInspector:
         - Exports tags to a CSV in the results directory.
         """
         samples = self.load_samples()
-        self.dataset = self.create_dataset(samples)
-        self.session = fo.launch_app(self.dataset)
+        self.dataset: fo.Dataset = self.create_dataset(samples)
+        self.session = fo.launch_app(self.dataset, port=self.port)
 
         try:
             print("\n\nFollow these instructions in the FiftyOne app:\n\n"
