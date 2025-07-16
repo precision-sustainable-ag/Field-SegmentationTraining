@@ -106,12 +106,30 @@ class RefineMask:
 
         if tag == "missing_red":
             log.info("Processing missing red regions.")
-            refined_mask = MissingRed.process_missing_red(self.cropout_image, self.cropout_mask, self.red_missing_hsv_lower_1, self.red_missing_hsv_upper_1, self.red_missing_hsv_lower_2, self.red_missing_hsv_upper_2, self.red_opening_size, self.red_closing_size, self.red_erosion_size)
+            refined_mask = MissingRed.process_missing_red(
+                self.cropout_image, 
+                self.cropout_mask, 
+                self.red_missing_hsv_lower_1, 
+                self.red_missing_hsv_upper_1, 
+                self.red_missing_hsv_lower_2, 
+                self.red_missing_hsv_upper_2, 
+                self.red_opening_size, 
+                self.red_closing_size, 
+                self.red_erosion_size
+            )
             if mask_output_path.exists():
                 os.remove(mask_output_path) # Delete previous mask if it exists
         elif tag == "missing_white":
             log.info("Processing missing white regions.")
-            refined_mask = MissingWhite.process_missing_white(self.cropout_image, self.cropout_mask, self.white_missing_hsv_lower, self.white_missing_hsv_upper, self.white_opening_size, self.white_closing_size, self.white_erosion_size)
+            refined_mask = MissingWhite.process_missing_white(
+                self.cropout_image, 
+                self.cropout_mask, 
+                self.white_missing_hsv_lower, 
+                self.white_missing_hsv_upper, 
+                self.white_opening_size, 
+                self.white_closing_size, 
+                self.white_erosion_size
+                )
             if mask_output_path.exists():
                 os.remove(mask_output_path) # Delete previous mask if it exists        
         elif tag == "present_mat":
