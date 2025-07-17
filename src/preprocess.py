@@ -45,7 +45,7 @@ def preprocess(cfg: DictConfig) -> None:
                 masks_dir=masks_dir,
                 out_images=out_base/"images",
                 out_masks=out_base/"masks",
-                cfg=cfg.preprocess,
+                cfg=cfg.preprocess.pad_gridcrop_resize,
             )
 
         if cfg.tasks.preprocess.train_val_test_split:

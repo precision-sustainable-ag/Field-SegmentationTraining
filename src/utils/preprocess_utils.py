@@ -50,14 +50,17 @@ def pad_gridcrop_resize(
 
     img_interp  = getattr(Image, cfg.resize.interpolation.image)
     mask_interp = getattr(Image, cfg.resize.interpolation.mask)
+    remove_src  = bool(getattr(cfg, "remove_src", False))
+    ignore_empty = bool(getattr(cfg, "ignore_empty_data", False))
+    pad_fill    = int(cfg.pad.fill)
 
     out_images.mkdir(parents=True, exist_ok=True)
     out_masks.mkdir(parents=True, exist_ok=True)
 
-    for img_path in cutouts_dir.iterdir():
+    for img_path in cutouts_dir.glob("*.jpg"):
         if not img_path.is_file():
             continue
-        mask_path = masks_dir / f"{img_path.stem}_mask{img_path.suffix}"
+        mask_path = masks_dir / f"{img_path.stem}_mask.png"
         if not mask_path.exists():
             continue
 
@@ -70,6 +73,19 @@ def pad_gridcrop_resize(
             img_out  = pad_image(img,  target_h, target_w, cfg.pad.mode, cfg.pad.fill)
             mask_out = pad_image(mask, target_h, target_w, cfg.pad.mode, cfg.pad.fill)
 
+            # If the image is now completely empty, skip saving
+            if ignore_empty and mask_out.getextrema() == (pad_fill, pad_fill):
+                continue
+
+            img_out.save(out_images / img_path.name)
+            mask_out.save(out_masks / mask_path.name)
+
+            # Optionally remove the original source files
+            if remove_src:
+                img_path.unlink()
+                mask_path.unlink()
+            continue
+
         # 2) GRID-CROP if *significantly* larger
         elif (w  >= threshold * target_w) or (h >= threshold * target_h):
             # compute origins so last tile aligns to edge
@@ -79,20 +95,32 @@ def pad_gridcrop_resize(
                 x_starts.append(max(w - target_w, 0))
             if y_starts[-1] != max(h - target_h, 0):
                 y_starts.append(max(h - target_h, 0))
+
             # generate multiple tiles
             for top in y_starts:
                 for left in x_starts:
                     box       = (left, top, left + target_w, top + target_h)
                     tile_img  = img.crop(box)
                     tile_mask = mask.crop(box)
+
                     # pad partial tiles
                     if tile_img.size != (target_w, target_h):
                         tile_img  = pad_image(tile_img,  target_h, target_w, cfg.pad.mode, cfg.pad.fill)
                         tile_mask = pad_image(tile_mask, target_h, target_w, cfg.pad.mode, cfg.pad.fill)
+                    
+                    # If the image is now completely empty, skip saving
+                    if ignore_empty and tile_mask.getextrema() == (pad_fill, pad_fill):
+                        continue
+
                     stem = f"{img_path.stem}_{left}_{top}"
                     tile_img.save(out_images / f"{stem}{img_path.suffix}")
                     tile_mask.save(out_masks / f"{stem}_mask{img_path.suffix}")
-            continue  # skip the single‐save below
+
+            # Optionally remove the original source files
+            if remove_src:
+                img_path.unlink()
+                mask_path.unlink()
+            continue
 
         # 3) RESIZE if just a bit over target
         elif cfg.resize.enabled:
@@ -103,15 +131,29 @@ def pad_gridcrop_resize(
             mask_res  = mask.resize((new_w, new_h), resample=mask_interp)
             img_out   = pad_image(img_res,  target_h, target_w, cfg.pad.mode, cfg.pad.fill)
             mask_out  = pad_image(mask_res, target_h, target_w, cfg.pad.mode, cfg.pad.fill)
+            # If the image is now completely empty, skip saving
+            if ignore_empty and mask_out.getextrema() == (pad_fill, pad_fill):
+                continue
+
+            img_out.save(out_images / img_path.name)
+            mask_out.save(out_masks / mask_path.name)
+
+            # Optionally remove the original source files
+            if remove_src:
+                img_path.unlink()
+                mask_path.unlink()
+            continue
 
         else:
-            # fallback—treat as pad
-            img_out  = pad_image(img,  target_h, target_w, cfg.pad.mode, cfg.pad.fill)
-            mask_out = pad_image(mask, target_h, target_w, cfg.pad.mode, cfg.pad.fill)
-
-        # save the single standardized patch
-        img_out.save( out_images / img_path.name )
-        mask_out.save(out_masks  / mask_path.name )
+            # This should never happen — neither pad, grid-crop, nor resize applied.
+            msg = (
+                f"Unexpected image size for {img_path.name}: "
+                f"{w}x{h} px (target {target_w}x{target_h}), "
+                f"pad.enabled={cfg.pad.enabled}, "
+                f"grid_crop.enabled={cfg.grid_crop.enabled}, "
+                f"resize.enabled={cfg.resize.enabled}"
+            )
+            raise RuntimeError(msg)
 
 def train_val_test_split(
     images_dir: Path,
@@ -150,6 +192,7 @@ def train_val_test_split(
         d.mkdir(parents=True, exist_ok=True)
 
     # 5) copy files
+    remove_src = bool(getattr(cfg.preprocess.split, "remove_src", False))
     for img_list, img_dest, mask_dest in [
         (train_imgs, train_img_out, train_mask_out),
         (val_imgs,   val_img_out,   val_mask_out),
@@ -159,3 +202,7 @@ def train_val_test_split(
             shutil.copy2(img_path, img_dest / img_path.name)
             mask_name = f"{img_path.stem}_mask{img_path.suffix}"
             shutil.copy2(masks_dir / mask_name, mask_dest / mask_name)
+            # Optionally remove the original source files
+            if remove_src:
+                img_path.unlink()
+                (masks_dir / mask_name).unlink()
