@@ -1,4 +1,4 @@
-# preprocess.py
+# src/preprocess.py
 
 import logging
 import warnings
@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 from hydra.core.hydra_config import HydraConfig
 
 from src.utils.pipeline_log import PipelineLogger
-from src.utils.preprocess_utils import pad_gridcrop_resize
+from src.utils.preprocess_utils import pad_gridcrop_resize, train_val_test_split
 
 log = logging.getLogger(__name__)
 
@@ -36,22 +36,27 @@ def preprocess(cfg: DictConfig) -> None:
         # Source directories from mask_gen (use paths config)
         cutouts_dir = Path(cfg.paths.initial_mask_inspection_source)
         masks_dir   = Path(cfg.paths.refined_masks_dir)
-
         # Output into preprocess directory
         out_base    = Path(cfg.paths.project_preprocess_dir)
-        out_images  = out_base / "images"
-        out_masks   = out_base / "masks"
 
-        # Run pad/grid-crop/resize
-        pad_gridcrop_resize(
-            cutouts_dir=cutouts_dir,
-            masks_dir=masks_dir,
-            out_images=out_images,
-            out_masks=out_masks,
-            cfg=cfg.preprocess,
-        )
+        if cfg.tasks.preprocess.pad_gridcrop_resize:
+            pad_gridcrop_resize(
+                cutouts_dir=cutouts_dir,
+                masks_dir=masks_dir,
+                out_images=out_base/"images",
+                out_masks=out_base/"masks",
+                cfg=cfg.preprocess,
+            )
+
+        if cfg.tasks.preprocess.train_val_test_split:
+            train_val_test_split(
+                images_dir=out_base/"images",
+                masks_dir=out_base/"masks",
+                cfg=cfg,
+            )
 
         success = True
+
     except Exception as e:
         log.error(f"Error in preprocess: {e}")
         log.debug(traceback.format_exc())
