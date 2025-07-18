@@ -58,7 +58,7 @@ class RefineMask:
 
         self.canonical_tag_mapping = cfg.mask_gen.canonical_tag_mapping
 
-        self.remove_tags = cfg.mask_gen.remove_tags
+        self.remove_tags = cfg.mask_gen.remove_tags if cfg.mask_gen.remove_tags else []
 
         self.only_include_tags = cfg.mask_gen.refine.only_include_tags
 
