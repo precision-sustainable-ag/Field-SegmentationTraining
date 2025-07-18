@@ -22,5 +22,12 @@ class PresentMat:
         morph_cleaned_mask_for_mat = MorphCleanedMask.morph_cleaned_mask(refined_mask_for_mat, morph_opening_size, morph_closing_size, morph_erosion_size)  # Apply morphological operations to clean the mask
         combined_refined_mask = cv2.bitwise_and(cropout_mask, morph_cleaned_mask_for_mat) # Combine the original mask with the refined mask
         combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
-
-        return combined_refined_mask_binary
+        # Prepare HSV parameters for mat present regions
+        hsv_morph_parameters_mat = {
+            'hsv_lower': mat_present_lower,
+            'hsv_upper': mat_present_upper,
+            'morph_opening_size': morph_opening_size,
+            'morph_closing_size': morph_closing_size,
+            'morph_erosion_size': morph_erosion_size
+        }
+        return combined_refined_mask_binary, hsv_morph_parameters_mat

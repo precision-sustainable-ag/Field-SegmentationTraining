@@ -21,5 +21,12 @@ class MissingWhite:
         morphcleaned_refined_white_mask = MorphCleanedMask.morph_cleaned_mask(refined_mask_for_white, morph_opening_size, morph_closing_size, morph_erosion_size) # Apply morphological operations to clean the mask
         combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_refined_white_mask) # Combine the original mask with the refined mask
         combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
-
-        return combined_refined_mask_binary
+        # Prepare HSV parameters for white missing regions
+        hsv_morph_parameters_white = {
+            'hsv_lower': white_missing_lower,
+            'hsv_upper': white_missing_upper,
+            'morph_opening_size': morph_opening_size,
+            'morph_closing_size': morph_closing_size,
+            'morph_erosion_size': morph_erosion_size
+        }
+        return combined_refined_mask_binary, hsv_morph_parameters_white
