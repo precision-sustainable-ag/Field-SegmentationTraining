@@ -27,3 +27,15 @@ refine:
     opening_kernel_size: 3
     closing_kernel_size: 4
     erosion_kernel_size: 2
+
+
+canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags (canonical: user defined)
+  missing_red: red
+  missing_white: white
+  present_mat: mat
+  bad: bad
+  other: other
+  ignore: ignore
+
+remove_tags: # canonicaltags used to remove refined masks and db entries
+  - bad
