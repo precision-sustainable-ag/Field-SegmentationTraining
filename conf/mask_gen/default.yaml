@@ -2,12 +2,13 @@ inspect:
   dataset_name: testing_inspect_maskgen
   port: 5050
   only_include_tags:
-    - missing_red
+    # - missing_red
 
 
 refine:
   only_include_tags:
-    - missing_red
+    # - missing_red
+  
   # Morphological operations and HSV color ranges for mask generation.
   missing_red:
     hsv_lower: [0, 120, 70]
@@ -17,8 +18,8 @@ refine:
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
-    exr_thresh: 60  # Threshold for EXR image processing
-    saturation_thresh: 20
+    exr_thresh: 60  # Experimental
+    saturation_thresh: 20 # Experimental
 
   missing_white: # focus of v value
     hsv_lower: [0, 0, 240]
