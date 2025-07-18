@@ -33,7 +33,7 @@ class MissingRed:
         exr = 2 * R - G - B
 
         # Calculate normalized saturation and mask out very gray pixels if desired
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         s = hsv[...,1].astype(np.float32)
         s_norm = s / 255.0
         if self.saturation_thresh > 0:
