@@ -69,7 +69,7 @@ class FiftyOneMaskInspector:
         Returns:
             list: A list of strings representing image names and their corresponding mask tags.
         """
-        return sorted(self.mask_gen_cutout_dir.glob("*.jpg"))
+        return sorted(self.mask_gen_cutout_dir.glob("*_mask.png"))
 
     def get_mask_paths_from_db(self) -> list:
         """
@@ -86,8 +86,8 @@ class FiftyOneMaskInspector:
 
         image_names = []
         for only_include_tag in self.inspect_cfg.only_include_tags:
-
-            matched = df[df["voxel tags"].str.contains(only_include_tag, na=False)]["image_name"]
+            # Ensure "voxel tags" column is treated as string and handle NaN values
+            matched = df[df["voxel tags"].fillna("").astype(str).str.contains(only_include_tag)]["image_name"]
             image_names.extend(matched)
 
         mask_paths = []
@@ -111,17 +111,19 @@ class FiftyOneMaskInspector:
                   - "prediction": from refined_masks `.png` files, if available
         """
         
-        if self.inspect_cfg.only_include_tags:
+        if self.inspect_cfg.only_include_tags and self.voxel_inspection_results_db.exists():
             mask_paths = self.get_mask_paths_from_db()
+            if not mask_paths:
+                raise ValueError("No mask paths found in the database. 'only_include_tags' is activated. Please check the voxel inspection results database.")
         else:
             mask_paths = self.get_mask_paths_from_src()
         
-        if not mask_paths:
-            raise ValueError("No mask paths found. Please check the source directories or database.")
+            if not mask_paths:
+                raise ValueError("No mask paths found. Please check the source directories or database.")
 
         samples = []
         for initial_mask_path in mask_paths:
-            image_name = initial_mask_path.stem.replace("_mask", ".jpg")
+            image_name = initial_mask_path.name.replace("_mask.png", ".jpg")
             if not initial_mask_path.exists():
                 log.warning(f"Warning: Initial mask not found for {image_name}. Skipping.")
                 continue

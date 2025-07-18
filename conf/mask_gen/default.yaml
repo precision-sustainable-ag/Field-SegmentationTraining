@@ -11,15 +11,11 @@ refine:
   
   # Morphological operations and HSV color ranges for mask generation.
   missing_red:
-    hsv_lower: [0, 120, 70]
-    hsv_upper: [10, 255, 255]
-    hsv_lower_2: [170, 120, 70]
-    hsv_upper_2: [180, 255, 255]
+    exr_thresh: 60
+    saturation_thresh: 20
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
-    exr_thresh: 60  # Experimental
-    saturation_thresh: 20 # Experimental
 
   missing_white: # focus of v value
     hsv_lower: [0, 0, 240]
