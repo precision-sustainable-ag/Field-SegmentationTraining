@@ -26,12 +26,12 @@ tasks: # TODO: make the other tasks bool key/values
     - normalize
     - remap
     - center_crop
-  maskgen:
+  mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    detect_weeds: true
-    unet_segment_weeds: true
-    mask_inspect: true
-    mask_refine: true
+    detect_weeds: false
+    unet_segment_weeds: false
+    mask_inspect: false
+    mask_refine: false
   train:
     - train
   inference:
