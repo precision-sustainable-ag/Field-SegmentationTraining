@@ -99,8 +99,6 @@ class FiftyOneMaskInspector:
             else:
                 log.warning(f"Mask file not found for {image_name}. Skipping.")
         
-        print(mask_paths)
-
         return mask_paths
 
     def load_samples(self) -> list:
@@ -117,6 +115,9 @@ class FiftyOneMaskInspector:
             mask_paths = self.get_mask_paths_from_db()
         else:
             mask_paths = self.get_mask_paths_from_src()
+        
+        if not mask_paths:
+            raise ValueError("No mask paths found. Please check the source directories or database.")
 
         samples = []
         for initial_mask_path in mask_paths:
