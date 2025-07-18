@@ -45,4 +45,4 @@ canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags 
   ignore: ignore
 
 remove_tags: # canonicaltags used to remove refined masks and db entries
-  - bad
+  # - bad
