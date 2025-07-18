@@ -19,10 +19,8 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 import logging
-import shutil
 
 # Logging configuration
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
 class FiftyOneMaskInspector:
