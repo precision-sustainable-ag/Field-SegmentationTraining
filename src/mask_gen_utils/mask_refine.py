@@ -60,6 +60,8 @@ class RefineMask:
 
         self.remove_tags = cfg.mask_gen.remove_tags
 
+        self.only_include_tags = cfg.mask_gen.refine.only_include_tags
+
         # refine parameters for missing red; HUE for red is split into two ranges to cover the full spectrum
         self.missing_red_cfg = cfg.mask_gen.refine.missing_red
         self.missing_red_processor = MissingRed(self.missing_red_cfg)
@@ -99,12 +101,22 @@ class RefineMask:
         pattern = "|".join([re.escape(keyword) for keyword in tag_keywords.values()])
         unmatched = self.df_voxel_db[~self.df_voxel_db["voxel tags"].str.contains(pattern, na=False, regex=True)]
         unmatched_tag_map = dict(zip(unmatched["image_name"], unmatched["voxel tags"]))
-        log.warning(f"Unmatched tags found in voxel inspection results: {unmatched_tag_map}")
+        if unmatched_tag_map:
+            log.warning(f"Unmatched tags found in voxel inspection results: {unmatched_tag_map}")
 
         if not tag_map:
             raise ValueError("No tags found in voxel inspection results. Ensure the CSV is populated correctly.")
         
         return tag_map
+
+    def _update_voxel_tags_to_canonical(self, tag_map: Dict[str, str]) -> None:
+        """
+        Updates the DataFrame to use canonical tags for each image in tag_map.
+        """
+        for image_name, canonical_tag in tag_map.items():
+            idx = self.df_voxel_db[self.df_voxel_db["image_name"] == image_name].index
+            if not idx.empty:
+                self.df_voxel_db.loc[idx, "voxel tags"] = canonical_tag
 
     def _remove_refined_masks(self, voxel_tag_map: Dict[str, str]) -> Dict[str, str]:
         """
@@ -226,19 +238,22 @@ class RefineMask:
         """
         Processes cropout images and refines masks based on voxel inspection tags.
         """
-
         try:
             ## Handling tags and already refined masks
             # TODO: improve this by catching and handling tag discrepancies, "other" tags, "bad" tags, etc.
             # Load and map voxel inspection tags to canonical tags
             tag_map = self._map_voxel_tags()
+            # Update the voxel inspection results DataFrame with canonical tags
+            self._update_voxel_tags_to_canonical(tag_map)
             # Remove refined masks for tags that should not be processed
             cleaned_tag_map = self._remove_refined_masks(tag_map)
             # Remove entries from the voxel inspection results DB for tags that should not be processed
             self._update_db_with_remove_tags(cleaned_tag_map)
 
             for image_name, tag in cleaned_tag_map.items():
-                
+                if self.only_include_tags and tag not in self.only_include_tags:
+                    log.info(f"Skipping {image_name} with tag '{tag}' as it is not in the only_include_tags list.")
+                    continue
                 try:
                     # Process each image based on its tag
                     refined_mask, hsv_morph_param = self._process_single_image(image_name, tag)

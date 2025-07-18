@@ -43,7 +43,7 @@ class FiftyOneMaskInspector:
             cfg (DictConfig): Configuration object with the required fields:
         """
         # Initialize and validate all required paths from the configuration
-        self.initial_mask_inspection_source = Path(cfg.paths.initial_mask_inspection_source)
+        self.mask_gen_cutout_dir = Path(cfg.paths.mask_gen_cutout_dir)
         self.refined_masks_dir_source = Path(cfg.paths.refined_masks_dir)
 
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
@@ -53,11 +53,55 @@ class FiftyOneMaskInspector:
         # Configuration parameters for FiftyOne Voxel
         self.port = cfg.mask_gen.inspect.port
         self.dataset_name = cfg.mask_gen.inspect.dataset_name
+        
         self.dataset = None
         self.session = None
 
         # pipeline mode
         self.mode = cfg.mode
+
+        self.inspect_cfg = cfg.mask_gen.inspect
+
+    def get_mask_paths_from_src(self) -> list:
+        """
+        Retrieves image names and their corresponding mask tags from the initial mask inspection source directory.
+
+        Returns:
+            list: A list of strings representing image names and their corresponding mask tags.
+        """
+        return sorted(self.mask_gen_cutout_dir.glob("*.jpg"))
+
+    def get_mask_paths_from_db(self) -> list:
+        """
+        Gets image names from the voxel inspection results database.
+
+        Returns:
+            list: A list of image names with their corresponding mask names.
+        """
+        if not self.voxel_inspection_results_db.exists():
+            return []
+
+        df = pd.read_csv(self.voxel_inspection_results_db)
+        
+
+        image_names = []
+        for only_include_tag in self.inspect_cfg.only_include_tags:
+
+            matched = df[df["voxel tags"].str.contains(only_include_tag, na=False)]["image_name"]
+            image_names.extend(matched)
+
+        mask_paths = []
+        for image_name in image_names:
+            image_name = Path(image_name)
+            mask_path = self.mask_gen_cutout_dir / str(image_name).replace(".jpg", "_mask.png")
+            if mask_path.exists():
+                mask_paths.append(mask_path)
+            else:
+                log.warning(f"Mask file not found for {image_name}. Skipping.")
+        
+        print(mask_paths)
+
+        return mask_paths
 
     def load_samples(self) -> list:
         """
@@ -68,21 +112,26 @@ class FiftyOneMaskInspector:
                   - "initial masks": from `_mask.png` files
                   - "prediction": from refined_masks `.png` files, if available
         """
-        samples = []
-        for image_path in self.initial_mask_inspection_source.glob("*.jpg"):
-            stem = image_path.stem
-            initial_mask_path = self.initial_mask_inspection_source / f"{stem}_mask.png"
+        
+        if self.inspect_cfg.only_include_tags:
+            mask_paths = self.get_mask_paths_from_db()
+        else:
+            mask_paths = self.get_mask_paths_from_src()
 
+        samples = []
+        for initial_mask_path in mask_paths:
+            image_name = initial_mask_path.stem.replace("_mask", ".jpg")
             if not initial_mask_path.exists():
-                log.warning(f"Warning: Initial mask not found for {image_path.name}. Skipping.")
+                log.warning(f"Warning: Initial mask not found for {image_name}. Skipping.")
                 continue
 
             initial_mask_array = np.array(Image.open(initial_mask_path).convert("L"), dtype=np.uint8)
+            image_path = self.mask_gen_cutout_dir / image_name
             sample = fo.Sample(filepath=str(image_path))
             sample["initial_mask"] = fo.Segmentation(mask=initial_mask_array)
 
             if self.refined_masks_dir_source:
-                refined_mask_path = self.refined_masks_dir_source / f"{stem}_mask.png"
+                refined_mask_path = self.refined_masks_dir_source / f"{Path(image_name).stem}_mask.png"
                 if refined_mask_path.exists():
                     refined_mask_array = np.array(Image.open(refined_mask_path).convert("L"), dtype=np.uint8)
                     sample["refined_mask"] = fo.Segmentation(mask=refined_mask_array)
