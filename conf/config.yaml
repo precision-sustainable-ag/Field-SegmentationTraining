@@ -7,7 +7,6 @@ defaults:
   - train: default             # training hyperparameters + Lightning Trainer settings
   - augment: default           # data augmentation transforms
   - preprocess: default        # resizing / normalization / cropping
-  - maskgen: default           # mask generation/refinement settings
   - inference: default         # inference & evaluation settings
   - evaluation: default         # evaluation metrics and settings
   - mask_gen: default
