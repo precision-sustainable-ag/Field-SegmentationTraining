@@ -10,7 +10,8 @@ from omegaconf import DictConfig
 from hydra.core.hydra_config import HydraConfig
 
 from src.utils.pipeline_log import PipelineLogger
-from src.utils.preprocess_utils import pad_gridcrop_resize, train_val_test_split
+from src.preprocess_utils.pad_gridcrop_resize import pad_gridcrop_resize
+from src.preprocess_utils.train_val_test_split import train_val_test_split
 
 log = logging.getLogger(__name__)
 
