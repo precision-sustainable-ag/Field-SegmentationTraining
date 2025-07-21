@@ -88,6 +88,7 @@ def pad_gridcrop_resize(
 
         # 2) GRID-CROP if *significantly* larger
         elif (w  >= threshold * target_w) or (h >= threshold * target_h):
+
             # compute origins so last tile aligns to edge
             x_starts = list(range(0, max(w - target_w + 1, 1), stride))
             y_starts = list(range(0, max(h - target_h + 1, 1), stride))
@@ -131,6 +132,7 @@ def pad_gridcrop_resize(
             mask_res  = mask.resize((new_w, new_h), resample=mask_interp)
             img_out   = pad_image(img_res,  target_h, target_w, cfg.pad.mode, cfg.pad.fill)
             mask_out  = pad_image(mask_res, target_h, target_w, cfg.pad.mode, cfg.pad.fill)
+
             # If the image is now completely empty, skip saving
             if ignore_empty and mask_out.getextrema() == (pad_fill, pad_fill):
                 continue
@@ -172,6 +174,7 @@ def train_val_test_split(
     total = len(all_imgs)
     n_train = int(cfg.preprocess.split.train * total)
     n_val   = int(cfg.preprocess.split.val   * total)
+    
     # rest goes to test
     train_imgs = all_imgs[:n_train]
     val_imgs   = all_imgs[n_train : n_train + n_val]
@@ -202,6 +205,7 @@ def train_val_test_split(
             shutil.copy2(img_path, img_dest / img_path.name)
             mask_name = f"{img_path.stem}_mask{img_path.suffix}"
             shutil.copy2(masks_dir / mask_name, mask_dest / mask_name)
+
             # Optionally remove the original source files
             if remove_src:
                 img_path.unlink()

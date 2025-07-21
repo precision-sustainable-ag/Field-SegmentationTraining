@@ -20,6 +20,10 @@ remap_mask:
 # ─── New settings for pad/gridcrop/resize ─────────────────────────────────────
 pad_gridcrop_resize:
 
+  # If True, uses multiprocessing to speed up preprocessing
+  use_concurrency: true      # toggle multiprocessing
+  num_workers:    16         # processes to use when concurrency on
+
   # Target size that all cutouts & masks will be standardized to:
   size:
     height: 1024
@@ -58,10 +62,16 @@ pad_gridcrop_resize:
 
 # Train/val/test split settings:
 split:
+
+  # If True, uses multithreading to speed up preprocessing
+  use_concurrency: true      # toggle multithreaded copy
+  num_workers:    16         # threads to use when concurrency on
+
+  # train/val/test set proportions:
   train: 0.8
   val:   0.1
   test:  0.1
 
   # If True, removes the original source images after processing
   # (useful if you want to save space and only keep processed images)
-  remove_src: true
+  remove_src: false
