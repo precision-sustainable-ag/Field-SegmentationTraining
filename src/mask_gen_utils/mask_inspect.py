@@ -203,7 +203,7 @@ class FiftyOneMaskInspector:
 
     def _load_existing_data(self) -> dict:
         """
-        Loads the existing CSV into self.df and returns a map of existing data.
+        Loads existing data from the voxel inspection results database.
         
         Returns:
             dict: A dictionary mapping image names to their initial and final voxel tags.
