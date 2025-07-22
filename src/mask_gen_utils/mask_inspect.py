@@ -27,7 +27,7 @@ class FiftyOneMaskInspector:
     """
     Manages image-mask datasets and interactive inspection using FiftyOne.
 
-    Responsibilities:
+    Functionality:
     - Load image-mask pairs from specified directories.
     - Create and manage FiftyOne datasets.
     - Launch FiftyOne UI for visual inspection and tagging.
@@ -42,10 +42,9 @@ class FiftyOneMaskInspector:
         Args:
             cfg (DictConfig): Configuration object with the required fields:
         """
-        # Initialize and validate all required paths from the configuration
+        # Initialize required paths from the configuration
         self.mask_gen_cutout_dir = Path(cfg.paths.mask_gen_cutout_dir)
         self.refined_masks_dir_source = Path(cfg.paths.refined_masks_dir)
-
         self.voxel_inspection_results_dir = Path(cfg.paths.voxel_inspection_results_dir)
         self.voxel_inspection_results_dir.mkdir(parents=True, exist_ok=True)
         self.voxel_inspection_results_db = Path(cfg.paths.voxel_inspection_results_db)
@@ -53,25 +52,17 @@ class FiftyOneMaskInspector:
         # Configuration parameters for FiftyOne Voxel
         self.port = cfg.mask_gen.inspect.port
         self.dataset_name = cfg.mask_gen.inspect.dataset_name
-        
         self.dataset = None
         self.session = None
 
         # pipeline mode
         self.mode = cfg.mode
-
         self.inspect_cfg = cfg.mask_gen.inspect
 
-    def get_mask_paths_from_src(self) -> list:
-        """
-        Retrieves image names and their corresponding mask tags from the initial mask inspection source directory.
+        # load db if exists or create a new one
+        self.df = pd.read_csv(self.voxel_inspection_results_db, index_col=False) if self.voxel_inspection_results_db.exists() else pd.DataFrame()
 
-        Returns:
-            list: A list of strings representing image names and their corresponding mask tags.
-        """
-        return sorted(self.mask_gen_cutout_dir.glob("*_mask.png"))
-
-    def get_mask_paths_from_db(self) -> list:
+    def _get_mask_paths_from_db(self) -> list:
         """
         Gets image names from the voxel inspection results database.
 
@@ -81,13 +72,10 @@ class FiftyOneMaskInspector:
         if not self.voxel_inspection_results_db.exists():
             return []
 
-        df = pd.read_csv(self.voxel_inspection_results_db)
-        
-
         image_names = []
         for only_include_tag in self.inspect_cfg.only_include_tags:
             # Ensure "voxel tags" column is treated as string and handle NaN values
-            matched = df[df["voxel tags"].fillna("").astype(str).str.contains(only_include_tag)]["image_name"]
+            matched = self.df[self.df["voxel tags"].fillna("").astype(str).str.contains(only_include_tag)]["image_name"]
             image_names.extend(matched)
 
         mask_paths = []
@@ -101,51 +89,83 @@ class FiftyOneMaskInspector:
         
         return mask_paths
 
-    def load_samples(self) -> list:
+    def _create_sample_with_masks(self, mask_path: Path):
+        """
+        Creates a FiftyOne sample with initial and refined masks (if available).
+
+        Args:
+            mask_path (Path): Path to the initial mask image.
+
+        Returns:
+            fo.Sample or None: The sample object or None if the mask is invalid.
+        """
+        image_name = mask_path.name.replace("_mask.png", ".jpg")
+        if not mask_path.exists():
+            log.warning(f"Warning: Initial mask not found for {image_name}. Skipping.")
+            return None
+
+        initial_mask_array = np.array(Image.open(mask_path).convert("L"), dtype=np.uint8)
+        image_path = self.mask_gen_cutout_dir / image_name
+        sample = fo.Sample(filepath=str(image_path))
+        sample["initial_mask"] = fo.Segmentation(mask=initial_mask_array)
+
+        if self.refined_masks_dir_source:
+            refined_mask_path = self.refined_masks_dir_source / f"{Path(image_name).stem}_mask.png"
+            if refined_mask_path.exists():
+                refined_mask_array = np.array(Image.open(refined_mask_path).convert("L"), dtype=np.uint8)
+                sample["refined_mask"] = fo.Segmentation(mask=refined_mask_array)
+            else:
+                log.warning(f"Note: Refined mask not found for {image_path.name}.")
+
+        return sample
+
+    def _load_samples(self) -> list:
         """
         Loads images and their corresponding masks into FiftyOne samples.
 
         Returns:
             list: A list of `fiftyone.core.sample.Sample` objects with attached segmentation masks:
-                  - "initial masks": from `_mask.png` files
-                  - "prediction": from refined_masks `.png` files, if available
         """
-        
         if self.inspect_cfg.only_include_tags and self.voxel_inspection_results_db.exists():
-            mask_paths = self.get_mask_paths_from_db()
+            mask_paths = self._get_mask_paths_from_db()
             if not mask_paths:
                 raise ValueError("No mask paths found in the database. 'only_include_tags' is activated. Please check the voxel inspection results database.")
         else:
-            mask_paths = self.get_mask_paths_from_src()
+            mask_paths = sorted(self.mask_gen_cutout_dir.glob("*_mask.png"))
         
             if not mask_paths:
                 raise ValueError("No mask paths found. Please check the source directories or database.")
 
         samples = []
-        for initial_mask_path in mask_paths:
-            image_name = initial_mask_path.name.replace("_mask.png", ".jpg")
-            if not initial_mask_path.exists():
-                log.warning(f"Warning: Initial mask not found for {image_name}. Skipping.")
-                continue
-
-            initial_mask_array = np.array(Image.open(initial_mask_path).convert("L"), dtype=np.uint8)
-            image_path = self.mask_gen_cutout_dir / image_name
-            sample = fo.Sample(filepath=str(image_path))
-            sample["initial_mask"] = fo.Segmentation(mask=initial_mask_array)
-
-            if self.refined_masks_dir_source:
-                refined_mask_path = self.refined_masks_dir_source / f"{Path(image_name).stem}_mask.png"
-                if refined_mask_path.exists():
-                    refined_mask_array = np.array(Image.open(refined_mask_path).convert("L"), dtype=np.uint8)
-                    sample["refined_mask"] = fo.Segmentation(mask=refined_mask_array)
-                else:
-                    log.warning(f"Note: Refined mask not found for {image_path.name}.")
-            samples.append(sample)
+        for mask_path in mask_paths:
+            sample = self._create_sample_with_masks(mask_path)
+            if sample:
+                samples.append(sample)
 
         log.info(f"Loaded {len(samples)} samples.")
         return samples
+    
+    def _create_tag_map_from_db(self) -> dict:
+        """
+        Creates a dictionary mapping image names to their tags from the voxel inspection results database.
 
-    def create_dataset(self, samples) -> fo.Dataset:
+        Returns:
+            dict: A dictionary where keys are image names and values are lists of tags.
+        """
+        tag_map = {}
+        for _, row in self.df.iterrows():
+            image_name = str(row["image_name"])
+            if pd.notna(row["final_voxel_tag"]):
+                tag = row["final_voxel_tag"]
+            elif pd.notna(row["initial_voxel_tag"]):
+                tag = str(row["initial_voxel_tag"])
+            else:
+                tag = ""
+            tags = [t.strip() for t in tag.split(",") if t.strip()]
+            tag_map[image_name] = tags
+        return tag_map
+    
+    def _create_dataset(self, samples) -> fo.Dataset:
         """
         Creates a FiftyOne dataset with the given samples.
 
@@ -164,75 +184,129 @@ class FiftyOneMaskInspector:
             fo.delete_dataset(self.dataset_name)
 
         # Load tags from CSV if available
-        tags_map = {}
+        tag_map = {}
         if self.voxel_inspection_results_db.exists():
-            df = pd.read_csv(self.voxel_inspection_results_db)
-            for _, row in df.iterrows():
-                image_name = str(row["image_name"])
-                tags_str = str(row["voxel tags"]) if pd.notna(row["voxel tags"]) else ""
-                tags = [t.strip() for t in tags_str.split(",") if t.strip()]
-                tags_map[image_name] = tags
-            log.info(f"Loaded tags for {len(tags_map)} images from {self.voxel_inspection_results_db}")
+            tag_map = self._create_tag_map_from_db()
+            log.info(f"Loaded tags for {len(tag_map)} images from {self.voxel_inspection_results_db}")
         else:
             log.info(f"No existing tags found in {self.voxel_inspection_results_db}. Starting fresh.")
 
         # Assign tags to samples
         for sample in samples:
             image_name = Path(sample.filepath).name
-            if image_name in tags_map:
-                sample.tags = tags_map[image_name]
+            if image_name in tag_map:
+                sample.tags = tag_map[image_name]
 
         dataset = fo.Dataset(self.dataset_name)
         dataset.add_samples(samples)
         return dataset
 
-    def save_tags_to_db(self, output_csv: Path) -> None:
+    def _load_existing_data(self) -> dict:
         """
-        Updates a CSV file with image filenames and their associated tags from self.dataset.
-        Only replaces tags if they have changed; otherwise, keeps the existing tags.
-        Appends new images if not already present.
+        Loads the existing CSV into self.df and returns a map of existing data.
+        
+        Returns:
+            dict: A dictionary mapping image names to their initial and final voxel tags.
+        """
+        existing_data = {}
+        for _, row in self.df.iterrows():
+            existing_data[row["image_name"]] = {
+                "initial_voxel_tag": row["initial_voxel_tag"],
+                "final_voxel_tag": row["final_voxel_tag"]
+            }
+        return existing_data
+
+    def _update_existing_rows(self, current_data: dict) -> None:
+        """
+        Updates self.df based on current_data if tags have changed.
+        
+        Args:
+            current_data (dict): A dictionary mapping image names to their new tags.
+        """
+        for idx, row in self.df.iterrows():
+            image_name = row["image_name"]
+            if image_name not in current_data:
+                continue
+
+            new_tags = current_data[image_name]
+            old_tags = str(row["initial_voxel_tag"]) if pd.notna(row["initial_voxel_tag"]) else ""
+
+            if old_tags == "good":
+                continue  # Do not change 'good'
+            elif new_tags == "good":
+                self.df.at[idx, "final_voxel_tag"] = new_tags
+            elif new_tags != old_tags and new_tags != "good":
+                self.df.at[idx, "initial_voxel_tag"] = new_tags
+
+    def _append_new_rows(self, current_data: dict, existing_data: dict) -> None:
+        """
+        Appends rows to self.df for any new image names not already present.
+
+        Args:
+            current_data (dict): A dictionary mapping image names to their tags.
+            existing_data (dict): A dictionary mapping existing image names to their tags.
+        """
+        new_rows = []
+        for image_name, tags_str in current_data.items():
+            if image_name not in existing_data:
+                new_rows.append({
+                    "image_name": image_name,
+                    "initial_voxel_tag": tags_str,
+                    "final_voxel_tag": ""
+                })
+        if new_rows:
+            self.df = pd.concat([self.df, pd.DataFrame(new_rows)], ignore_index=True)
+
+    def _create_new_dataframe(self, current_data: dict) -> None:
+        """
+        Creates a new DataFrame from scratch when no CSV exists.
+        Args:
+            current_data (dict): A dictionary mapping image names to their tags."""
+        self.df = pd.DataFrame([
+            {
+                "image_name": image_name,
+                "initial_voxel_tag": tags_str,
+                "final_voxel_tag": ""
+            }
+            for image_name, tags_str in current_data.items()
+        ])
+
+    def _get_current_dataset_map(self) -> dict:
+        """
+        Creates a dictionary of image_name -> tags from self.dataset.
+
+        Returns:
+            dict: A dictionary where keys are image filenames and values are comma-separated tag strings.
+        """
+        dataset_map = {}
+        for sample in self.dataset:
+            image_name = Path(sample.filepath).name
+            tags = sample.tags if sample.tags else []
+            tags_str = ",".join(tags)
+            dataset_map[image_name] = tags_str
+        return dataset_map
+
+    def _save_tags_to_db(self, output_csv: Path) -> None:
+        """
+        Writes updated tagging information from the FiftyOne session back to the voxel inspection CSV.
+
+        - Updates existing entries if tags have changed (except for 'good' which is preserved).
+        - Appends any new image entries not already in the CSV.
+
+        Args:
+            output_csv (Path): Destination path for the updated voxel inspection CSV.
         """
         output_csv = Path(output_csv)
-
-        # Create a dictionary from the current dataset
-        current_data = {
-            Path(sample.filepath).name: ",".join(sample.tags) if sample.tags else ""
-            for sample in self.dataset
-        }
+        current_data = self._get_current_dataset_map()
 
         if output_csv.exists():
-            # Load existing CSV
-            df = pd.read_csv(output_csv)
-
-            # Create a map from the current CSV
-            existing_data = dict(zip(df["image_name"], df["voxel tags"]))
-
-            # Update only if tags have changed
-            for idx, row in df.iterrows():
-                image_name = row["image_name"]
-                if image_name in current_data:
-                    new_tags = current_data[image_name]
-                    old_tags = str(row["voxel tags"]) if pd.notna(row["voxel tags"]) else ""
-                    if new_tags and new_tags != old_tags:
-                        df.at[idx, "voxel tags"] = new_tags
-                    # If new_tags is empty or unchanged, keep the old tags
-
-            # Append new rows (not in the original CSV)
-            for image_name, tags_str in current_data.items():
-                if image_name not in existing_data:
-                    df = pd.concat([df, pd.DataFrame([{
-                        "image_name": image_name,
-                        "voxel tags": tags_str
-                    }])], ignore_index=True)
+            existing_data = self._load_existing_data()
+            self._update_existing_rows(current_data)
+            self._append_new_rows(current_data, existing_data)
         else:
-            # Create new DataFrame if CSV doesn't exist
-            df = pd.DataFrame([
-                {"image_name": image_name, "voxel tags": tags_str}
-                for image_name, tags_str in current_data.items()
-            ])
+            self._create_new_dataframe(current_data)
 
-        # Save the updated DataFrame
-        df.to_csv(output_csv, index=False)
+        self.df.to_csv(output_csv, index=False)
 
     def run_voxel_inspection(self) -> None:
         """
@@ -243,9 +317,10 @@ class FiftyOneMaskInspector:
         - Launches the FiftyOne App for user-driven tagging.
         - Waits for the session to close (Ctrl+C).
         - Exports tags to a CSV in the results directory.
+        TODO: improve docstring for whole script
         """
-        samples = self.load_samples()
-        self.dataset: fo.Dataset = self.create_dataset(samples)
+        samples = self._load_samples()
+        self.dataset: fo.Dataset = self._create_dataset(samples)
         self.session = fo.launch_app(self.dataset, port=self.port)
 
         try:
@@ -267,7 +342,7 @@ class FiftyOneMaskInspector:
             print("Session closed.")
 
         # Save the voxel inspection results
-        self.save_tags_to_db(self.voxel_inspection_results_db)
+        self._save_tags_to_db(self.voxel_inspection_results_db)
         log.info(f"Tags saved to database: {self.voxel_inspection_results_db}")
 
 def main(cfg: DictConfig) -> None:
