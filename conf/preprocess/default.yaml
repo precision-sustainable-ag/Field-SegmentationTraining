@@ -75,3 +75,9 @@ split:
   # If True, removes the original source images after processing
   # (useful if you want to save space and only keep processed images)
   remove_src: false
+
+# Computes and saves RGB mean/std into ${paths.project_datastats_dir}/rgb_mean_std.json
+
+compute_data_stats:
+  use_concurrency: true   # toggle multiprocessing
+  num_workers:    16      # processes to use when concurrency on

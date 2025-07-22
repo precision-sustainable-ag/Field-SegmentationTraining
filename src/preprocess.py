@@ -12,6 +12,7 @@ from hydra.core.hydra_config import HydraConfig
 from src.utils.pipeline_log import PipelineLogger
 from src.preprocess_utils.pad_gridcrop_resize import pad_gridcrop_resize
 from src.preprocess_utils.train_val_test_split import train_val_test_split
+from src.preprocess_utils.data_stats import compute_rgb_mean_std
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +56,10 @@ def preprocess(cfg: DictConfig) -> None:
                 masks_dir=out_base/"masks",
                 cfg=cfg,
             )
+        
+        if cfg.tasks.preprocess.compute_data_stats:
+            # Compute & save RGB mean/std into ${paths.project_datastats_dir}/rgb_mean_std.json
+            compute_rgb_mean_std(cfg)
 
         success = True
 
