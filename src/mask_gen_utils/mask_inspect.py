@@ -74,8 +74,8 @@ class FiftyOneMaskInspector:
 
         image_names = []
         for only_include_tag in self.inspect_cfg.only_include_tags:
-            # Ensure "voxel tags" column is treated as string and handle NaN values
-            matched = self.df[self.df["voxel tags"].fillna("").astype(str).str.contains(only_include_tag)]["image_name"]
+            # Ensure "initial_voxel_tag" column is treated as string and handle NaN values
+            matched = self.df[self.df["initial_voxel_tag"].fillna("").astype(str).str.contains(only_include_tag)]["image_name"]
             image_names.extend(matched)
 
         mask_paths = []
