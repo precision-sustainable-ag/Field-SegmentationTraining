@@ -9,7 +9,7 @@ refine:
   only_include_tags:
     # - missing_red
   
-  filter_db_by_final_voxel_tags: # filters the voxel database by specific tags
+  filter_db_by_final_voxel_tags: # filters the voxel database by specific final voxel tags 
     - good
 
   # Morphological operations and HSV color ranges for mask generation.
