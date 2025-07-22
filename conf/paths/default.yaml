@@ -28,7 +28,7 @@ project_maskgen_dir: ${paths.project_dir}/mask_gen
 project_inference_dir: ${paths.project_dir}/inference  
 
 # paths for mask_gen mode:
-initial_mask_inspection_source: ${paths.project_maskgen_dir}/cutouts
+mask_gen_cutout_dir: ${paths.project_maskgen_dir}/cutouts
 refined_masks_dir: ${paths.project_maskgen_dir}/refined_masks
 voxel_inspection_results_dir: ${paths.project_maskgen_dir}/mask_inspection_db
 voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv

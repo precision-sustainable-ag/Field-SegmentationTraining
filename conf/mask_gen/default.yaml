@@ -1,23 +1,48 @@
 inspect:
   dataset_name: testing_inspect_maskgen
   port: 5050
+  only_include_tags:
+    # - missing_red
 
 
 refine:
+  only_include_tags:
+    # - missing_red
+  
   # Morphological operations and HSV color ranges for mask generation.
-  hsv_missing_red:
-    lower: [0, 100, 100]
-    upper: [179, 255, 255]
+  missing_red:
+    hsv_lower: [0, 120, 70]
+    hsv_upper: [10, 255, 255]
+    hsv_lower_2: [170, 120, 70]
+    hsv_upper_2: [180, 255, 255]
+    opening_kernel_size: 0
+    closing_kernel_size: 0
+    erosion_kernel_size: 0
+    exr_thresh: 60  # Experimental
+    saturation_thresh: 20 # Experimental
 
-  hsv_missing_white:
-    lower: [0, 0, 30]
-    upper: [180, 30, 255]
+  missing_white: # focus of v value
+    hsv_lower: [0, 0, 240]
+    hsv_upper: [180, 255, 255]
+    opening_kernel_size: 0
+    closing_kernel_size: 0
+    erosion_kernel_size: 0
 
-  hsv_present_mat: #gray or black pixels
-    lower: [15, 54, 46]
-    upper: [21, 94, 150]
+  present_mat: #gray or black pixels
+    hsv_lower: [15, 54, 46]
+    hsv_upper: [21, 94, 150]
+    opening_kernel_size: 3
+    closing_kernel_size: 4
+    erosion_kernel_size: 2
 
-  opening_kernel_size: 3
-  closing_kernel_size: 4
-  erosion_kernel_size: 3
-  exg_threshold: 20
+
+canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags (canonical: user defined)
+  missing_red: red
+  missing_white: white
+  present_mat: mat
+  bad: bad
+  other: other
+  ignore: ignore
+
+remove_tags: # canonicaltags used to remove refined masks and db entries
+  # - bad

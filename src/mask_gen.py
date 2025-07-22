@@ -9,7 +9,6 @@ from src.mask_gen_utils.unet_segment_weeds import main as unet_segment_weeds
 from src.mask_gen_utils.mask_inspect import main as mask_inspect
 from src.mask_gen_utils.mask_refine import main as mask_refine
 
-
 log = logging.getLogger(__name__)
 
 # Define a registry of tasks
@@ -26,7 +25,7 @@ def main(cfg: DictConfig) -> None:
     """ Main entry point for the application """
     log.info(f"Starting mask gen tasks...")
     
-    task_dict = cfg.tasks.maskgen # TODO: change this to cfg.mask_gen.tasks when incorporating into larger pipeline
+    task_dict = cfg.tasks.mask_gen # TODO: change this to cfg.mask_gen.tasks when incorporating into larger pipeline
     
     for task, enabled in task_dict.items():
 

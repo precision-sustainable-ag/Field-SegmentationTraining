@@ -45,7 +45,7 @@ def main(cfg: DictConfig) -> None:
         success = True
 
     except Exception as e:
-        log.error(f"Error in {cfg.mode}: {e}")
+        log.error(f"Error in {cfg.mode}: {e}", exc_info=True)
         log.debug(traceback.format_exc())
         pipe_logger.add_error(e)
 
