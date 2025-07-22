@@ -7,7 +7,7 @@ project_dir: ${paths.base_dir}/projects/${project.name}
 
 project_preprocess_dir: ${paths.project_dir}/preprocess 
 preprocess_split_dir: ${paths.project_preprocess_dir}/train_val_test_split 
-project_datastats_dir: ${paths.project_preprocess_dir}/data_sets
+project_datastats_dir: ${paths.project_preprocess_dir}/data_stats
 
 # Preprocess stats and image list files
 preprocess_stats_file: ${paths.project_preprocess_dir}/data_stats.txt
