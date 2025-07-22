@@ -6,6 +6,7 @@ max_epochs: 3
 num_workers: 16
 pin_memory: true
 seed: 42
+use_data_normalization: true
 
 # Optimizer:
 optimizer:
@@ -51,6 +52,6 @@ logger:
 
   - _target_: pytorch_lightning.loggers.WandbLogger
     project: ${project.name}
-    entity: mkutu # Optional: your WandB entity
+    entity:  # Optional: your WandB entity
     log_model: true
     save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
