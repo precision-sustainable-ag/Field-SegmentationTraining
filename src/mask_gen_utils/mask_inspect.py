@@ -60,7 +60,7 @@ class FiftyOneMaskInspector:
         self.inspect_cfg = cfg.mask_gen.inspect
 
         # load db if exists or create a new one
-        self.df = pd.read_csv(self.voxel_inspection_results_db, index_col=False) if self.voxel_inspection_results_db.exists() else pd.DataFrame()
+        self.df = pd.read_csv(self.voxel_inspection_results_db, index_col=False) if self.voxel_inspection_results_db.exists() else pd.DataFrame(columns=["image_name", "initial_voxel_tag", "final_voxel_tag"])
 
     def _get_mask_paths_from_db(self) -> list:
         """
@@ -201,7 +201,7 @@ class FiftyOneMaskInspector:
         dataset.add_samples(samples)
         return dataset
 
-    def _load_existing_data(self) -> dict:
+    def _get_existing_data(self) -> dict:
         """
         Loads existing data from the voxel inspection results database.
         
@@ -257,23 +257,19 @@ class FiftyOneMaskInspector:
         if new_rows:
             self.df = pd.concat([self.df, pd.DataFrame(new_rows)], ignore_index=True)
 
-    def _create_new_dataframe(self, current_data: dict) -> None:
+    def _populate_empty_db(self, current_data: dict) -> None:
         """
-        Creates a new DataFrame from scratch when no CSV exists.
+        Creates a new DB DataFrame from scratch and populates columns with voxel tags.
         Args:
             current_data (dict): A dictionary mapping image names to their tags."""
-        self.df = pd.DataFrame([
-            {
-                "image_name": image_name,
-                "initial_voxel_tag": tags_str,
-                "final_voxel_tag": ""
-            }
-            for image_name, tags_str in current_data.items()
-        ])
 
-    def _get_current_dataset_map(self) -> dict:
+        for image_name, tags_str in current_data.items():
+            self.df.loc[self.df["image_name"] == image_name, "initial_voxel_tag"] = tags_str
+            self.df["final_voxel_tag"] = ""
+
+    def _get_voxel_dataset_map(self) -> dict:
         """
-        Creates a dictionary of image_name -> tags from self.dataset.
+        Creates a dictionary of image_name -> user tags from self.dataset.
 
         Returns:
             dict: A dictionary where keys are image filenames and values are comma-separated tag strings.
@@ -286,27 +282,23 @@ class FiftyOneMaskInspector:
             dataset_map[image_name] = tags_str
         return dataset_map
 
-    def _save_tags_to_db(self, output_csv: Path) -> None:
+    def _handle_db(self) -> None:
         """
-        Writes updated tagging information from the FiftyOne session back to the voxel inspection CSV.
-
-        - Updates existing entries if tags have changed (except for 'good' which is preserved).
-        - Appends any new image entries not already in the CSV.
-
-        Args:
-            output_csv (Path): Destination path for the updated voxel inspection CSV.
+        Handles the voxel inspection results database by updating existing rows, appending new ones, 
+        or creating a new DB if not already present.
         """
-        output_csv = Path(output_csv)
-        current_data = self._get_current_dataset_map()
+        # Map image names to user defined tags from the FiftyOne dataset
+        voxel_data = self._get_voxel_dataset_map()
 
-        if output_csv.exists():
-            existing_data = self._load_existing_data()
-            self._update_existing_rows(current_data)
-            self._append_new_rows(current_data, existing_data)
+        # If the db exists, update existing rows and append new ones
+        if self.voxel_inspection_results_db.exists():
+            existing_data = self._get_existing_data()
+            self._update_existing_rows(voxel_data)
+            self._append_new_rows(voxel_data, existing_data)
         else:
-            self._create_new_dataframe(current_data)
+            self._populate_empty_db(voxel_data)
 
-        self.df.to_csv(output_csv, index=False)
+        self.df.to_csv(self.voxel_inspection_results_db, index=False)
 
     def run_voxel_inspection(self) -> None:
         """
@@ -342,7 +334,7 @@ class FiftyOneMaskInspector:
             print("Session closed.")
 
         # Save the voxel inspection results
-        self._save_tags_to_db(self.voxel_inspection_results_db)
+        self._handle_db()
         log.info(f"Tags saved to database: {self.voxel_inspection_results_db}")
 
 def main(cfg: DictConfig) -> None:
