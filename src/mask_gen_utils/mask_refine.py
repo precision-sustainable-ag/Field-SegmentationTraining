@@ -94,13 +94,16 @@ class RefineMask:
         # Set the voxel tag to the correct canonical tag (the key in tag_keywords)
         tag_map = {}
         for tag_label, keyword in tag_keywords.items():
-            matched = self.df_voxel_db[self.df_voxel_db["voxel tags"].str.contains(keyword, na=False)]["image_name"]
+            # filter the DataFrame for images that are not tagged "good"
+            df_voxel_db_need_refining = self.df_voxel_db[~self.df_voxel_db["final_voxel_tag"].astype(str).str.contains("good", na=False)]
+            # Find all images that match the keyword in their initial_voxel_tag
+            matched = df_voxel_db_need_refining[df_voxel_db_need_refining["initial_voxel_tag"].astype(str).str.contains(keyword, na=False)]["image_name"]
             tag_map.update({name: tag_label for name in matched})
-        
+
         # Check for unmatched tags
         pattern = "|".join([re.escape(keyword) for keyword in tag_keywords.values()])
-        unmatched = self.df_voxel_db[~self.df_voxel_db["voxel tags"].str.contains(pattern, na=False, regex=True)]
-        unmatched_tag_map = dict(zip(unmatched["image_name"], unmatched["voxel tags"]))
+        unmatched = self.df_voxel_db[~self.df_voxel_db["initial_voxel_tag"].str.contains(pattern, na=False, regex=True)]
+        unmatched_tag_map = dict(zip(unmatched["image_name"], unmatched["initial_voxel_tag"]))
         if unmatched_tag_map:
             log.warning(f"Unmatched tags found in voxel inspection results: {unmatched_tag_map}")
 
@@ -116,7 +119,7 @@ class RefineMask:
         for image_name, canonical_tag in tag_map.items():
             idx = self.df_voxel_db[self.df_voxel_db["image_name"] == image_name].index
             if not idx.empty:
-                self.df_voxel_db.loc[idx, "voxel tags"] = canonical_tag
+                self.df_voxel_db.loc[idx, "initial_voxel_tag"] = canonical_tag
 
     def _remove_refined_masks(self, voxel_tag_map: Dict[str, str]) -> Dict[str, str]:
         """
