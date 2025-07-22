@@ -262,10 +262,14 @@ class FiftyOneMaskInspector:
         Creates a new DB DataFrame from scratch and populates columns with voxel tags.
         Args:
             current_data (dict): A dictionary mapping image names to their tags."""
-
+        rows = []
         for image_name, tags_str in current_data.items():
-            self.df.loc[self.df["image_name"] == image_name, "initial_voxel_tag"] = tags_str
-            self.df["final_voxel_tag"] = ""
+            rows.append({
+                "image_name": image_name,
+                "initial_voxel_tag": tags_str,
+                "final_voxel_tag": ""
+            })
+        self.df = pd.DataFrame(rows)
 
     def _get_voxel_dataset_map(self) -> dict:
         """
