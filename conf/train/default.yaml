@@ -52,6 +52,6 @@ logger:
 
   - _target_: pytorch_lightning.loggers.WandbLogger
     project: ${project.name}
-    entity: sbaghba # Optional: your WandB entity
+    entity:  # Optional: your WandB entity
     log_model: true
     save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
