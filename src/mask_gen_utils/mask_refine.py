@@ -92,61 +92,38 @@ class RefineMask:
             raise FileNotFoundError(f"Voxel inspection results database (csv) not found at {self.voxel_inspection_results_db_path}")
         return pd.read_csv(self.voxel_inspection_results_db_path)
 
-    def _get_df_needing_refinement(self) -> pd.DataFrame:
+    def _get_df_needing_refinement(self, cfg: DictConfig) -> pd.DataFrame:
         """
         Returns a DataFrame of images that need mask refinement.
 
         Returns:
             pd.DataFrame: Filtered DataFrame containing only images that need refinement.
         """
-        df_voxel_db_need_refining = self.df_voxel_db.copy()
-        for tag in self.filter_db_by_final_voxel_tags:
-            # Filter out images that have the tag to be filtered in their final_voxel_tag column
-            df_voxel_db_need_refining = df_voxel_db_need_refining[~df_voxel_db_need_refining["final_voxel_tag"].astype(str).str.contains(tag, na=False)]
-        return df_voxel_db_need_refining
-    
-    def _get_matching_voxel_tag_map(self, tag_keywords):
-        """
-        Creates a mapping of image names to their corresponding tags based on keywords.
-        Args:
-            tag_keywords (Dict[str, str]): Dictionary mapping tag labels to keywords.
-        Returns:
-            Dict[str, str]: Mapping of image names to their corresponding tags.
-        """
-        tag_map = {}
-        for tag_label, keyword in tag_keywords.items():
-            # filter the DataFrame for images that are not tagged "good"
-            df_voxel_db_need_refining = self._get_df_needing_refinement()
-            # Find all images that match the keyword in their initial_voxel_tag
-            matched = df_voxel_db_need_refining[df_voxel_db_need_refining["initial_voxel_tag"].astype(str).str.contains(keyword, na=False)]["image_name"]
-            tag_map.update({name: tag_label for name in matched})
-        return tag_map
-    
-    def _get_unmatched_voxel_tag_map(self, tag_keywords):
-        """
-        Finds images in the voxel inspection results that do not match any of the specified tag keywords.
-        Args:
-            tag_keywords (Dict[str, str]): Dictionary mapping tag labels to keywords.
-        Returns:
-            Dict[str, str]: Mapping of image names to their unmatched initial_voxel_tag.
-        """
-        # Create a regex pattern from the tag keywords
-        pattern = "|".join([re.escape(keyword) for keyword in tag_keywords.values()])
-        unmatched = self.df_voxel_db[~self.df_voxel_db["initial_voxel_tag"].str.contains(pattern, na=False, regex=True)]
-        unmatched_tag_map = dict(zip(unmatched["image_name"], unmatched["initial_voxel_tag"]))
-        return unmatched_tag_map
+        # Load tags from config to filter the DataFrame
+        tags_to_filter_db = list(cfg.mask_gen.refine.filter_db_by_final_voxel_tags)
 
-    def _map_voxel_tags(self) -> Dict[str, str]:
+        for tag in tags_to_filter_db:
+            # Filter out images that have the tag to be filtered in their final_voxel_tag column
+            df_voxel_db_need_refining = self.df_voxel_db[~self.df_voxel_db["final_voxel_tag"].astype(str).str.contains(tag, na=False)]
+        return df_voxel_db_need_refining
+
+    def _map_voxel_tags(self, df_voxel_db_need_refining: pd.DataFrame) -> Dict[str, str]:
         """
         Maps voxel inspection tags to canonical tags defined in the configuration.
         """
         tag_keywords = self.canonical_tag_mapping
 
         # Set the voxel tag to the correct canonical tag (the key in tag_keywords)
-        tag_map = self._get_matching_voxel_tag_map(tag_keywords)
-        # Check for unmatched tags
-        unmatched_tag_map = self._get_unmatched_voxel_tag_map(tag_keywords)
+        tag_map = {}
+        for tag_label, keyword in tag_keywords.items():
+            # Find all images that match the keyword in their initial_voxel_tag
+            matched = df_voxel_db_need_refining[df_voxel_db_need_refining["initial_voxel_tag"].astype(str).str.contains(keyword, na=False)]["image_name"]
+            tag_map.update({name: tag_label for name in matched})
 
+        # Check for unmatched tags
+        pattern = "|".join([re.escape(keyword) for keyword in tag_keywords.values()])
+        unmatched = df_voxel_db_need_refining[~df_voxel_db_need_refining["initial_voxel_tag"].astype(str).str.contains(pattern, na=False, regex=True)]
+        unmatched_tag_map = dict(zip(unmatched["image_name"], unmatched["initial_voxel_tag"]))
         if unmatched_tag_map:
             log.warning(f"Unmatched tags found in voxel inspection results: {unmatched_tag_map}")
 
@@ -154,7 +131,7 @@ class RefineMask:
             raise ValueError("No tags found in voxel inspection results. Ensure the CSV is populated correctly.")
         
         return tag_map
-
+    
     def _update_voxel_tags_to_canonical(self, tag_map: Dict[str, str]) -> None:
         """
         Updates the DataFrame to use canonical tags for each image in tag_map.
@@ -279,20 +256,26 @@ class RefineMask:
         """
         self.df_voxel_db.to_csv(self.voxel_inspection_results_db_path, index=False)
         log.info(f"Voxel inspection results database updated and saved to {self.voxel_inspection_results_db_path}")
-        
-    def process_cutout_dir(self) -> None:
+
+    def process_cutout_dir(self, cfg: DictConfig) -> None:
         """
         Processes cropout images and refines masks based on voxel inspection tags.
         """
         try:
             ## Handling tags and already refined masks
             # TODO: improve this by catching and handling tag discrepancies, "other" tags, "bad" tags, etc.
+            # Get the DataFrame of images that need refinement
+            df_voxel_db_need_refining = self._get_df_needing_refinement(cfg)
+
             # Load and map voxel inspection tags to canonical tags
-            tag_map = self._map_voxel_tags()
+            tag_map = self._map_voxel_tags(df_voxel_db_need_refining)
+
             # Update the voxel inspection results DataFrame with canonical tags
             self._update_voxel_tags_to_canonical(tag_map)
+
             # Remove refined masks for tags that should not be processed
             cleaned_tag_map = self._remove_refined_masks(tag_map)
+
             # Remove entries from the voxel inspection results DB for tags that should not be processed
             self._update_db_with_remove_tags(cleaned_tag_map)
 
@@ -335,5 +318,5 @@ def main(cfg: DictConfig) -> None:
     TODO: make tags handling more robust, e.g., handle "other" tags, "bad" tags, tag discrepencies, etc.
     """
     refine_mask = RefineMask(cfg)
-    refine_mask.process_cutout_dir()
+    refine_mask.process_cutout_dir(cfg)
     log.info("Refining mask process completed successfully.")
