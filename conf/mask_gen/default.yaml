@@ -3,7 +3,7 @@ inspect:
   port: 5050
   only_include_tags:
     # - missing_red
-
+  reviewer: # Leave empty, place holder for user name
 
 refine:
   only_include_tags:
@@ -42,6 +42,7 @@ canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags 
   bad: bad
   other: other
   ignore: ignore
+  good: good
 
 remove_tags: # canonicaltags used to remove refined masks and db entries
   # - bad
