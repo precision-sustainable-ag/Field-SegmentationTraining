@@ -25,7 +25,7 @@ import pandas as pd
 import logging
 import sqlite3
 import datetime
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Optional, Set, Tuple
 
 # Logging configuration
 log = logging.getLogger(__name__)
@@ -92,11 +92,24 @@ class InspectionDB:
         except Exception as e:
             log.error(f"Insert failed for {image_id}: {e}")
 
-    def get_images_for_review(self) -> List[Tuple]:
+    def get_images_for_review(self, only_tags: List[str] = None) -> List[Tuple]:
         c = self.conn.cursor()
         try:
-            q = "SELECT * FROM images"
-            c.execute(q)
+            where_clauses = []
+            params = []
+
+            if only_tags:
+                tag_clauses = []
+                for tag in only_tags:
+                    tag_clauses.append("initial_tag LIKE ?")
+                    params.append(f"%{tag}%")
+                where_clauses.append("(" + " OR ".join(tag_clauses) + ")")
+
+            base_query = "SELECT * FROM images"
+            if where_clauses:
+                base_query += " WHERE " + " AND ".join(where_clauses)
+
+            c.execute(base_query, params)
             rows = c.fetchall()
             return rows
         except Exception as e:
@@ -128,6 +141,33 @@ class InspectionDB:
             log.error(f"Error fetching image IDs from DB: {e}")
             return set()
 
+    def get_images_for_refinement(self, only_tags: List[str] = None) -> List[Tuple]:
+        # Only return those with a non-empty initial_tag and not already final_tag == "good"
+        c = self.conn.cursor()
+        try:
+            base_query = '''
+                SELECT *
+                FROM images
+                WHERE 
+                    (final_tag IS NULL OR final_tag != "good")
+                    AND (initial_tag IS NOT NULL AND TRIM(initial_tag) != "")
+            '''
+            params = []
+            if only_tags:
+                # Compose a WHERE clause for tags using LIKE, for safety and flexibility
+                tag_clauses = []
+                for tag in only_tags:
+                    tag_clauses.append("initial_tag LIKE ?")
+                    params.append(f"%{tag}%")
+                tag_filter = " AND (" + " OR ".join(tag_clauses) + ")"
+                base_query += tag_filter
+            c.execute(base_query, params)
+            rows = c.fetchall()
+            return rows
+        except Exception as e:
+            log.error(f"Error fetching images for refinement: {e}")
+            return []
+    
     def close(self):
         try:
             self.conn.close()
@@ -188,11 +228,7 @@ class FiftyOneMaskInspector:
         # Reviewer name for tagging
         self.reviewer = os.getenv("USER")
 
-        # Refine parameters: 
-        refine_cfg = cfg.mask_gen.inspect
-        refine_params = OmegaConf.to_container(refine_cfg, resolve=True)
-        refine_params_json = json.dumps(refine_params)
-
+        self.only_tags = cfg.mask_gen.inspect.only_tags
 
     def _populate_db_with_images(self) -> None:
         
@@ -209,7 +245,7 @@ class FiftyOneMaskInspector:
                 mask_path_str = str(mask_path)
                 refined_path = str(self.refined_masks_dir / mask_path.name) if self.refined_masks_dir else ""
                 masks_to_add.append((image_name, image_path, mask_path_str, refined_path))
-            if len(masks_to_add) <= 3:
+            if 0 < len(masks_to_add) <= 3:
                 log.info(f"Adding {len(masks_to_add)} images one by one to DB")
                 for entry in masks_to_add:
                     try:
@@ -250,7 +286,7 @@ class FiftyOneMaskInspector:
         Returns:
             list: A list of FiftyOne samples created from the database entries.
         """
-        db_rows = self.db.get_images_for_review()
+        db_rows = self.db.get_images_for_review(only_tags=self.only_tags)
         samples = []
         mask_paths_in_db = set()  # Track mask paths for deduplication
 
