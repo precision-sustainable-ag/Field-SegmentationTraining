@@ -25,20 +25,12 @@ class MissingWhite:
             np.ndarray: Binary mask with white regions as 255.
         """
         # Separate the channels from RGB image
-        r = image[:, :, 0].astype(np.float32)
-        g = image[:, :, 1].astype(np.float32)
-        b = image[:, :, 2].astype(np.float32)
-
-        # Normalize the channels
-        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
-
-        # Linearize the RGB values to convert the default gamma-corrected RGB values to linear RGB values.
-        r_lin = np.where(r_norm < 0.04045, r_norm / 12.92, ((r_norm + 0.055) / 1.055) ** 2.4)
-        g_lin = np.where(g_norm < 0.04045, g_norm / 12.92, ((g_norm + 0.055) / 1.055) ** 2.4)
-        b_lin = np.where(b_norm < 0.04045, b_norm / 12.92, ((b_norm + 0.055) / 1.055) ** 2.4)
+        R = image[:, :, 0].astype(np.float32)
+        G = image[:, :, 1].astype(np.float32)
+        B = image[:, :, 2].astype(np.float32)
 
         # Calculate luminance index
-        luminance = 0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin
+        luminance = 0.2126 * R + 0.7152 * G + 0.0722 * B
 
         # Apply luminance threshold
         if self.luminance_thresh > 0:

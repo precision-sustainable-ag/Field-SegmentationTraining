@@ -1,13 +1,16 @@
 inspect:
   dataset_name: testing_inspect_maskgen
   port: 5050
-  only_tags:
-    # - missing_red
-  reviewer: # Leave empty, place holder for user name
+  only_include_tags:
+    - missing_white
+
 
 refine:
-  only_tags:
-    # - missing_red
+  only_include_tags:
+    - missing_white
+  
+  filter_db_by_final_voxel_tags: # filters the voxel database by specific final voxel tags 
+    - good
 
   # Morphological operations and HSV color ranges for mask generation.
   missing_red:
@@ -17,8 +20,8 @@ refine:
     closing_kernel_size: 0
     erosion_kernel_size: 0
 
-  missing_white: 
-    luminance_thresh: 0.8 # range [0, 1]
+  missing_white: # focus of v value
+    luminance_thresh: 200
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
@@ -40,8 +43,6 @@ canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags 
   ignore: ignore
   good: good
 
-relabel:
-  annot_session_key: cvat_mask_refine_run_001
-  label_field: refined_mask # either initial_mask or refined_mask
-  only_tags:
-    - missing_white
+remove_tags: # canonicaltags used to remove refined masks and db entries
+  # - bad
+
