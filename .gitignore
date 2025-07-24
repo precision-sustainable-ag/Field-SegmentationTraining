@@ -9,6 +9,8 @@ logging
 # trained_models directory
 trained_models
 
+# keys
+.keys/
 
 # logging
 logging
