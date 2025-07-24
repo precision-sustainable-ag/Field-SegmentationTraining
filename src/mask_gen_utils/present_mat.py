@@ -14,7 +14,7 @@ class PresentMat:
         self.mat_closing_size = present_mat_cfg.closing_kernel_size
         self.mat_erosion_size = present_mat_cfg.erosion_kernel_size
 
-    def process_present_mat(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
+    def process(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
         """
         Generate a binary mask for detecting mat-present regions using HSV thresholding.
 

@@ -15,7 +15,7 @@ class MissingRed:
         self.red_closing_size = missing_red_cfg.closing_kernel_size
         self.red_erosion_size = missing_red_cfg.erosion_kernel_size
 
-    def process_missing_red(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
+    def process(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
         """
         Generate a binary mask for detecting red-colored regions using Excess Red (ExR) boosted by saturation.
 
@@ -56,6 +56,5 @@ class MissingRed:
 
         # Combine with cropout_mask
         combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_exr_mask)
-        combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8)
 
-        return combined_refined_mask_binary
+        return combined_refined_mask
