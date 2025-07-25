@@ -16,22 +16,19 @@ Key Features:
 import os
 import fiftyone as fo
 from omegaconf import DictConfig
-from omegaconf import OmegaConf
 from PIL import Image
-import json
 import numpy as np
 from pathlib import Path
-import pandas as pd
 import logging
 import sqlite3
 import datetime
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Set, Tuple
 
 # Logging configuration
 log = logging.getLogger(__name__)
 
 
-DB_PATH = "inspection.db" # TODO: pull from cfg.paths.db_path or similar
+TABLE_NAME = "mask_gen_images"
 
 class InspectionDB:
     def __init__(self, db_path: str) -> None:
@@ -46,8 +43,8 @@ class InspectionDB:
     def _init_db(self) -> None:
         c = self.conn.cursor()
         try:
-            c.execute('''
-            CREATE TABLE IF NOT EXISTS images (
+            c.execute(f'''
+            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
                 image_id TEXT PRIMARY KEY,
                 image_path TEXT,
                 mask_path TEXT,
@@ -69,8 +66,8 @@ class InspectionDB:
         log.info(f"Bulk-inserting {len(image_info_list)} new images into DB")
         c = self.conn.cursor()
         try:
-            c.executemany('''
-                INSERT OR IGNORE INTO images (
+            c.executemany(f'''
+                INSERT OR IGNORE INTO {TABLE_NAME} (
                     image_id, image_path, mask_path, refined_mask_path, 
                     initial_tag, final_tag, tags, status, reviewer, timestamp
                 ) VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '')
@@ -82,8 +79,8 @@ class InspectionDB:
     def add_or_update_image(self, image_id: str, image_path: str, mask_path: str, refined_mask_path: str) -> None:
         c = self.conn.cursor()
         try:
-            c.execute('''
-                INSERT OR IGNORE INTO images (
+            c.execute(f'''
+                INSERT OR IGNORE INTO {TABLE_NAME} (
                     image_id, image_path, mask_path, refined_mask_path, 
                     initial_tag, final_tag, tags, status, reviewer, timestamp
                 )
@@ -105,7 +102,7 @@ class InspectionDB:
                     params.append(f"%{tag}%")
                 where_clauses.append("(" + " OR ".join(tag_clauses) + ")")
 
-            base_query = "SELECT * FROM images"
+            base_query = f"SELECT * FROM {TABLE_NAME}"
             if where_clauses:
                 base_query += " WHERE " + " AND ".join(where_clauses)
 
@@ -125,7 +122,7 @@ class InspectionDB:
         c = self.conn.cursor()
         try:
             c.executemany(
-                "UPDATE images SET initial_tag=?, final_tag=?, tags=?, status=?, reviewer=?, timestamp=? WHERE image_id=?",
+                f"UPDATE {TABLE_NAME} SET initial_tag=?, final_tag=?, tags=?, status=?, reviewer=?, timestamp=? WHERE image_id=?",
                 updates
             )
         except Exception as e:
@@ -135,7 +132,7 @@ class InspectionDB:
     def get_all_image_ids(self) -> Set[str]:
         c = self.conn.cursor()
         try:
-            c.execute("SELECT image_id FROM images")
+            c.execute(f"SELECT image_id FROM {TABLE_NAME}")
             return set(row[0] for row in c.fetchall())
         except Exception as e:
             log.error(f"Error fetching image IDs from DB: {e}")
@@ -145,9 +142,9 @@ class InspectionDB:
         # Only return those with a non-empty initial_tag and not already final_tag == "good"
         c = self.conn.cursor()
         try:
-            base_query = '''
+            base_query = f'''
                 SELECT *
-                FROM images
+                FROM {TABLE_NAME}
                 WHERE 
                     (final_tag IS NULL OR final_tag != "good")
                     AND (initial_tag IS NOT NULL AND TRIM(initial_tag) != "")
@@ -210,7 +207,7 @@ class FiftyOneMaskInspector:
         # Initialize required paths from the configuration
         self.mask_gen_cutout_dir = Path(cfg.paths.mask_gen_cutout_dir)
         self.refined_masks_dir = Path(cfg.paths.refined_masks_dir)
-        self.db_path = DB_PATH # TODO: pull from cfg.paths.db_path or similar
+        self.db_path = cfg.paths.agir_field_db
 
         # Use persistent DB connection
         self.db = InspectionDB(self.db_path)
@@ -444,6 +441,7 @@ def main(cfg: DictConfig) -> None:
     """
     Entry point for launching the voxel inspection process.
     """
+    # TODO: Move images marked as good to long-term storage or test directory.
     log.info("Mask inspection script started.")
     try:
         inspector = FiftyOneMaskInspector(cfg)
