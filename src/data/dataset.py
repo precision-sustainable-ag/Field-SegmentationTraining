@@ -9,6 +9,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from torchvision import transforms
 from omegaconf import OmegaConf, DictConfig
+import json
 
 class FieldDataset(Dataset):
     """
@@ -28,7 +29,7 @@ class FieldDataset(Dataset):
             mode (str): Dataset split to load: 'train', 'val', or 'test'.
         """
         # Keep references to the preprocess and augment config blocks
-        self.cfg_pre = cfg.preprocess
+        # self.cfg_pre = cfg.preprocess
         self.cfg_aug = cfg.augment
 
         # Determine image/mask directories based on mode
@@ -55,9 +56,18 @@ class FieldDataset(Dataset):
                 f"and masks ({len(self.masks)}) do not match."
             )
 
-        # Build the joint transform function (returns img_tensor, mask_tensor)
-        # from data.augmentation import build_transforms
-        # self.transform = build_transforms(self.cfg_pre, self.cfg_aug)
+        # ─── Dataset‐wide normalization setup ──────────────────────────────────
+        # Use the flag in cfg.train to decide whether to normalize
+        self.use_norm = bool(getattr(cfg.train, "use_data_normalization", False))
+        if self.use_norm:
+            # Stats JSON lives in paths.project_datastats_dir/rgb_mean_std.json
+            stats_path = Path(cfg.paths.project_datastats_dir) / "rgb_mean_std.json"
+            with open(stats_path, "r") as f:
+                stats = json.load(f)
+            # Create a torchvision Normalize transform
+            self.normalize = transforms.Normalize(mean=stats["mean"], std=stats["std"])
+        else:
+            self.normalize = None
 
     def __len__(self) -> int:
         """
@@ -82,11 +92,13 @@ class FieldDataset(Dataset):
         img = Image.open(self.images[idx]).convert("RGB")
         mask = Image.open(self.masks[idx]).convert("L")  # single channel mask
 
-        # Apply the combined preprocessing + augmentation transforms
-        from torchvision import transforms
+        # Convert to tensors in [0,1]
         img_tensor = transforms.ToTensor()(img)
         mask_tensor = transforms.ToTensor()(mask)
 
+        # Apply dataset-wide normalization if enabled
+        if self.normalize is not None:
+            img_tensor = self.normalize(img_tensor)
 
         # Ensure mask is binary: any value >0.5 becomes 1.0, else 0.0
         mask_tensor = (mask_tensor > 0.5).float()

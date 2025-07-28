@@ -18,22 +18,24 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: test # or field
 
-
-mode: train                  # one of: maskgen / preprocess / train / inference
+mode: preprocess                  # one of: mask_gen / preprocess / train / inference
 
 tasks: # TODO: make the other tasks bool key/values
-  preprocess:
-    - normalize
-    - remap
-    - center_crop
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
     detect_weeds: false
     unet_segment_weeds: false
-    mask_inspect: false
+    mask_inspect: true
     mask_refine: false
+
+  preprocess:
+    pad_gridcrop_resize: false
+    train_val_test_split: false
+    compute_data_stats:   false
+
   train:
     - train
+  
   inference:
     - inference
 
@@ -56,3 +58,6 @@ job:
   job_now_time: ${now:%H_%M_%S}
   job_now: ${job.job_now_date}/${job.job_now_time} 
   jobdir: ${paths.data_dir}/${job.job_now}
+
+db:
+  table_name: mask_gen_images

@@ -4,10 +4,13 @@ projects/test_project/train
 !projects/test_project/preprocess
 !src/data
 scripts/crop_images.py
+logging
 
 # trained_models directory
 trained_models
 
+# keys
+.keys/
 
 # logging
 logging

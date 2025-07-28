@@ -16,3 +16,68 @@ center_crop:
 remap_mask:
   enabled: true
   mapping: { "0": 0, "255": 1 }
+
+# ─── New settings for pad/gridcrop/resize ─────────────────────────────────────
+pad_gridcrop_resize:
+
+  # If True, uses multiprocessing to speed up preprocessing
+  use_concurrency: true      # toggle multiprocessing
+  num_workers:    16         # processes to use when concurrency on
+
+  # Target size that all cutouts & masks will be standardized to:
+  size:
+    height: 1024
+    width: 1024
+
+  # If True, ignores empty images and masks (e.g. no objects in the image) and does not include them in the dataset.
+  ignore_empty_data: true
+
+  # If True, removes the original source images after processing
+  # (useful if you want to save space and only keep processed images)
+  remove_src: false
+
+  # Padding settings: if enabled, pads images smaller than target size
+  pad:
+    enabled: true
+    # If True, pads images smaller than target size to target size
+    # (e.g. 512x512) using the specified padding mode:
+    mode: constant
+    fill: 0  # e.g. black padding
+
+  # If enabled, any image larger than `size` will be
+  # broken into overlapping tiles of `size` using this stride:
+  grid_crop:
+    enabled: true
+    stride: 512  # if False, uses size.height as stride
+    # only grid-crop if at least this many times larger than target:
+    threshold: 2.5     # e.g. if width/height ≥ 2× target, then grid-crop
+
+  # Resize settings: if True, resize images that are
+  # larger than target but below threshold; interpolation methods configurable
+  resize:
+    enabled: true
+    interpolation:
+      image: BILINEAR   # options: NEAREST, BILINEAR, BICUBIC, LANCZOS
+      mask: NEAREST     # NEAREST is recommended for label masks
+
+# Train/val/test split settings:
+split:
+
+  # If True, uses multithreading to speed up preprocessing
+  use_concurrency: true      # toggle multithreaded copy
+  num_workers:    16         # threads to use when concurrency on
+
+  # train/val/test set proportions:
+  train: 0.8
+  val:   0.1
+  test:  0.1
+
+  # If True, removes the original source images after processing
+  # (useful if you want to save space and only keep processed images)
+  remove_src: false
+
+# Computes and saves RGB mean/std into ${paths.project_datastats_dir}/rgb_mean_std.json
+
+compute_data_stats:
+  use_concurrency: true   # toggle multiprocessing
+  num_workers:    16      # processes to use when concurrency on

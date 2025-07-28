@@ -1,14 +1,14 @@
 inspect:
   dataset_name: testing_inspect_maskgen
   port: 5050
-  only_include_tags:
+  only_tags:
     # - missing_red
-
+  reviewer: # Leave empty, place holder for user name
 
 refine:
-  only_include_tags:
+  only_tags:
     # - missing_red
-  
+
   # Morphological operations and HSV color ranges for mask generation.
   missing_red:
     exr_thresh: 60
@@ -39,6 +39,5 @@ canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags 
   bad: bad
   other: other
   ignore: ignore
+  good: good
 
-remove_tags: # canonicaltags used to remove refined masks and db entries
-  # - bad
