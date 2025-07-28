@@ -6,6 +6,9 @@ projects/test_project/train
 scripts/crop_images.py
 logging
 
+# Ignore exploratory notebooks
+notebooks/
+
 # trained_models directory
 trained_models
 
