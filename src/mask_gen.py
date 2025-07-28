@@ -8,6 +8,7 @@ from src.mask_gen_utils.detect_weeds import main as detect_weeds
 from src.mask_gen_utils.unet_segment_weeds import main as unet_segment_weeds
 from src.mask_gen_utils.mask_inspect import main as mask_inspect
 from src.mask_gen_utils.mask_refine import main as mask_refine
+from mask_gen_utils.relabel import main as relabel
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ TASK_REGISTRY = {
     "unet_segment_weeds": unet_segment_weeds,
     "mask_inspect": mask_inspect,
     "mask_refine": mask_refine,
+    "relabel": relabel,
     # Add more tasks here as needed
 }
 
