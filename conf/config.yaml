@@ -58,3 +58,6 @@ job:
   job_now_time: ${now:%H_%M_%S}
   job_now: ${job.job_now_date}/${job.job_now_time} 
   jobdir: ${paths.data_dir}/${job.job_now}
+
+db:
+  table_name: mask_gen_images

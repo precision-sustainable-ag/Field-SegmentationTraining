@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from typing import Dict, Tuple, Any
 
-from src.mask_gen_utils.mask_inspect import InspectionDB
+from src.mask_gen_utils.db_utils import InspectionDB
 from src.mask_gen_utils.missing_red  import MissingRed
 from src.mask_gen_utils.missing_white import MissingWhite
 from src.mask_gen_utils.present_mat import PresentMat
@@ -32,7 +32,7 @@ class RefineMask:
         }
 
         self.db_path = cfg.paths.agir_field_db
-        self.db = InspectionDB(self.db_path)
+        self.db = InspectionDB(cfg)
 
         self.timestamp = datetime.datetime.now().isoformat()
 
@@ -53,7 +53,6 @@ class RefineMask:
         log.info(f"Processing tag: {tag}")
         refined_mask = processor.process(image, mask)
         return refined_mask, cfg
-
 
     def _save_refined_mask(self, mask: np.ndarray, image_name: str) -> None:
         output_path = self.refined_mask_dir / image_name.replace(".jpg", "_mask.png")
