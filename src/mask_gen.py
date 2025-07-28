@@ -30,8 +30,6 @@ def main(cfg: DictConfig) -> None:
     for task, enabled in task_dict.items():
 
         if enabled:
-            log.info(f"Running task {task}")
-
             if task in TASK_REGISTRY:
                 log.info(f"Running task {task}")
                 TASK_REGISTRY[task](cfg)

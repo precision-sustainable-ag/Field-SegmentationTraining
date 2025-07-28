@@ -13,7 +13,7 @@ class MissingWhite:
     """
     Class for refining binary masks to detect missing white regions in images.
     """
-    def process_missing_white(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
+    def process(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
         """
         Generate a binary mask for detecting white-colored regions using HSV thresholding.
 
@@ -35,6 +35,5 @@ class MissingWhite:
             ) 
         
         combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_refined_white_mask) # Combine the original mask with the refined mask
-        combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
-        
-        return combined_refined_mask_binary
+
+        return combined_refined_mask
