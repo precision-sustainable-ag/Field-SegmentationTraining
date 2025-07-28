@@ -1,32 +1,123 @@
 # All data‐augmentation transforms. Your datamodule should read these keys 
 # and apply the appropriate torchvision / albumentations transforms.
+# conf/augment/default.yaml
 
-horizontal_flip: true
-vertical_flip: false
-
-random_rotate:
-  enabled: true
-  degrees: 15
-
-color_jitter:
-  enabled: true
-  brightness: 0.2
-  contrast: 0.2
-  saturation: 0.2
-  hue: 0.05
-
-# (Optional) random scale + crop:
-random_resized_crop:
-  enabled: false
-  scale: [0.8, 1.0]
-  ratio: [0.75, 1.33]
-
-# (Optional) blur / gaussian noise
-gaussian_blur:
-  enabled: false
-  kernel_size: 5
-  sigma: 1.0
-
+# ─── how many samples to visualize each epoch ─────────────────────────────
 augmentation_logger:
-  enabled: true
-  num_samples: 8
+  enable: true        # toggle on/off
+  num_samples: 4      # how many image+mask pairs to log
+
+# ─── train transformations ──────────────────────────────────────────
+train:
+  img_size:
+    height: ${preprocess.pad_gridcrop_resize.size.height}
+    width:  ${preprocess.pad_gridcrop_resize.size.width}
+
+  spatial:
+    enable: true
+    horizontal_flip:
+      enable: true
+      p: 0.5
+    vertical_flip:
+      enable: true
+      p: 0.3
+    random_rotate90:
+      enable: true
+      p: 0.5
+    random_crop:
+      enable: true
+      p: 0.5
+      height: ${augment.train.img_size.height}
+      width:  ${augment.train.img_size.width}
+    affine:
+      enable: true
+      p: 0.3
+      scale: [0.9, 1.1]
+      translate_percent: [-0.1,0.1]
+      rotate: [-15,15]
+      shear: [-10,10]
+    elastic_transform:
+      enable: true
+      p: 0.2
+      alpha: 120
+      sigma: 8
+    grid_distortion:
+      enable: true
+      p: 0.2
+      num_steps: 5
+      distort_limit: [-0.3,0.3]
+    perspective:
+      enable: true
+      p: 0.2
+      scale: [0.1,0.2]
+      fit_output: false
+    optical_distortion:
+      enable: true
+      p: 0.2
+      distort_limit: [-0.2,0.2]
+
+  pixel:
+    enable: true
+    color_jitter:
+      enable: true
+      p: 0.5
+      brightness: 0.2
+      contrast:   0.2
+      saturation: 0.2
+      hue:        0.1
+    random_brightness_contrast:
+      enable: true
+      p: 0.5
+      brightness_limit: 0.2
+      contrast_limit:   0.2
+    random_gamma:
+      enable: true
+      p: 0.3
+      gamma_limit: [80,120]
+    gauss_noise:
+      enable: true
+      p: 0.3
+      var_limit: [10.0,50.0]
+    clahe:
+      enable: true
+      p: 0.3
+      clip_limit: 2.0
+      tile_grid_size: [8,8]
+    multiplicative_noise:
+      enable: true
+      p: 0.2
+      multiplier: [0.9,1.1]
+      per_channel: true
+    iso_noise:
+      enable: true
+      p: 0.2
+      color_shift: [0.01,0.05]
+      intensity:   [0.05,0.2]
+    image_compression:
+      enable: true
+      p: 0.3
+      quality_lower: 50
+      quality_upper: 90
+    rgb_shift:
+      enable: false
+    channel_shuffle:
+      enable: false
+
+# ─── validation (only resize/pad) ────────────────────────────────────
+val:
+  enable: true
+  img_size:
+    height: ${augment.train.img_size.height}
+    width:  ${augment.train.img_size.width}
+  spatial:
+    enable: true
+    horizontal_flip:
+      enable: false
+    random_crop:
+      enable: false
+  pixel:
+    enable: false
+
+# ─── test (no augment) ───────────────────────────────────────────────
+test:
+  enable: false

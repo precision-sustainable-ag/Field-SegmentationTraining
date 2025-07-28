@@ -18,14 +18,14 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: test # or field
 
-mode: preprocess                  # one of: mask_gen / preprocess / train / inference
+mode: train                  # one of: mask_gen / preprocess / train / inference
 
 tasks: # TODO: make the other tasks bool key/values
   preprocess:
     pad_gridcrop_resize: false
     train_val_test_split: false
-    compute_data_stats:   false
-  
+    compute_data_stats: false
+
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
     detect_weeds: false
@@ -34,7 +34,7 @@ tasks: # TODO: make the other tasks bool key/values
     mask_refine: false
   
   train:
-    - train
+    augment: true 
   
   inference:
     - inference

@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Tuple, Dict, Any
 
+import numpy as np
 from PIL import Image
 import torch
 from torch import Tensor
@@ -10,6 +11,14 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from omegaconf import OmegaConf, DictConfig
 import json
+
+# ─── import your augment builders ─────────────────────────────────────────────
+from src.augment import (
+    get_train_transforms,
+    get_val_transforms,
+    get_test_transforms,
+    get_noop_transform
+)
 
 class FieldDataset(Dataset):
     """
@@ -29,7 +38,7 @@ class FieldDataset(Dataset):
             mode (str): Dataset split to load: 'train', 'val', or 'test'.
         """
         # Keep references to the preprocess and augment config blocks
-        # self.cfg_pre = cfg.preprocess
+        self.cfg_pre = cfg.preprocess
         self.cfg_aug = cfg.augment
 
         # Determine image/mask directories based on mode
@@ -68,6 +77,20 @@ class FieldDataset(Dataset):
             self.normalize = transforms.Normalize(mean=stats["mean"], std=stats["std"])
         else:
             self.normalize = None
+        
+        # ─── build albumentations pipeline based on mode ───────────────────
+        # If augmentations are enabled in config, build the appropriate transforms
+        if cfg.tasks.train.augment:
+            if mode == "train":
+                self.transform = get_train_transforms(cfg)
+            elif mode == "val":
+                self.transform = get_val_transforms(cfg)
+            else:
+                self.transform = get_test_transforms(cfg)
+        
+        # no-op: return image & mask untouched
+        else:
+            self.transform = get_noop_transform()
 
     def __len__(self) -> int:
         """
@@ -93,8 +116,18 @@ class FieldDataset(Dataset):
         mask = Image.open(self.masks[idx]).convert("L")  # single channel mask
 
         # Convert to tensors in [0,1]
-        img_tensor = transforms.ToTensor()(img)
-        mask_tensor = transforms.ToTensor()(mask)
+        # img_tensor = transforms.ToTensor()(img)
+        # mask_tensor = transforms.ToTensor()(mask)
+
+        # apply albumentations (numpy arrays in/out)
+        arr = self.transform(
+            image = np.array(img),
+            mask = np.array(mask)
+        )
+        img_tensor = arr["image"].float() / 255.0  # convert to float32
+        # mask is single channel, so we add a channel dimension
+        # and convert to float32
+        mask_tensor = arr["mask"].unsqueeze(0).float()
 
         # Apply dataset-wide normalization if enabled
         if self.normalize is not None:
