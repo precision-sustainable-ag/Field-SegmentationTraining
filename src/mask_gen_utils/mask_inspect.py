@@ -54,12 +54,20 @@ class InspectionDB:
                 tags TEXT,
                 status TEXT,
                 reviewer TEXT,
-                timestamp TEXT
+                timestamp TEXT,
+                refine_params TEXT
             )
             ''')
+            
+            # Add refine_params if missing
+            c.execute(f"PRAGMA table_info({TABLE_NAME})")
+            existing_cols = [row[1] for row in c.fetchall()]
+            if "refine_params" not in existing_cols:
+                c.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN refine_params TEXT")
+
             self.conn.commit()
         except Exception as e:
-            log.error(f"Error creating DB table: {e}")
+            log.error(f"Error creating/updating DB table: {e}")
             raise
     
     def add_images_bulk(self, image_info_list: List[Tuple]) -> None:
@@ -122,7 +130,7 @@ class InspectionDB:
         c = self.conn.cursor()
         try:
             c.executemany(
-                f"UPDATE {TABLE_NAME} SET initial_tag=?, final_tag=?, tags=?, status=?, reviewer=?, timestamp=? WHERE image_id=?",
+                f"UPDATE {TABLE_NAME} SET initial_tag=?, final_tag=?, tags=?, status=?, reviewer=?, timestamp=?, refine_params=? WHERE image_id=?",
                 updates
             )
         except Exception as e:
@@ -290,7 +298,8 @@ class FiftyOneMaskInspector:
         for row in db_rows:
             (
                 image_id, image_path, mask_path, refined_mask_path,
-                initial_tag, final_tag, tags, status, reviewer, timestamp
+                initial_tag, final_tag, tags, status, reviewer, timestamp,
+                refine_params_str
             ) = row
 
             mask_paths_in_db.add(str(mask_path))  # Store as string for easy comparison
@@ -345,8 +354,11 @@ class FiftyOneMaskInspector:
         try:
             if self.dataset_name in fo.list_datasets():
                 log.info(f"Dataset '{self.dataset_name}' already exists. Load it.")
-                fo.load_dataset(self.dataset_name)
+                # dataset = fo.load_dataset(self.dataset_name)
+                # dataset.add_samples(samples)
+                fo.delete_dataset(self.dataset_name)  # removes registry entry
 
+            
             dataset = fo.Dataset(self.dataset_name)
             dataset.add_samples(samples)
             return dataset
@@ -408,7 +420,7 @@ class FiftyOneMaskInspector:
             image_name = Path(sample.filepath).name
             canonical_tags = self.normalize_tags(sample.tags)
             tags = set([t.lower() for t in canonical_tags if t])
-            
+            refine_params = None
             initial_tag = None
             final_tag = None
             status = None
@@ -427,7 +439,7 @@ class FiftyOneMaskInspector:
                 
             if isinstance(tags, set):
                 tags = ",".join(sorted(tags))
-            updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, image_name))
+            updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params, image_name))
         self.db.bulk_update_tags(updates)
         self.db.commit()
 

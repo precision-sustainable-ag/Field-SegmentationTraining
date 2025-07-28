@@ -3,12 +3,14 @@ import logging
 from pathlib import Path
 
 import cv2
+import json
 import hydra
 import numpy as np
 from omegaconf import DictConfig
+from omegaconf import OmegaConf
 from typing import Dict, Tuple, Any
 
-from src.mask_gen_utils.mask_inspect import InspectionDB, DB_PATH
+from src.mask_gen_utils.mask_inspect import InspectionDB
 from src.mask_gen_utils.missing_red  import MissingRed
 from src.mask_gen_utils.missing_white import MissingWhite
 from src.mask_gen_utils.present_mat import PresentMat
@@ -29,7 +31,7 @@ class RefineMask:
             "present_mat": (PresentMat(refine_cfg.present_mat), refine_cfg.present_mat),
         }
 
-        self.db_path = DB_PATH
+        self.db_path = cfg.paths.agir_field_db
         self.db = InspectionDB(self.db_path)
 
         self.timestamp = datetime.datetime.now().isoformat()
@@ -62,16 +64,16 @@ class RefineMask:
         log.info("Loading images needing refinement from database...")
         images = self.db.get_images_for_refinement(only_tags=self.only_tags)
         updates = []
-        for _, image_path, mask_path, _, initial_tag, final_tag, tags, _, _, _ in images:
+        for _, image_path, mask_path, _, initial_tag, final_tag, tags, _, _, _, _ in images:
             tag = initial_tag.split(",")[0].strip().lower()
             image_name = Path(image_path).name
-            refined_mask, _ = self._process_single_image(image_path, mask_path, tag)
+            refined_mask, refine_cfg = self._process_single_image(image_path, mask_path, tag)
             self._save_refined_mask(refined_mask, image_name)
             status = "refined"
             reviewer = "matt"
             timestamp = self.timestamp
-
-            updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, image_name))
+            refine_params_str = json.dumps(OmegaConf.to_container(refine_cfg, resolve=True))
+            updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params_str, image_name))
 
         self.db.bulk_update_tags(updates)
         self.db.commit()
