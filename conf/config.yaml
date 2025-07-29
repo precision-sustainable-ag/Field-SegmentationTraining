@@ -28,11 +28,11 @@ tasks:
 
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    detect_weeds: false
-    unet_segment_weeds: false
-    mask_inspect: false
-    mask_refine: false
-    relabel_test: false
+    detect: false
+    segment: false
+    inspect: false
+    refine: false
+    relabel: false
 
   train:
     vis_augment: false
