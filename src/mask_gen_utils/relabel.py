@@ -4,7 +4,7 @@ from pathlib import Path
 import logging
 import fiftyone as fo
 import numpy as np
-from src.mask_gen_utils.mask_inspect import FiftyOneMaskInspector
+from mask_gen_utils.inspect import FiftyOneMaskInspector
 
 log = logging.getLogger(__name__)
 

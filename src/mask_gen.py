@@ -4,20 +4,20 @@ from omegaconf import DictConfig
 
 # Import the task functions
 # TODO: move these into a subdirectory src/mask_gen when incorporating into larger pipeline
-from src.mask_gen_utils.detect_weeds import main as detect_weeds
-from src.mask_gen_utils.unet_segment_weeds import main as unet_segment_weeds
-from src.mask_gen_utils.mask_inspect import main as mask_inspect
-from src.mask_gen_utils.mask_refine import main as mask_refine
-from mask_gen_utils.relabel import main as relabel
+from src.mask_gen_utils.detect import main as detect
+from src.mask_gen_utils.segment import main as segment
+from src.mask_gen_utils.inspect import main as inspect
+from src.mask_gen_utils.refine import main as refine
+from src.mask_gen_utils.relabel import main as relabel
 
 log = logging.getLogger(__name__)
 
 # Define a registry of tasks
 TASK_REGISTRY = {
-    "detect_weeds": detect_weeds,
-    "unet_segment_weeds": unet_segment_weeds,
-    "mask_inspect": mask_inspect,
-    "mask_refine": mask_refine,
+    "detect": detect,
+    "segment": segment,
+    "inspect": inspect,
+    "refine": refine,
     "relabel": relabel,
     # Add more tasks here as needed
 }
