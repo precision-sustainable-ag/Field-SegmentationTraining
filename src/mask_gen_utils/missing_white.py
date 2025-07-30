@@ -4,17 +4,19 @@ from omegaconf import DictConfig
 from .morph_cleaned_mask import MorphCleanedMask
 
 class MissingWhite:
+    """
+    Class for refining binary masks to detect missing white regions in images.
+    """
+
     def __init__(self, missing_white_cfg: DictConfig):
         self.luminance_thresh = missing_white_cfg.luminance_thresh
         self.white_opening_size = missing_white_cfg.opening_kernel_size
         self.white_closing_size = missing_white_cfg.closing_kernel_size
         self.white_erosion_size = missing_white_cfg.erosion_kernel_size
-    """
-    Class for refining binary masks to detect missing white regions in images.
-    """
-    def process_missing_white(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
+    
+    def process(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
         """
-        Generate a binary mask for detecting white-colored regions using HSV thresholding.
+        Generate a binary mask for detecting white-colored regions using luminance.
 
         Args:
             image (np.ndarray): RGB image.
