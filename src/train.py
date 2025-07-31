@@ -78,6 +78,10 @@ def train(cfg: DictConfig) -> None:
     # === 4. Loggers ===
     # Dynamically instantiate all configured loggers
     loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
+
+    # If augmentation logging is enabled, log a sample batch
+    # This is only done if the dataset is set to use augmentations
+    if cfg.train.vis_augment and train_loader.dataset.use_augment:
     log_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_logger.num_samples)
 
     # === 5. Callbacks ===

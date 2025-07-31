@@ -80,7 +80,9 @@ class FieldDataset(Dataset):
         
         # ─── build albumentations pipeline based on mode ───────────────────
         # If augmentations are enabled in config, build the appropriate transforms
-        if cfg.tasks.train.augment:
+        # Use the flag in cfg.train to decide whether to augment
+        self.use_augment = bool(getattr(cfg.train, "use_data_augmentation", False))
+        if self.use_augment:
             if mode == "train":
                 self.transform = get_train_transforms(cfg)
             elif mode == "val":

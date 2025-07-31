@@ -7,6 +7,7 @@ num_workers: 16
 pin_memory: true
 seed: 42
 use_data_normalization: false
+use_data_augmentation: true
 
 # Optimizer:
 optimizer:

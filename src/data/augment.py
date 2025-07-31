@@ -1,4 +1,4 @@
-# src/augment.py
+# src/data/augment.py
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
