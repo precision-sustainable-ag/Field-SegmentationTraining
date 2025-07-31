@@ -56,8 +56,8 @@ class InspectionDB:
             c.executemany(f'''
                 INSERT OR IGNORE INTO {self.table_name} (
                     image_id, image_path, mask_path, refined_mask_path, 
-                    initial_tag, final_tag, tags, status, reviewer, timestamp
-                ) VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '')
+                    initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params
+                ) VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '', '')
             ''', image_info_list)
         except Exception as e:
             log.error(f"Bulk insert failed: {e}")
@@ -69,9 +69,9 @@ class InspectionDB:
             c.execute(f'''
                 INSERT OR IGNORE INTO {self.table_name} (
                     image_id, image_path, mask_path, refined_mask_path, 
-                    initial_tag, final_tag, tags, status, reviewer, timestamp
+                    initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params
                 )
-                VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '')
+                VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '', '')
             ''', (image_id, image_path, mask_path, refined_mask_path))
         except Exception as e:
             log.error(f"Insert failed for {image_id}: {e}")

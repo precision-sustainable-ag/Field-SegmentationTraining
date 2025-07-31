@@ -298,22 +298,28 @@ class MaskRelabelPipeline:
           4. Post-process mask fields
           5. Finalize and save results
         """
-        samples = self.load_samples_for_relabel()
-        dataset = self.inspector.create_dataset(samples)
-        dataset.save()
+        try:
+            samples = self.load_samples_for_relabel()
+            dataset = self.inspector.create_dataset(samples)
+            dataset.save()
 
-        if len(dataset) == 0:
-            print("No images needing relabel found in the database.")
-            return
+            if len(dataset) == 0:
+                print("No images needing relabel found in the database.")
+                return
 
-        view = dataset  # Could be dataset.take(N) if sampling desired
+            view = dataset  # Could be dataset.take(N) if sampling desired
 
-        self.launch_annotation(view)
-        input("Press ENTER to continue after annotating in CVAT...")
-
-        self.import_annotations(view)
-        self.postprocess_annotations(view)
-        self.finalize(view)
+            self.launch_annotation(view)
+            input("Press ENTER to continue after annotating in CVAT...")
+    
+        except Exception as e:
+            log.error(f"Error during relabeling pipeline: {e}")
+    
+        finally:
+            log.info("Finalizing relabeling pipeline...")
+            self.import_annotations(view)
+            self.postprocess_annotations(view)
+            self.finalize(view)
 
 
 def main(cfg: DictConfig) -> None:
