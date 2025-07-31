@@ -178,7 +178,7 @@ class FiftyOneMaskInspector:
         return samples
 
 
-    def _create_dataset(self, samples: List[fo.Sample]) -> fo.Dataset:
+    def create_dataset(self, samples: List[fo.Sample]) -> fo.Dataset:
         """
         Creates a FiftyOne dataset from samples defined in the SQLite DB.
         If dataset with same name exists, it will be deleted (optionally you can skip this for persistence).
@@ -226,7 +226,7 @@ class FiftyOneMaskInspector:
         """
         log.info("Starting voxel inspection workflow.")
         samples: List[fo.Sample] = self._load_samples()
-        self.dataset: fo.Dataset = self._create_dataset(samples)
+        self.dataset: fo.Dataset = self.create_dataset(samples)
         self.session = fo.launch_app(self.dataset, port=self.port)
         log.info("FiftyOne session started. Waiting for tagging to finish...")
 

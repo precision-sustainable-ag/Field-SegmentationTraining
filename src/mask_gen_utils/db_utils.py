@@ -171,3 +171,32 @@ class InspectionDB:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
+
+    def get_images_for_relabel(self, only_tags: List =None) -> List[Tuple]:
+        c = self.conn.cursor()
+        try:
+            base_query = f"""
+                SELECT * 
+                FROM {self.table_name}
+                WHERE (
+                    final_tag IS NULL
+                    OR TRIM(final_tag) = ''
+                    OR LOWER(final_tag) = 'none'
+                    OR LOWER(final_tag) NOT LIKE '%good%'
+                )
+            """
+            params = []
+            if only_tags:
+                print(f"Filtering for tags: {only_tags}")
+                tag_clauses = []
+                for tag in only_tags:
+                    tag_clauses.append("initial_tag LIKE ?")
+                    params.append(f"%{tag}%")
+                tag_filter = " AND (" + " OR ".join(tag_clauses) + ")"
+                base_query += tag_filter
+            c.execute(base_query, params)
+            rows = c.fetchall()
+            return rows
+        except Exception as e:
+            log.error(f"Error fetching images for relabel from DB: {e}")
+            return []
