@@ -36,7 +36,7 @@ def preprocess(cfg: DictConfig) -> None:
     success = False
     try:
         # Source directories from mask_gen (use paths config)
-        cutouts_dir = Path(cfg.paths.initial_mask_inspection_source)
+        cutouts_dir = Path(cfg.paths.mask_gen_cutout_dir)
         masks_dir   = Path(cfg.paths.refined_masks_dir)
         # Output into preprocess directory
         out_base    = Path(cfg.paths.project_preprocess_dir)
