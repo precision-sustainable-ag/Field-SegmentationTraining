@@ -15,21 +15,28 @@ augmentation_logger:
 
 # ─── train transformations ──────────────────────────────────────────
 train:
+  enable: true
+  
+  # target size for all spatial ops (pad/crop/resize happens upstream)
   img_size:
     height: ${preprocess.pad_gridcrop_resize.size.height}
     width:  ${preprocess.pad_gridcrop_resize.size.width}
 
   spatial:
-    enable: true
+    enable: true     # master switch for all spatial transforms
+
+    # simple flips & rotations
     horizontal_flip:
       enable: true
-      p: 0.5
+      p: 0.5         # mirror left‐right
     vertical_flip:
       enable: true
-      p: 0.3
+      p: 0.3         # mirror up‐down
     random_rotate90:
       enable: true
-      p: 0.5
+      p: 0.5         # rotate by a multiple of 90°
+
+    # cropping and geometric warps
     random_crop:
       enable: true
       p: 0.5
@@ -39,72 +46,98 @@ train:
       enable: true
       p: 0.3
       scale: [0.9, 1.1]
-      translate_percent: [-0.1,0.1]
-      rotate: [-15,15]
-      shear: [-10,10]
+      translate_percent: [-0.1, 0.1]
+      rotate: [-15, 15]
+      shear: [-10, 10]
     elastic_transform:
       enable: true
       p: 0.2
       alpha: 120
-      sigma: 8
+      sigma: 8            # elastic distortions
     grid_distortion:
       enable: true
       p: 0.2
       num_steps: 5
-      distort_limit: [-0.3,0.3]
+      distort_limit: [-0.3, 0.3]
     perspective:
       enable: true
       p: 0.2
-      scale: [0.1,0.2]
+      scale: [0.1, 0.2]
       fit_output: false
     optical_distortion:
       enable: true
       p: 0.2
-      distort_limit: [-0.2,0.2]
+      distort_limit: [-0.2, 0.2]
+    random_scale:
+      enable: true
+      p: 0.3
+      scale_limit: [0.8, 1.2]         # random zoom in/out
+    shift_scale_rotate:
+      enable: true
+      p: 0.3
+      shift_limit: 0.1
+      scale_limit: 0.1
+      rotate_limit: 30
 
   pixel:
-    enable: true
+    enable: true     # master switch for all pixel‐level transforms
+
+    # color and brightness adjustments
     color_jitter:
       enable: true
       p: 0.5
       brightness: 0.2
-      contrast:   0.2
+      contrast: 0.2
       saturation: 0.2
-      hue:        0.1
+      hue: 0.1
     random_brightness_contrast:
       enable: true
       p: 0.5
       brightness_limit: 0.2
-      contrast_limit:   0.2
+      contrast_limit: 0.2
     random_gamma:
       enable: true
       p: 0.3
-      gamma_limit: [80,120]
+      gamma_limit: [80, 120]
+
+    # noise injection
     gauss_noise:
       enable: true
       p: 0.3
-    clahe:
-      enable: true
-      p: 0.3
-      clip_limit: 2.0
-      tile_grid_size: [8,8]
     multiplicative_noise:
       enable: true
       p: 0.2
-      multiplier: [0.9,1.1]
+      multiplier: [0.9, 1.1]
       per_channel: true
     iso_noise:
       enable: true
       p: 0.2
-      color_shift: [0.01,0.05]
-      intensity:   [0.05,0.2]
-    image_compression:
+      color_shift: [0.01, 0.05]
+      intensity: [0.05, 0.2]
+
+    # advanced pixel ops
+    clahe:
       enable: true
       p: 0.3
+      clip_limit: 2.0
+      tile_grid_size: [8, 8]  # adaptive histogram equalization
+    image_compression:
+      enable: true
+      p: 0.3                   # simulate JPEG artifacts
+
+    # new pixel‐level additions
     rgb_shift:
-      enable: false
+      enable: true
+      p: 0.2
+      r_shift_limit: [-20, 20]
+      g_shift_limit: [-20, 20]
+      b_shift_limit: [-20, 20]
     channel_shuffle:
-      enable: false
+      enable: true
+      p: 0.2                   # random re‐ordering of channels
+    coarse_dropout:
+      enable: true
+      p: 0.2                   # “black out”
 
 # ─── validation (only resize/pad) ────────────────────────────────────
 val:

@@ -4,87 +4,127 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from typing import Dict, Any
 
-def _build_group(cfg_group: Dict[str, Any], class_map: Dict[str, Any], extra: Dict[str, Any]=None):
-    """Helper: pick enabled transforms from a config group."""
-    ts = []
+
+def _build_group(
+    cfg_group: Dict[str, Any],
+    class_map: Dict[str, Any],
+    extra: Dict[str, Any] = None
+) -> list:
+    """
+    Helper: instantiate all enabled transforms in a group.
+
+    Args:
+        cfg_group:   The config subtree for this group (spatial or pixel).
+        class_map:   Mapping from config keys to Albumentations classes.
+        extra:       Optional dict of extra params for grouped transforms.
+
+    Returns:
+        A list of instantiated Albumentations transform objects.
+    """
+    ops = []
     for key, cls in class_map.items():
         spec = cfg_group.get(key, {})
-        if spec.get("enable", False):
-            params = {k:v for k,v in spec.items() if k!="enable"}
-            if extra and key in extra:
-                params.update(extra[key])
-            ts.append(cls(**params))
-    return ts
+        if not spec.get("enable", False):
+            continue
+        # Collect parameters except the 'enable' flag
+        params = {k: v for k, v in spec.items() if k != "enable"}
+        # Merge in any extras (e.g. weightings for OneOf, etc.)
+        if extra and key in extra:
+            params.update(extra[key])
+        ops.append(cls(**params))
+    return ops
+
 
 def get_train_transforms(cfg):
+    """
+    Build the full training augmentation pipeline:
+      1) Spatial-level ops applied to both image & mask
+      2) Pixel-level ops applied to image only
+      3) Conversion to tensor
+      4) Replay info for introspection
+
+    Relies on `cfg.augment.train` for enabled flags and parameters.
+    """
     t = cfg.augment.train
 
-    # ─── spatial transforms (both image+mask) ────────────────────────────────
-    spatial_ops = []
+    # ─── Spatial transforms (image + mask) ───────────────────────────────
     spat_map = {
-      "horizontal_flip":  A.HorizontalFlip,
-      "vertical_flip":    A.VerticalFlip,
-      "random_rotate90":  A.RandomRotate90,
-      "random_crop":      A.RandomCrop,
-      "affine":           A.Affine,
-      "elastic_transform":A.ElasticTransform,
-      "grid_distortion":  A.GridDistortion,
-      "perspective":      A.Perspective,
-      "optical_distortion":A.OpticalDistortion,
+        "random_crop":        A.RandomCrop,
+        "horizontal_flip":    A.HorizontalFlip,
+        "vertical_flip":      A.VerticalFlip,
+        "random_rotate90":    A.RandomRotate90,
+        "affine":             A.Affine,
+        "elastic_transform":  A.ElasticTransform,
+        "grid_distortion":    A.GridDistortion,
+        "perspective":        A.Perspective,
+        "optical_distortion": A.OpticalDistortion,
+        "random_scale":       A.RandomScale,
+        "shift_scale_rotate": A.ShiftScaleRotate,
     }
-    for key, cls in spat_map.items():
-        c = t.spatial.get(key, {})
-        if c.get("enable", False):
-            params = {k:v for k,v in c.items() if k!="enable"}
-            spatial_ops.append(cls(**params))
+    spatial_ops = _build_group(t.spatial, spat_map)
 
-    # ─── pixel‐level transforms (image only) ─────────────────────────────────
-    pixel_ops = []
+    # ─── Pixel-level transforms (image only) ─────────────────────────────
     pix_map = {
-      "color_jitter":          A.ColorJitter,
-      "random_brightness_contrast":A.RandomBrightnessContrast,
-      "random_gamma":           A.RandomGamma,
-      "clahe":                  A.CLAHE,
-      "gauss_noise":            A.GaussNoise,
-      "multiplicative_noise":   A.MultiplicativeNoise,
-      "iso_noise":              A.ISONoise,
-      "image_compression":      A.ImageCompression,
-      "rgb_shift":              A.RGBShift,
-      "channel_shuffle":        A.ChannelShuffle,
+        "color_jitter":             A.ColorJitter,
+        "random_brightness_contrast":A.RandomBrightnessContrast,
+        "random_gamma":             A.RandomGamma,
+        "gauss_noise":              A.GaussNoise,
+        "multiplicative_noise":     A.MultiplicativeNoise,
+        "iso_noise":                A.ISONoise,
+        "clahe":                    A.CLAHE,
+        "image_compression":        A.ImageCompression,
+        "rgb_shift":                A.RGBShift,
+        "channel_shuffle":          A.ChannelShuffle,
+        "coarse_dropout":           A.CoarseDropout,
     }
-    for key, cls in pix_map.items():
-        c = t.pixel.get(key, {})
-        if c.get("enable", False):
-            params = {k:v for k,v in c.items() if k!="enable"}
-            pixel_ops.append(cls(**params))
+    pixel_ops = _build_group(t.pixel, pix_map)
 
-    # ─── build final Compose ────────────────────────────────────────────────
-    # spatial + pixel, then ToTensor, masks carried via additional_targets
+    # ─── Assemble final pipeline ─────────────────────────────────────────
+    # - replay=True captures which transforms actually ran & their params
+    # - additional_targets ensures masks go through only spatial ops
+    # 1) spatial_ops + pixel_ops
+    # 2) resize *always* to target size so DataLoader can batch
+    # 3) to-tensor + replay capture
+    H = int(cfg.augment.train.img_size.height)
+    W = int(cfg.augment.train.img_size.width)
+
+    pipeline = spatial_ops + pixel_ops + [
+        # ensure fixed output dimensions
+        A.Resize(height=H, width=W, p=1.0),
+        ToTensorV2()
+    ]
+
     return A.ReplayCompose(
-      spatial_ops + pixel_ops + [ToTensorV2()],
-      additional_targets={"mask": "mask"},
+        transforms=pipeline,
+        additional_targets={"mask": "mask"},
     )
 
-def get_val_transforms(cfg: Any) -> A.Compose:
-    t = cfg.augment.val
-    ts = []
-    # we’ll just resize/pad to target size
-    if t.enable:
-        size = (t.img_size.height, t.img_size.width)
-        ts.append(A.PadIfNeeded(min_height=size[0], min_width=size[1], p=1.0))
-        ts.append(ToTensorV2())
-    return A.Compose(ts)
 
-def get_test_transforms(cfg: Any) -> A.Compose:
-    # same as val by default
+def get_val_transforms(cfg) -> A.Compose:
+    """
+    Validation transforms: pad/resize only, then to tensor.
+    """
+    t = cfg.augment.val
+    ops = []
+    if t.enable:
+        height, width = t.img_size.height, t.img_size.width
+        ops.append(A.PadIfNeeded(min_height=height, min_width=width, p=1.0))
+        ops.append(ToTensorV2())
+    return A.Compose(ops)
+
+
+def get_test_transforms(cfg) -> A.Compose:
+    """
+    Test transforms: same as validation by default.
+    """
     return get_val_transforms(cfg)
+
 
 def get_noop_transform() -> A.Compose:
     """
-    Returns an Albumentations transform that performs no augmentation.
-    Useful as a fallback when augmentations are disabled.
+    No-op pipeline: returns image & mask untouched (but as tensors).
     """
-    return A.Compose([
-        A.NoOp(),
-        ToTensorV2()
-    ], additional_targets={"mask": "mask"})
+    return A.Compose(
+        [A.NoOp(), ToTensorV2()],
+        additional_targets={"mask": "mask"}
+    )
