@@ -5,8 +5,7 @@ from .morph_cleaned_mask import MorphCleanedMask
 
 class MissingWhite:
     def __init__(self, missing_white_cfg: DictConfig):
-        self.white_missing_hsv_lower = np.array(missing_white_cfg.hsv_lower, dtype=np.uint8)
-        self.white_missing_hsv_upper = np.array(missing_white_cfg.hsv_upper, dtype=np.uint8)
+        self.luminance_thresh = missing_white_cfg.luminance_thresh
         self.white_opening_size = missing_white_cfg.opening_kernel_size
         self.white_closing_size = missing_white_cfg.closing_kernel_size
         self.white_erosion_size = missing_white_cfg.erosion_kernel_size
@@ -23,17 +22,27 @@ class MissingWhite:
         Returns:
             np.ndarray: Binary mask with white regions as 255.
         """
-        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        refined_mask_for_white = cv2.inRange(hsv_image, self.white_missing_hsv_lower, self.white_missing_hsv_upper)
-        
-        # Apply morphological operations to clean the mask
+        # Separate the channels from RGB image
+        R = image[:, :, 0].astype(np.float32)
+        G = image[:, :, 1].astype(np.float32)
+        B = image[:, :, 2].astype(np.float32)
+
+        # Calculate luminance index
+        luminance = 0.2126 * R + 0.7152 * G + 0.0722 * B
+
+        # Apply luminance threshold
+        if self.luminance_thresh > 0:
+            luminance_mask = np.where(luminance > self.luminance_thresh, 255, 0).astype(np.uint8)
+
+        # Morphological cleaning
         morphcleaned_refined_white_mask = MorphCleanedMask.morph_cleaned_mask(
-            refined_mask_for_white, 
+            luminance_mask, 
             self.white_opening_size, 
             self.white_closing_size, 
             self.white_erosion_size
             ) 
         
+        # Combine with cropout_mask
         combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_refined_white_mask) # Combine the original mask with the refined mask
 
         return combined_refined_mask

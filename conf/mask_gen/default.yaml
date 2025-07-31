@@ -18,8 +18,7 @@ refine:
     erosion_kernel_size: 0
 
   missing_white: # focus of v value
-    hsv_lower: [0, 0, 240]
-    hsv_upper: [180, 255, 255]
+    luminance_thresh: 200
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
