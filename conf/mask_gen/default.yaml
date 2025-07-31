@@ -41,3 +41,8 @@ canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags 
   ignore: ignore
   good: good
 
+relabel:
+  annot_session_key: cvat_mask_refine_run_001
+  label_field: refined_mask # either initial_mask or refined_mask
+  only_tags:
+    - missing_white
