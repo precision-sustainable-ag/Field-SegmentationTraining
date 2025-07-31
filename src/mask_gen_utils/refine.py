@@ -1,3 +1,4 @@
+import os
 import datetime
 import logging
 from pathlib import Path
@@ -37,6 +38,8 @@ class RefineMask:
         self.timestamp = datetime.datetime.now().isoformat()
 
         self.only_tags = cfg.mask_gen.refine.only_tags
+        # Get the user name from the environment variable or use a default
+        self.reviewer = os.getenv("USER", "unknown_reviewer")
 
     def _process_single_image(self, image_path: str, mask_path: str, tag: str) -> Tuple[np.ndarray, Dict[str, Any]]:
         log.info(f"Refining mask for: {Path(image_path).name}")
@@ -69,7 +72,7 @@ class RefineMask:
             refined_mask, refine_cfg = self._process_single_image(image_path, mask_path, tag)
             self._save_refined_mask(refined_mask, image_name)
             status = "refined"
-            reviewer = "matt"
+            reviewer = self.reviewer
             timestamp = self.timestamp
             refine_params_str = json.dumps(OmegaConf.to_container(refine_cfg, resolve=True))
             updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params_str, image_name))

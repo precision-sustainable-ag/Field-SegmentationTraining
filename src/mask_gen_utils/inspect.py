@@ -259,23 +259,42 @@ class FiftyOneMaskInspector:
             image_name = Path(sample.filepath).name
             canonical_tags = self.normalize_tags(sample.tags)
             tags = set([t.lower() for t in canonical_tags if t])
-            refine_params = None
-            initial_tag = None
+            refine_params = sample["refine_params"] if "refine_params" in sample else None
+            
+            initial_tag = sample["initial_tag"]
+            # initial tag already exists and hasn't changed
+            if initial_tag and initial_tag.lower() in tags:
+                initial_tag = initial_tag.lower()
+
+            # if initial tag doesn't exist or the initial tag is not in tags, set it to the current tags other than good, bad, or other
+            elif not initial_tag or initial_tag.lower() not in tags:
+                initial_tag = ",".join(sorted(tags - {"good", "bad", "other"})) if tags else None
+            
+            # Update the initial tag if anything in the tags is anything other than good, bad, other, or the initial_tag
             final_tag = None
             status = None
             reviewer = None
+
             if "good" in tags:
                 final_tag = "good"
                 status = "reviewed"
                 reviewer = self.reviewer
+            elif "bad" in tags:
+                final_tag = "bad"
+                status = "reviewed"
+                reviewer = self.reviewer
+            elif "other" in tags:
+                final_tag = "other"
+                status = "reviewed"
+                reviewer = self.reviewer
             elif tags:
                 initial_tag = ",".join(sorted(tags))
-                status = "pending"
+                status = "inspected"
                 reviewer = self.reviewer
             else:
                 status = "unreviewed"
-                reviewer = None\
-                
+                reviewer = None
+
             if isinstance(tags, set):
                 tags = ",".join(sorted(tags))
             updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params, image_name))
