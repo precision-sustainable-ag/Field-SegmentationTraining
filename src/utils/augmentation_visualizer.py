@@ -8,7 +8,7 @@ from torchvision.utils import make_grid, save_image
 import wandb
 
 
-def log_augmentation_batch(train_loader, logger_cfgs, num_samples: int = 4):
+def vis_augmentation_batch(train_loader, logger_cfgs, num_samples: int = 4):
     """
     One-off: log a single batch of augmented inputs and their corresponding masks.
     - Saves a grid of paired images & masks from `train_loader`

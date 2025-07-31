@@ -65,7 +65,6 @@ def get_train_transforms(cfg):
       additional_targets={"mask": "mask"},
     )
 
-
 def get_val_transforms(cfg: Any) -> A.Compose:
     t = cfg.augment.val
     ts = []

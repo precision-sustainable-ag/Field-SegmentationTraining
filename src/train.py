@@ -16,7 +16,7 @@ from src.utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed, seed_worker
 from src.models.lit_segmentation import LitSegmentation
 from src.data.dataset import FieldDataset
-from src.utils.augmentation_logger import log_augmentation_batch
+from src.utils.augmentation_visualizer import vis_augmentation_batch
 
 import torch
 from torch.utils.data import DataLoader
@@ -79,10 +79,9 @@ def train(cfg: DictConfig) -> None:
     # Dynamically instantiate all configured loggers
     loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
 
-    # If augmentation logging is enabled, log a sample batch
-    # This is only done if the dataset is set to use augmentations
-    if cfg.train.vis_augment and train_loader.dataset.use_augment:
-    log_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_logger.num_samples)
+    # If augmentation visualization is enabled, log a sample batch before training
+    if cfg.tasks.train.vis_augment and train_loader.dataset.use_augment:
+        vis_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_logger.num_samples)
 
     # === 5. Callbacks ===
     checkpoint_cb = ModelCheckpoint(
@@ -114,7 +113,6 @@ def train(cfg: DictConfig) -> None:
         callbacks=[checkpoint_cb, earlystop_cb],
         default_root_dir=str(Path(cfg.paths.project_train_dir))
     )
-
 
     # === 7. Train ===
     trainer.fit(model, train_loader, val_loader)

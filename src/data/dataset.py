@@ -13,7 +13,7 @@ from omegaconf import OmegaConf, DictConfig
 import json
 
 # ─── import your augment builders ─────────────────────────────────────────────
-from src.augment import (
+from src.data.augment import (
     get_train_transforms,
     get_val_transforms,
     get_test_transforms,
@@ -127,8 +127,7 @@ class FieldDataset(Dataset):
             mask = np.array(mask)
         )
         img_tensor = arr["image"].float() / 255.0  # convert to float32
-        # mask is single channel, so we add a channel dimension
-        # and convert to float32
+        # mask is single channel, so we add a channel dimension and convert to float32
         mask_tensor = arr["mask"].unsqueeze(0).float()
 
         # Apply dataset-wide normalization if enabled
