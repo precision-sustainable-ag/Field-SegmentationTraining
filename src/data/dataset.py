@@ -117,10 +117,6 @@ class FieldDataset(Dataset):
         img = Image.open(self.images[idx]).convert("RGB")
         mask = Image.open(self.masks[idx]).convert("L")  # single channel mask
 
-        # Convert to tensors in [0,1]
-        # img_tensor = transforms.ToTensor()(img)
-        # mask_tensor = transforms.ToTensor()(mask)
-
         # apply albumentations (numpy arrays in/out)
         arr = self.transform(
             image = np.array(img),

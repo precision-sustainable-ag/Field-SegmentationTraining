@@ -60,7 +60,7 @@ def get_train_transforms(cfg):
 
     # ─── build final Compose ────────────────────────────────────────────────
     # spatial + pixel, then ToTensor, masks carried via additional_targets
-    return A.Compose(
+    return A.ReplayCompose(
       spatial_ops + pixel_ops + [ToTensorV2()],
       additional_targets={"mask": "mask"},
     )

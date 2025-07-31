@@ -39,8 +39,6 @@ field_segmentation/                    # ← top‐level repo
 │           └── custom.yaml            #     • Custom Python logging config (formatters, handlers, loggers)
 │
 ├── src/                               # 7. All source code under a top‐level Python package
-│   ├── __init__.py
-│   │
 │   ├── data/                          # 7a. Data + transforms
 │   │   ├── augmentation.py            #     • Compose augment & preprocess pipelines based on cfg
 │   │   └── dataset.py                 #     • Custom Dataset class for field images + masks

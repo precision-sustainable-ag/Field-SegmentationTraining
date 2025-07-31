@@ -1,23 +1,9 @@
-# Preprocessing: resizing, normalization, cropping. 
+# Preprocessing:
+# This file defines the preprocessing steps for the dataset, including resizing,
+# padding, cropping, and splitting the dataset into train/val/test sets.
 # Your datamodule code should use these for transforms prior to augment.
 
-normalize:
-  enabled: true
-  mean: [0.485, 0.456, 0.406]
-  std:  [0.229, 0.224, 0.225]
-
-center_crop:
-  enabled: false
-  size:
-    height: 512
-    width: 512
-
-# If you want to remap mask values (e.g. 0→0, 255→1):
-remap_mask:
-  enabled: true
-  mapping: { "0": 0, "255": 1 }
-
-# ─── New settings for pad/gridcrop/resize ─────────────────────────────────────
+# ─── Settings for pad/gridcrop/resize ─────────────────────────────────────
 pad_gridcrop_resize:
 
   # If True, uses multiprocessing to speed up preprocessing

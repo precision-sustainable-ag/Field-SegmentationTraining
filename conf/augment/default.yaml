@@ -7,6 +7,12 @@ augmentation_logger:
   enable: true        # toggle on/off
   num_samples: 4      # how many image+mask pairs to log
 
+  # ─── legend panel settings ─────────────────────────────────────────
+  legend:
+    # font size = max(min_font_size, height / font_divisor)
+    font_divisor: 40
+    min_font_size: 12
+
 # ─── train transformations ──────────────────────────────────────────
 train:
   img_size:
@@ -77,7 +83,6 @@ train:
     gauss_noise:
       enable: true
       p: 0.3
-      var_limit: [10.0,50.0]
     clahe:
       enable: true
       p: 0.3
@@ -96,8 +101,6 @@ train:
     image_compression:
       enable: true
       p: 0.3
-      quality_lower: 50
-      quality_upper: 90
     rgb_shift:
       enable: false
     channel_shuffle:
