@@ -28,6 +28,7 @@ class InspectionDB:
                 image_path TEXT,
                 mask_path TEXT,
                 refined_mask_path TEXT,
+                relabeled_mask_path TEXT,
                 initial_tag TEXT,
                 final_tag TEXT,
                 tags TEXT,
@@ -55,24 +56,24 @@ class InspectionDB:
         try:
             c.executemany(f'''
                 INSERT OR IGNORE INTO {self.table_name} (
-                    image_id, image_path, mask_path, refined_mask_path, 
+                    image_id, image_path, mask_path, refined_mask_path, relabeled_mask_path,
                     initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params
-                ) VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '', '')
+                ) VALUES (?, ?, ?, ?, ?, '', '', '', 'pending', '', '', '')
             ''', image_info_list)
         except Exception as e:
             log.error(f"Bulk insert failed: {e}")
             raise
 
-    def add_or_update_image(self, image_id: str, image_path: str, mask_path: str, refined_mask_path: str) -> None:
+    def add_or_update_image(self, image_id: str, image_path: str, mask_path: str, refined_mask_path: str, relabeled_mask_path: str) -> None:
         c = self.conn.cursor()
         try:
             c.execute(f'''
                 INSERT OR IGNORE INTO {self.table_name} (
-                    image_id, image_path, mask_path, refined_mask_path, 
+                    image_id, image_path, mask_path, refined_mask_path, relabeled_mask_path,
                     initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params
                 )
-                VALUES (?, ?, ?, ?, '', '', '', 'pending', '', '', '')
-            ''', (image_id, image_path, mask_path, refined_mask_path))
+                VALUES (?, ?, ?, ?, ?, '', '', '', 'pending', '', '', '')
+            ''', (image_id, image_path, mask_path, refined_mask_path, relabeled_mask_path))
         except Exception as e:
             log.error(f"Insert failed for {image_id}: {e}")
 
