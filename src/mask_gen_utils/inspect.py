@@ -54,6 +54,7 @@ class FiftyOneMaskInspector:
         # Initialize required paths from the configuration
         self.mask_gen_cutout_dir = Path(cfg.paths.mask_gen_cutout_dir)
         self.refined_masks_dir = Path(cfg.paths.refined_masks_dir)
+        self.relabeled_masks_dir = Path(cfg.paths.relabeled_masks_dir)
         self.db_path = cfg.paths.agir_field_db
 
         # Use persistent DB connection
@@ -87,8 +88,13 @@ class FiftyOneMaskInspector:
                     continue
                 image_path = str(self.mask_gen_cutout_dir / image_name)
                 mask_path_str = str(mask_path)
-                refined_path = str(self.refined_masks_dir / mask_path.name) if self.refined_masks_dir else ""
-                masks_to_add.append((image_name, image_path, mask_path_str, refined_path))
+                # Set mask paths if they exist
+                refined_path = self.refined_masks_dir / mask_path.name
+                relabeled_path = self.relabeled_masks_dir / mask_path.name
+                refined_path = str(refined_path) if refined_path.exists() else ""
+                relabeled_path = str(relabeled_path) if relabeled_path.exists() else ""
+
+                masks_to_add.append((image_name, image_path, mask_path_str, refined_path, relabeled_path))
             if 0 < len(masks_to_add) <= 3:
                 log.info(f"Adding {len(masks_to_add)} images one by one to DB")
                 for entry in masks_to_add:
@@ -136,7 +142,7 @@ class FiftyOneMaskInspector:
 
         for row in db_rows:
             (
-                image_id, image_path, mask_path, refined_mask_path,
+                image_id, image_path, mask_path, refined_mask_path, relabeled_mask_path,
                 initial_tag, final_tag, tags, status, reviewer, timestamp,
                 refine_params_str
             ) = row
