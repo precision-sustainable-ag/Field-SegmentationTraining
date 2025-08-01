@@ -47,7 +47,7 @@ class MaskRelabelPipeline:
         samples = []
         for row in rows:
             (
-                image_id, image_path, mask_path, refined_mask_path,
+                image_id, image_path, mask_path, refined_mask_path, relabeled_mask_path,
                 initial_tag, final_tag, tags, status, reviewer, timestamp,
                 refine_params_str
             ) = row
@@ -59,7 +59,7 @@ class MaskRelabelPipeline:
             sample["image_id"] = image_id
             sample["mask_path"] = mask_path
             sample["refined_mask_path"] = refined_mask_path
-            sample["relabeled_mask_path"] = str(self.output_mask_dir / f"{Path(image_id).stem}_mask.png")
+            sample["relabeled_mask_path"] = relabeled_mask_path
             sample["initial_tag"], sample["final_tag"] = initial_tag, final_tag or ""
             sample["status"], sample["reviewer"] = status, reviewer
             sample["timestamp"], sample["refine_params"] = timestamp, refine_params_str
@@ -112,7 +112,7 @@ class MaskRelabelPipeline:
 
         return sample
 
-    def launch_annotation(self, view: fo.DatasetView) -> None:
+    def send_annotations(self, view: fo.DatasetView) -> None:
         """
         Launch a CVAT annotation session with a segmentation schema for relabeling.
 
@@ -136,7 +136,7 @@ class MaskRelabelPipeline:
             password=self.keys['cvat']['password'],
             task_name=self.task_name
         )
-        print("\nGo annotate in the CVAT UI. When done, come back here.")
+        log.info("\nGo annotate in the CVAT UI.")
 
     def import_annotations(self, view: fo.DatasetView) -> None:
         """
@@ -317,17 +317,11 @@ class MaskRelabelPipeline:
 
             view = dataset  # Could be dataset.take(N) if sampling desired
 
-            self.launch_annotation(view)
-            input("Press ENTER to continue after annotating in CVAT...")
+            self.send_annotations(view)
+    
     
         except Exception as e:
             log.error(f"Error during relabeling pipeline: {e}")
-    
-        finally:
-            log.info("Finalizing relabeling pipeline...")
-            self.import_annotations(view)
-            self.postprocess_annotations(view)
-            self.finalize(view, export_from_cvat=False)
 
 
 def main(cfg: DictConfig) -> None:

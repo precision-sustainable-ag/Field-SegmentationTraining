@@ -27,7 +27,7 @@ tasks: # TODO: make the other tasks bool key/values
     segment: false
     inspect: false
     refine: false
-    relabel: false
+    upload_cvat: false
     export_cvat: false
 
   preprocess:

@@ -5,7 +5,7 @@ import hydra
 from omegaconf import DictConfig
 
 from src.utils.utils import read_yaml
-from src.mask_gen_utils.relabel import MaskRelabelPipeline
+from src.mask_gen_utils.upload_cvat import MaskRelabelPipeline
 
 log = logging.getLogger(__name__)
 
