@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 from omegaconf import DictConfig
 
+from src.utils.utils import read_yaml
 from src.mask_gen_utils.inspect import FiftyOneMaskInspector
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ class MaskRelabelPipeline:
         self.timestamp = datetime.datetime.now().isoformat()
         self.reviewer = os.getenv("USER", "unknown_user")
         self.inspector = FiftyOneMaskInspector(cfg)
+
+        self.keys = read_yaml(cfg.paths.keys_path)
+        self.task_name = cfg.mask_gen.relabel.task_name or "mask_relabeling"
 
     def load_samples_for_relabel(self) -> List[fo.Sample]:
         """
@@ -127,7 +131,10 @@ class MaskRelabelPipeline:
             self.annot_session_key,
             backend="cvat",
             label_schema=segmentation_label_schema,
-            launch_editor=True,
+            launch_editor=False,
+            username=self.keys['cvat']['username'],
+            password=self.keys['cvat']['password'],
+            task_name=self.task_name
         )
         print("\nGo annotate in the CVAT UI. When done, come back here.")
 
@@ -142,7 +149,6 @@ class MaskRelabelPipeline:
             self.annot_session_key,
             dest_field=self.dest_field,
             unexpected="keep",
-            cleanup=True,
         )
 
     def postprocess_annotations(self, view: fo.DatasetView) -> None:
@@ -159,7 +165,7 @@ class MaskRelabelPipeline:
             if "detections" in sample:
                 del sample["detections"]
 
-    def finalize(self, view: fo.DatasetView) -> None:
+    def finalize(self, view: fo.DatasetView, save_to_local: bool = False) -> None:
         """
         Finalize the pipeline: save relabeled masks, update database records, and commit changes.
 
@@ -169,7 +175,9 @@ class MaskRelabelPipeline:
         updates = []
         for sample in view:
             status, timestamp, reviewer = self._evaluate_and_update_status(sample)
-            self._save_or_remove_relabeled_mask_if_needed(sample, status)
+            
+            if save_to_local:
+                self._save_or_remove_relabeled_mask_if_needed(sample, status)
             updates.append(self.prepare_update_tuple(sample, status, timestamp, reviewer))
         self._commit_updates(updates)
 
@@ -319,7 +327,7 @@ class MaskRelabelPipeline:
             log.info("Finalizing relabeling pipeline...")
             self.import_annotations(view)
             self.postprocess_annotations(view)
-            self.finalize(view)
+            self.finalize(view, export_from_cvat=False)
 
 
 def main(cfg: DictConfig) -> None:

@@ -28,6 +28,7 @@ tasks: # TODO: make the other tasks bool key/values
     inspect: false
     refine: false
     relabel: false
+    export_cvat: false
 
   preprocess:
     pad_gridcrop_resize: false
@@ -44,7 +45,7 @@ tasks: # TODO: make the other tasks bool key/values
 hydra:
   run:
     # base of all outputs for train mode
-    dir: ${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}
+    dir: ${paths.project_dir}/${mode}
   sweep:
     dir: ${paths.project_train_dir}/multirun
 
