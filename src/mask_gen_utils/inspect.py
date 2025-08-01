@@ -261,7 +261,11 @@ class FiftyOneMaskInspector:
             tags = set([t.lower() for t in canonical_tags if t])
             refine_params = sample["refine_params"] if "refine_params" in sample else None
             
-            initial_tag = sample["initial_tag"]
+            if "initial_tag" in sample:
+                initial_tag = sample["initial_tag"]
+            else:
+                initial_tag = None
+                
             # initial tag already exists and hasn't changed
             if initial_tag and initial_tag.lower() in tags:
                 initial_tag = initial_tag.lower()
