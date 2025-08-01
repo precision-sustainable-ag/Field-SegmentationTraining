@@ -33,6 +33,7 @@ tasks:
     inspect: false
     refine: false
     relabel: false
+    export_cvat: false
 
   train:
     vis_augment: false

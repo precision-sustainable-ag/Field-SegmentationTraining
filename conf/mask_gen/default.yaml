@@ -43,6 +43,13 @@ canonical_tag_mapping: # ensures user defined tags are mapped to canonical tags 
   ignore: ignore
   good: good
 
-remove_tags: # canonicaltags used to remove refined masks and db entries
-  # - bad
+relabel:
+  annot_session_key: cvat_mask_refine_run_001
+  task_name: test mask_gen relabeling
+  label_field: refined_mask # either initial_mask or refined_mask
+  only_tags:
+    - missing_white
 
+export_cvat:
+  task_ids: 
+    - 288  # CVAT task ID for exporting annotations

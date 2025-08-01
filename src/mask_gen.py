@@ -9,6 +9,7 @@ from src.mask_gen_utils.segment import main as segment
 from src.mask_gen_utils.inspect import main as inspect
 from src.mask_gen_utils.refine import main as refine
 from src.mask_gen_utils.relabel import main as relabel
+from src.mask_gen_utils.export_cvat import main as export_cvat
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ TASK_REGISTRY = {
     "inspect": inspect,
     "refine": refine,
     "relabel": relabel,
+    "export_cvat": export_cvat,  
     # Add more tasks here as needed
 }
 

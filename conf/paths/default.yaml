@@ -45,3 +45,6 @@ longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
 agir_field_db_dir: ${paths.longterm_storage}/field-tools/agir_field_db
 agir_field_db: ${paths.agir_field_db_dir}/test_agir_field.db
 agir_field_db_schema: ${paths.agir_field_db_dir}/schema.sql
+
+# Keys
+keys_path: ${paths.base_dir}/.keys/default.yaml
