@@ -32,7 +32,7 @@ tasks:
     segment: false
     inspect: false
     refine: false
-    relabel: false
+    upload_cvat: false
     export_cvat: false
 
   train:
