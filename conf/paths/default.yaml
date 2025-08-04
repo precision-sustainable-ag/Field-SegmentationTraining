@@ -1,10 +1,12 @@
 # All filesystem paths, built from base_dir + project‐specific subfolders
+# conf/paths/default.yaml
 
 base_dir: ${hydra:runtime.cwd}                      # usually the repo root
 data_dir: ${paths.base_dir}/data
 
 project_dir: ${paths.base_dir}/projects/${project.name}
 
+# Preprocess paths
 project_preprocess_dir: ${paths.project_dir}/preprocess 
 preprocess_split_dir: ${paths.project_preprocess_dir}/train_val_test_split 
 project_datastats_dir: ${paths.project_preprocess_dir}/data_stats

@@ -16,9 +16,11 @@ from src.utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed, seed_worker
 from src.models.lit_segmentation import LitSegmentation
 from src.data.dataset import FieldDataset
+from src.data.collate import get_batch_collate_fn
 from src.utils.augmentation_visualizer import vis_augmentation_batch
 
 import torch
+from torch.utils.data._utils.collate import default_collate
 from torch.utils.data import DataLoader
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
@@ -51,6 +53,8 @@ def train(cfg: DictConfig) -> None:
     # === 2. DataLoaders ===
     generator = torch.Generator()
     generator.manual_seed(cfg.train.seed)
+    train_collate_fn = get_batch_collate_fn(cfg.augment.train.batch)
+    val_collate_fn = get_batch_collate_fn(cfg.augment.val.batch)
 
     train_loader = DataLoader(
         train_ds,
@@ -60,6 +64,7 @@ def train(cfg: DictConfig) -> None:
         pin_memory=cfg.train.pin_memory,
         worker_init_fn=seed_worker,
         generator=generator,
+        collate_fn=train_collate_fn
     )
 
     val_loader = DataLoader(
@@ -70,6 +75,7 @@ def train(cfg: DictConfig) -> None:
         pin_memory=cfg.train.pin_memory,
         worker_init_fn=seed_worker,
         generator=generator,
+        collate_fn=val_collate_fn,  # no mixup/cutmix on validation
     )
 
     # === 3. Model ===
@@ -81,7 +87,7 @@ def train(cfg: DictConfig) -> None:
 
     # If augmentation visualization is enabled, log a sample batch before training
     if cfg.tasks.train.vis_augment and train_loader.dataset.use_augment:
-        vis_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_logger.num_samples)
+        vis_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_visualizer.num_samples)
 
     # === 5. Callbacks ===
     checkpoint_cb = ModelCheckpoint(

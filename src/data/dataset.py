@@ -12,6 +12,8 @@ from torchvision import transforms
 from omegaconf import OmegaConf, DictConfig
 import json
 
+from src.data.dataset_utils import natural_base_key
+
 # ─── import your augment builders ─────────────────────────────────────────────
 from src.data.augment import (
     get_train_transforms,
@@ -54,9 +56,9 @@ class FieldDataset(Dataset):
         else:
             raise ValueError(f"Unsupported mode: {mode!r}. Choose from 'train','val','test'.")
 
-        # List and sort all image and mask files
-        self.images = sorted(img_dir.glob("*"))
-        self.masks  = sorted(mask_dir.glob("*"))
+        # List and sort all image and mask files with the same natural key
+        self.images = sorted(img_dir.glob("*"), key=natural_base_key)
+        self.masks  = sorted(mask_dir.glob("*"), key=natural_base_key)
 
         # Sanity check: ensure equal number of images and masks
         if len(self.images) != len(self.masks):
@@ -64,6 +66,20 @@ class FieldDataset(Dataset):
                 f"Number of images ({len(self.images)}) "
                 f"and masks ({len(self.masks)}) do not match."
             )
+
+        # flexible check: mask filenames should start with the image stem
+        mismatches = []
+        for img_path, mask_path in zip(self.images, self.masks):
+            img_stem  = img_path.stem               # e.g. "ILA00959_0_0_0"
+            mask_stem = mask_path.stem              # e.g. "ILA00959_0_0_0_mask"
+            if not mask_stem.startswith(img_stem):
+                mismatches.append((img_path.name, mask_path.name))
+
+        if mismatches:
+            print("Found image/mask ordering mismatches (mask must start with image stem):")
+            for img_name, mask_name in mismatches[:5]:
+                print(f"  ✗ {img_name}  ⟷  {mask_name}")
+            raise RuntimeError(f"{len(mismatches)} pairs don’t even share the same stem prefix. Aborting.")
 
         # ─── Dataset‐wide normalization setup ──────────────────────────────────
         # Use the flag in cfg.train to decide whether to normalize

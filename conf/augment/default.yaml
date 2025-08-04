@@ -3,7 +3,7 @@
 # conf/augment/default.yaml
 
 # ─── how many samples to visualize each epoch ─────────────────────────────
-augmentation_logger:
+augmentation_visualizer:
   enable: true        # toggle on/off
   num_samples: 4      # how many image+mask pairs to log
 
@@ -89,7 +89,10 @@ train:
       shift_limit: 0.1
       scale_limit: 0.1
       rotate_limit: 30
-
+    coarse_dropout:
+      enable: true
+      p: 0.2                   # “black out”
+      
   pixel:
     enable: true     # master switch for all pixel‐level transforms
 
@@ -156,9 +159,24 @@ train:
     channel_shuffle:
       enable: true
       p: 0.2                   # random re‐ordering of channels
-    coarse_dropout:
-      enable: true
-      p: 0.2                   # “black out”
+
+    # ─── batch-level mixing ops ─────────────────────────────────────
+  batch:
+    enable: true           # master switch for batch mixing ops
+
+    mosaic:
+      enable: true        # master switch for Mosaic
+      p: 0.5              # probability per batch
+
+    cutmix:
+      enable: true         # master switch for CutMix
+      p: 0.5               # probability per batch
+      alpha: 1.0           # Beta(alpha,alpha) hyperparameter
+
+    mixup:
+      enable: false        # master switch for MixUp
+      p: 0.5               # probability per batch
+      alpha: 0.4           # Beta(alpha,alpha) hyperparameter
 
 # ─── validation (only resize/pad) ────────────────────────────────────
 val:
@@ -166,14 +184,20 @@ val:
   img_size:
     height: ${augment.train.img_size.height}
     width:  ${augment.train.img_size.width}
+
   spatial:
     enable: true
     horizontal_flip:
       enable: false
     random_crop:
       enable: false
+
   pixel:
     enable: false
+  
+  batch:
+    enable: false           # no batch mixing on validation
+
 
 # ─── test (no augment) ───────────────────────────────────────────────
 test:

@@ -4,7 +4,6 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from typing import Dict, Any
 
-
 def _build_group(
     cfg_group: Dict[str, Any],
     class_map: Dict[str, Any],
@@ -60,6 +59,7 @@ def get_train_transforms(cfg):
         "optical_distortion": A.OpticalDistortion,
         "random_scale":       A.RandomScale,
         "shift_scale_rotate": A.ShiftScaleRotate,
+        "coarse_dropout":     CoarseDropoutDual,
     }
     spatial_ops = _build_group(t.spatial, spat_map)
 
@@ -93,7 +93,6 @@ def get_train_transforms(cfg):
         "image_compression":        A.ImageCompression,
         "rgb_shift":                A.RGBShift,
         "channel_shuffle":          A.ChannelShuffle,
-        "coarse_dropout":           A.CoarseDropout,
     }
     pixel_ops = _build_group(t.pixel, pix_map)
 
@@ -163,3 +162,8 @@ def get_noop_transform() -> A.Compose:
         [A.NoOp(), ToTensorV2()],
         additional_targets={"mask": "mask"}
     )
+
+class CoarseDropoutDual(A.CoarseDropout):
+    def apply_to_mask(self, mask, **params):
+        # Run the same pixel‐zeroing on the mask
+        return self.apply(mask, **params)
