@@ -48,3 +48,6 @@ agir_field_db_schema: ${paths.agir_field_db_dir}/schema.sql
 
 # Keys
 keys_path: ${paths.base_dir}/.keys/default.yaml
+
+# Persistent table data
+pesistent_table_data_path: /mnt/research-projects/r/raatwell/longterm_images3/field-tools/persistent_data_tables/merged_blobs_tables_metadata_lts.csv
