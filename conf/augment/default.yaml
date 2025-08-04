@@ -25,6 +25,17 @@ train:
   spatial:
     enable: true     # master switch for all spatial transforms
 
+    # # Pick exactly 2 of these 3 spatial ops, with 50% chance
+    # some_of:
+    #   enable: true
+    #   p: 0.5
+    #   n: 2
+    #   ops:
+    #     - horizontal_flip
+    #     - vertical_flip
+    #     - random_rotate90
+    #     - random_crop
+
     # simple flips & rotations
     horizontal_flip:
       enable: true
@@ -81,6 +92,16 @@ train:
 
   pixel:
     enable: true     # master switch for all pixel‐level transforms
+
+    # # Pick exactly 2 of these 4 pixel ops, with 30% chance
+    # some_of:
+    #   enable: true
+    #   p: 0.3
+    #   n: 2
+    #   ops:
+    #     - color_jitter
+    #     - random_brightness_contrast
+    #     - random_gamma
 
     # color and brightness adjustments
     color_jitter:

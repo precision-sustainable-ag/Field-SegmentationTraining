@@ -63,6 +63,24 @@ def get_train_transforms(cfg):
     }
     spatial_ops = _build_group(t.spatial, spat_map)
 
+    # # ─── SomeOf for spatial ops ───────────────────────────────────────
+    # so = getattr(t.spatial, "some_of", None)
+    # if so and so.enable:
+    #     # Build the list of Albumentations transform instances
+    #     some_list = []
+    #     for key in so.ops:
+    #         spec   = t.spatial.get(key, {})
+    #         params = {k:v for k,v in spec.items() if k not in ("enable",)}
+    #         some_list.append(spat_map[key](**params))
+    #     spatial_ops.append(
+    #         A.SomeOf(
+    #             some_list,
+    #             n = int(so.n),
+    #             replace = False,
+    #             p = float(so.p)
+    #         )
+    #     )
+
     # ─── Pixel-level transforms (image only) ─────────────────────────────
     pix_map = {
         "color_jitter":             A.ColorJitter,
@@ -78,6 +96,23 @@ def get_train_transforms(cfg):
         "coarse_dropout":           A.CoarseDropout,
     }
     pixel_ops = _build_group(t.pixel, pix_map)
+
+    # # ─── SomeOf for pixel ops ─────────────────────────────────────────
+    # po = getattr(t.pixel, "some_of", None)
+    # if po and po.enable:
+    #     some_list = []
+    #     for key in po.ops:
+    #         spec   = t.pixel.get(key, {})
+    #         params = {k:v for k,v in spec.items() if k not in ("enable",)}
+    #         some_list.append(pix_map[key](**params))
+    #     pixel_ops.append(
+    #         A.SomeOf(
+    #             some_list,
+    #             n = int(po.n),
+    #             replace = False,
+    #             p = float(po.p)
+    #         )
+    #     )
 
     # ─── Assemble final pipeline ─────────────────────────────────────────
     # - replay=True captures which transforms actually ran & their params
