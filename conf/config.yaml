@@ -42,10 +42,10 @@ tasks: # TODO: make the other tasks bool key/values
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
   run:
-    # base of all outputs for train mode
-    dir: ${paths.project_train_dir}/version_${now:%Y%m%d_%H%M%S}
+    # base of all outputs
+    dir: ${paths.project_mode_dir}/version_${now:%Y%m%d_%H%M%S}
   sweep:
-    dir: ${paths.project_train_dir}/multirun
+    dir: ${paths.project_mode_dir}/multirun
 
 test:
   enabled: true

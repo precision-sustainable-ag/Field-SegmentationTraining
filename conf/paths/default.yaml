@@ -5,6 +5,7 @@ base_dir: ${hydra:runtime.cwd}                      # usually the repo root
 data_dir: ${paths.base_dir}/data
 
 project_dir: ${paths.base_dir}/projects/${project.name}
+project_mode_dir: ${paths.project_dir}/${mode} # e.g. projects/field/train
 
 # Preprocess paths
 project_preprocess_dir: ${paths.project_dir}/preprocess 
@@ -23,9 +24,8 @@ val_masks_dir: ${paths.preprocess_split_dir}/val/masks
 test_images_dir: ${paths.preprocess_split_dir}/test/images
 test_masks_dir: ${paths.preprocess_split_dir}/test/masks
 
-
+# hardcoded paths for each mode
 project_train_dir: ${paths.project_dir}/train  
-
 project_maskgen_dir: ${paths.project_dir}/mask_gen
 project_inference_dir: ${paths.project_dir}/inference  
 
