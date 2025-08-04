@@ -6,7 +6,11 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data._utils.collate import default_collate
 
-def mixup_collate(batch, p: float, alpha: float):
+def mixup_collate(
+    batch: List[Tuple[torch.Tensor, torch.Tensor]],
+    p: float,
+    alpha: float
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Collate + MixUp. Returns (imgs, masks) always.
     """
@@ -24,7 +28,11 @@ def mixup_collate(batch, p: float, alpha: float):
     return imgs, masks
 
 
-def cutmix_collate(batch, p: float, alpha: float):
+def cutmix_collate(
+    batch: List[Tuple[torch.Tensor, torch.Tensor]],
+    p: float,
+    alpha: float
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Collate + CutMix. Always returns (imgs, masks).
     """
@@ -59,7 +67,10 @@ def cutmix_collate(batch, p: float, alpha: float):
     return imgs, masks
 
 
-def mosaic_collate(batch, p: float):
+def mosaic_collate(
+    batch: List[Tuple[torch.Tensor, torch.Tensor]],
+    p: float
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Collate + Mosaic of exactly 4 samples into one 2×2 tile, then replicate
     back to original batch size. Always returns (imgs, masks).
@@ -103,7 +114,9 @@ def mosaic_collate(batch, p: float):
     return out_imgs, out_masks
 
 
-def get_batch_collate_fn(batch_cfg):
+def get_batch_collate_fn(
+    batch_cfg: Any
+) -> Callable[[List[Tuple[torch.Tensor, torch.Tensor]]], Tuple[torch.Tensor, torch.Tensor]]:
     """
     Return a collate_fn that applies CutMix and Mosaic according to batch_cfg.
     MixUp is left unchanged but may be disabled in your config.
