@@ -48,5 +48,6 @@ relabel:
     - missing_white
 
 export_cvat:
-  task_ids: 
+  move_to_lts: true # Moves the exported annotations to the long-term storage directory and updates the path in the database.
+  task_ids:
     - 288  # CVAT task ID for exporting annotations

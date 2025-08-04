@@ -9,6 +9,8 @@ logging
 # Ignore exploratory notebooks
 notebooks/
 
+# temp data
+species_dataset/
 # trained_models directory
 trained_models
 
