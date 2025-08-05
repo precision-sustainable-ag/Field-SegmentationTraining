@@ -10,6 +10,7 @@ defaults:
   - inference: default         # inference & evaluation settings
   - evaluation: default         # evaluation metrics and settings
   - mask_gen: default
+  - create_project: default
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 
@@ -21,6 +22,8 @@ project:
 mode: preprocess                  # one of: mask_gen / preprocess / train / inference
 
 tasks: # TODO: make the other tasks bool key/values
+  create_project:
+    create_project: false
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
     detect: false
