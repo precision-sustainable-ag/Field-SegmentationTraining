@@ -10,6 +10,7 @@ defaults:
   - inference: default         # inference & evaluation settings
   - evaluation: default         # evaluation metrics and settings
   - mask_gen: default
+  - create_project: default
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 

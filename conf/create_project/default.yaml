@@ -1,0 +1,8 @@
+species:
+  - waterhemp
+  - giant ragweed
+
+images_per_species:
+  - waterhemp: 20
+  - giant ragweed: 20
+
