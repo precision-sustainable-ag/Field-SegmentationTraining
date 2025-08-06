@@ -25,16 +25,13 @@ train:
   spatial:
     enable: true     # master switch for all spatial transforms
 
-    # # Pick exactly 2 of these 3 spatial ops, with 50% chance
-    # some_of:
-    #   enable: true
-    #   p: 0.5
-    #   n: 2
-    #   ops:
-    #     - horizontal_flip
-    #     - vertical_flip
-    #     - random_rotate90
-    #     - random_crop
+    # ─── pick some spatial ops ───────────────────────────────
+    # with probability p, applies some n of the spatial transforms with/without replacement
+    some_of:
+      enable: true
+      p: 1.0
+      n: 4
+      replace: false
 
     # simple flips & rotations
     horizontal_flip:
@@ -96,15 +93,13 @@ train:
   pixel:
     enable: true     # master switch for all pixel‐level transforms
 
-    # # Pick exactly 2 of these 4 pixel ops, with 30% chance
-    # some_of:
-    #   enable: true
-    #   p: 0.3
-    #   n: 2
-    #   ops:
-    #     - color_jitter
-    #     - random_brightness_contrast
-    #     - random_gamma
+    # ─── pick some pixel‐level ops ─────────────────────────────
+    # with probability p, applies some n of the pixel transforms with/without replacement
+    some_of:
+      enable: true
+      p: 1.0
+      n: 4
+      replace: false
 
     # color and brightness adjustments
     color_jitter:
@@ -166,11 +161,11 @@ train:
 
     mosaic:
       enable: true        # master switch for Mosaic
-      p: 0.5              # probability per batch
+      p: 0.8              # probability per batch
 
     cutmix:
       enable: true         # master switch for CutMix
-      p: 0.5               # probability per batch
+      p: 0.8               # probability per batch
       alpha: 1.0           # Beta(alpha,alpha) hyperparameter
 
     mixup:

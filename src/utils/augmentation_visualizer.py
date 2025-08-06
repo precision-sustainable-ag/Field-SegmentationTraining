@@ -69,23 +69,37 @@ def render_legend(
     for rec in replay.get("transforms", []):
         if not rec.get("applied", False):
             continue
-        name = rec.get("__class_fullname__", "").split('.')[-1]
-        if name in {"ToTensorV2", "ReplayCompose"}:
+        cls_name = rec.get("__class_fullname__", "").split('.')[-1]
+
+        # 1) If it's a SomeOf wrapper, expand it into its candidate list
+        if cls_name == "SomeOf":
+            params = rec.get("parameters", {})  # Albumentations records init args here
+            sub_ts = params.get("transforms", [])
+            sub_names = [t.__class__.__name__ for t in sub_ts]
+            labels.append(f"SomeOf({', '.join(sub_names)})")
             continue
-        if mask_mode and name not in mask_names:
+
+        # 2) Skip the generic ReplayCompose / ToTensorV2
+        if cls_name in {"ToTensorV2", "ReplayCompose"}:
             continue
-        labels.append(name)
+
+        # 3) If rendering the mask legend, only spatial transforms
+        if mask_mode and cls_name not in mask_names:
+            continue
+
+        labels.append(cls_name)
 
     if not labels:
         labels = ["No augmentations applied"]
 
+    # draw text panel
     legend_width = max(full_width // 2, 100)
     panel = Image.new("RGB", (legend_width, height), color=(255, 255, 255))
-    draw = ImageDraw.Draw(panel)
+    draw  = ImageDraw.Draw(panel)
     y = 5
     for lbl in labels:
         draw.text((5, y), lbl, fill="black", font=font)
-        bbox = draw.textbbox((0, 0), lbl, font=font) if font else (0, 0, 0, font_size)
+        bbox = draw.textbbox((0, 0), lbl, font=font)
         text_h = bbox[3] - bbox[1]
         y += text_h + 4
 
@@ -94,7 +108,6 @@ def render_legend(
     if pad_w > 0:
         legend = F.pad(legend, (0, pad_w, 0, 0), value=1.0)
     return legend
-
 
 def vis_augmentation_batch(
     train_loader: torch.utils.data.DataLoader,
@@ -302,13 +315,39 @@ def vis_augmentation_batch(
     grid = make_grid(cells, nrow=ncols, padding=4)
     out_dir = Path(HydraConfig.get().runtime.output_dir) / "image_logs"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "aug_comparison_full.png"
+    out_file = out_dir / "aug_visualization.png"
     save_image(grid, str(out_file))
     print(f"Saved comparison grid to: {out_file}")
 
-    # log to all configured loggers
+    so_spat = dataset.cfg_aug.train.spatial.some_of
+    so_pix  = dataset.cfg_aug.train.pixel.some_of
+    warn_msg = None
+    if so_spat.enable or so_pix.enable:
+        warn_msg = (
+            "‘SomeOf’ is enabled in your augmentation config: "
+            "the visualizer will only show the SomeOf wrapper, "
+            "not the individual transforms inside it."
+        )
+        print(warn_msg)
+
+    # Log both the warning (if any) and the image to all configured loggers
     for lcfg in logger_cfgs:
         logger = hydra.utils.instantiate(lcfg)
-        exp = getattr(logger, "experiment", None)
-        if exp and hasattr(exp, "log"):
-            exp.log({"train/aug_comparison_full": [wandb.Image(str(out_file))]})
+        exp    = getattr(logger, "experiment", None)
+        if not exp:
+            continue
+
+        # 1) if the logger supports alerts (e.g. WandB), send an alert
+        if warn_msg and hasattr(exp, "alert"):
+            exp.alert(
+                title="SomeOf Enabled",
+                text=warn_msg,
+                level=wandb.AlertLevel.WARN
+            )
+        # 2) otherwise log the warning as a string metric so it still shows up
+        elif warn_msg and hasattr(exp, "log"):
+            exp.log({"train/aug_visualization_warning": warn_msg})
+
+        # 3) always log the image
+        if hasattr(exp, "log"):
+            exp.log({"train/aug_visualization": [wandb.Image(str(out_file))]})

@@ -61,25 +61,23 @@ def get_train_transforms(cfg):
         "shift_scale_rotate": A.ShiftScaleRotate,
         "coarse_dropout":     CoarseDropoutDual,
     }
-    spatial_ops = _build_group(t.spatial, spat_map)
 
-    # # ─── SomeOf for spatial ops ───────────────────────────────────────
-    # so = getattr(t.spatial, "some_of", None)
-    # if so and so.enable:
-    #     # Build the list of Albumentations transform instances
-    #     some_list = []
-    #     for key in so.ops:
-    #         spec   = t.spatial.get(key, {})
-    #         params = {k:v for k,v in spec.items() if k not in ("enable",)}
-    #         some_list.append(spat_map[key](**params))
-    #     spatial_ops.append(
-    #         A.SomeOf(
-    #             some_list,
-    #             n = int(so.n),
-    #             replace = False,
-    #             p = float(so.p)
-    #         )
-    #     )
+    # build all enabled spatial ops
+    all_spatial = _build_group(t.spatial, spat_map)
+
+    # wrap them in one SomeOf
+    so_spat = t.spatial.some_of
+    if so_spat.enable:
+        spatial_ops = [
+            A.SomeOf(
+                all_spatial,
+                n=int(so_spat.n),
+                replace=bool(so_spat.replace),
+                p=float(so_spat.p),
+            )
+        ]
+    else:
+        spatial_ops = all_spatial
 
     # ─── Pixel-level transforms (image only) ─────────────────────────────
     pix_map = {
@@ -94,24 +92,23 @@ def get_train_transforms(cfg):
         "rgb_shift":                A.RGBShift,
         "channel_shuffle":          A.ChannelShuffle,
     }
-    pixel_ops = _build_group(t.pixel, pix_map)
 
-    # # ─── SomeOf for pixel ops ─────────────────────────────────────────
-    # po = getattr(t.pixel, "some_of", None)
-    # if po and po.enable:
-    #     some_list = []
-    #     for key in po.ops:
-    #         spec   = t.pixel.get(key, {})
-    #         params = {k:v for k,v in spec.items() if k not in ("enable",)}
-    #         some_list.append(pix_map[key](**params))
-    #     pixel_ops.append(
-    #         A.SomeOf(
-    #             some_list,
-    #             n = int(po.n),
-    #             replace = False,
-    #             p = float(po.p)
-    #         )
-    #     )
+
+    all_pixel = _build_group(t.pixel, pix_map)
+
+    # wrap them in one SomeOf
+    so_pix = t.pixel.some_of
+    if so_pix.enable:
+        pixel_ops = [
+            A.SomeOf(
+                all_pixel,
+                n=int(so_pix.n),
+                replace=bool(so_pix.replace),
+                p=float(so_pix.p),
+            )
+        ]
+    else:
+        pixel_ops = all_pixel
 
     # ─── Assemble final pipeline ─────────────────────────────────────────
     # - replay=True captures which transforms actually ran & their params
