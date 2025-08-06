@@ -5,11 +5,11 @@ This script performs semantic segmentation on crop images using a pre-trained UN
 It reads images and bounding box metadata, crops the region of interest, predicts a segmentation mask, and saves the results.
 """
 import cv2
-import json
 import torch
 import logging
 import numpy as np
 from omegaconf import DictConfig
+import pandas as pd
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
@@ -39,7 +39,13 @@ class UNetInference:
         self.image_dir = Path(cfg.paths.project_maskgen_dir)
         self.developed_images_dir = self.image_dir / "developed-images"
         self.cutout_dir = self.image_dir / "cutouts"
+        self.detections_csv = self.cutout_dir / "temp_db.csv"
         self.trained_model_path = Path(cfg.paths.unet_segmentation_model)
+
+        if self.detections_csv.exists():
+            self.df = pd.read_csv(self.detections_csv)
+        else:
+            raise FileNotFoundError(f"Detections CSV not found at {self.detections_csv}")
         
         # Load pre-trained UNet model
         self.seg_model = smp.Unet(
@@ -54,24 +60,27 @@ class UNetInference:
 
         self.transform = transforms.Compose([transforms.ToTensor()])
 
-    def read_metadata(self, json_path: Path):
-        """
-        Load bounding box metadata from a JSON file.
+    def update_mask_path(self, image_name, mask_path):
+        """Update DataFrame with mask path for a given image name."""
+        idx = self.df[self.df["image_name"] == image_name].index
+        if len(idx) == 1:
+            self.df.at[idx[0], "initial_mask_path"] = mask_path
+        elif len(idx) > 1:
+            # Shouldn't happen, but just in case
+            self.df.loc[self.df["image_name"] == image_name, "initial_mask_path"] = mask_path
+        else:
+            log.warning(f"No detection row found for {image_name}; can't update mask_path.")
 
-        Args:
-            json_path (Path): Path to the bounding box metadata file.
-
-        Returns:
-            dict or None: Parsed JSON dictionary, or None if the file is missing.
-        """
-        if not json_path.exists():
-            log.warning(f"JSON file not found: {json_path}")
-            return None
-
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-        return data
-
+    def get_bbox_minmax(self, bbox):
+        y_min, y_max = int(bbox[1]), int(bbox[1] + bbox[3])
+        x_min, x_max = int(bbox[0]), int(bbox[0] + bbox[2])
+        return {
+            "y_min": y_min,
+            "y_max": y_max,
+            "x_min": x_min,
+            "x_max": x_max
+        }
+    
     def _predict_mask(self, cropped_image: np.ndarray):
         """
         Predict the segmentation mask for a cropped image.
@@ -145,25 +154,6 @@ class UNetInference:
 
         return padded_mask
 
-    def get_bbox_minmax(self, bbox: dict):
-        """
-        Convert YOLO-format bbox to pixel coordinates.
-
-        Args:
-            bbox (dict): Dictionary with top-left (x, y) and width/height.
-
-        Returns:
-            dict: Bounding box with pixel-based min and max keys.
-        """
-        y_min, y_max = bbox[1], bbox[1] + bbox[3]
-        x_min, x_max = bbox[0], bbox[0] + bbox[2]
-        return {
-            "y_min": y_min,
-            "y_max": y_max,
-            "x_min": x_min,
-            "x_max": x_max
-        }
-
     def pred_mask(self, cropped_image: np.ndarray):
         """
         Decide between tile-based and standard inference.
@@ -192,32 +182,33 @@ class UNetInference:
         cropout_name = f"{stem}_0.jpg"
         final_mask_name = f"{stem}_0_mask.png"
         cutout_name = f"{stem}_0.png"
+        mask_rel_path = str((self.cutout_dir / final_mask_name).relative_to(self.image_dir))
 
         cv2.imwrite(str(self.cutout_dir / cropout_name), image_cropped.astype(np.uint8), [cv2.IMWRITE_JPEG_QUALITY, 100])
         cv2.imwrite(str(self.cutout_dir / final_mask_name), (padded_cropped_mask * 255).astype(np.uint8))
         cv2.imwrite(str(self.cutout_dir / cutout_name), final_cutout_rgb.astype(np.uint8))
 
-    def process_image(self, input_paths):
-        """
-        Run full segmentation pipeline for a single image.
+        # Update mask path in the DataFrame
+        self.update_mask_path(Path(img_path).name, mask_rel_path)
 
-        Args:
-            input_paths (tuple): Tuple containing image path and JSON metadata path.
-        """
-        image_path, json_path = input_paths
+    def process_row(self, row: pd.Series):
+        image_name = row["image_name"]
+        image_path = self.developed_images_dir / image_name
         log.info(f"Processing image: {image_path}")
 
-        metadata = self.read_metadata(json_path)
+        # Get bbox directly from DataFrame columns
         try:
-            bbox = metadata["bbox"]
+            bbox = [row["bbox_x"], row["bbox_y"], row["bbox_w"], row["bbox_h"]]
+            if any(pd.isna(bbox)):
+                log.warning(f"No bounding box found for {image_name}. Skipping.")
+                return
         except Exception as e:
-            log.warning(f"No bounding box found for {image_path}. Skipping. Error details: {e}")
+            log.warning(f"Error reading bbox for {image_name}: {e}")
             return
 
         bx = self.get_bbox_minmax(bbox)
         image = cv2.cvtColor(cv2.imread(str(image_path)), cv2.COLOR_BGR2RGB)
         image_cropped = image[bx["y_min"]:bx["y_max"], bx["x_min"]:bx["x_max"]]
-
         pred_mask = self.pred_mask(image_cropped)
         padded_mask = self._resize_and_pad_mask(pred_mask, bx, image.shape[:2])
         padded_cropped_mask = padded_mask[bx["y_min"]:bx["y_max"], bx["x_min"]:bx["x_max"]]
@@ -230,15 +221,11 @@ class UNetInference:
         self.save_image(image_path, image_cropped_bgr, padded_cropped_mask, final_cutout_rgb)
 
     def process_directory(self):
-        """
-        Process all images in the developed-images directory using corresponding bounding box metadata.
-        """
-        images = sorted(list(self.developed_images_dir.glob("*.jpg")))
-        log.info(f"Processing {len(images)} images in directory: {self.developed_images_dir}.")
+        for _, row in self.df.iterrows():
+            self.process_row(row)
         
-        for img_path in images:
-            json_path = self.cutout_dir / f"{img_path.stem}_0.json"
-            self.process_image((img_path, json_path))
+        # Save updated DataFrame (with mask_path column) back to CSV
+        self.df.to_csv(self.detections_csv, index=False)
 
 def main(cfg: DictConfig) -> None:
     """
