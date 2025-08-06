@@ -160,12 +160,12 @@ train:
     enable: true           # master switch for batch mixing ops
 
     mosaic:
-      enable: true        # master switch for Mosaic
-      p: 0.8              # probability per batch
+      enable: true         # master switch for Mosaic
+      p: 0.5               # probability per batch
 
     cutmix:
       enable: true         # master switch for CutMix
-      p: 0.8               # probability per batch
+      p: 0.5               # probability per batch
       alpha: 1.0           # Beta(alpha,alpha) hyperparameter
 
     mixup:

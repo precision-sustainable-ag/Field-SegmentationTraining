@@ -14,7 +14,7 @@ conf_dir = str(Path(__file__).resolve().parents[2] / "conf")
 from src.data.dataset import FieldDataset
 from src.data.collate import get_batch_collate_fn
 
-@hydra.main(config_path=conf_dir, config_name="config")
+@hydra.main(version_base="1.1", config_path=conf_dir, config_name="config")
 def visualize(cfg: DictConfig):
     """
     Visualize a single batch from the training DataLoader.
