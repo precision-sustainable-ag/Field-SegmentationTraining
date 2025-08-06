@@ -7,15 +7,14 @@ This script detects weeds in images using a trained YOLO model. It processes all
 in the 'cutouts' directory.
 """
 
-import json
 import logging
+import pandas as pd
 from pathlib import Path
 from ultralytics import YOLO
 from omegaconf import DictConfig
 from typing import Optional, Dict
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
 class WeedDetector:
@@ -99,30 +98,38 @@ class ProcessDetections:
         self.detection_save_dir = self.mask_gen_dir / "cutouts"
         self.detection_save_dir.mkdir(exist_ok=True)
 
+        self.results = []
+
     def process_image(self, image_path: Path) -> None:
-        """
-        Processes a single image by performing weed detection and saving metadata.
-
-        Saves results to a JSON file named after the image stem in the `cutouts` directory.
-
-        Args:
-            image_path (Path): Path to the image to be processed.
-        """
         log.info(f"Processing image: {image_path.name}")
-        detection_results = self.weed_detector.detect_weeds(image_path)
+        detection = self.weed_detector.detect_weeds(image_path)
+        
+        # Always record row, even if detection is None, for tracking
+        row = {
+            "image_name": image_path.name,
+            "image_path": str(image_path.resolve()),
+            "bbox_x": None,
+            "bbox_y": None,
+            "bbox_w": None,
+            "bbox_h": None,
+            "det_pred_conf": None,
+            "detection_note": None,
+        }
+        if detection is not None:
+            row.update({
+                "bbox_x": detection["bbox"][0],
+                "bbox_y": detection["bbox"][1],
+                "bbox_w": detection["bbox"][2],
+                "bbox_h": detection["bbox"][3],
+                "det_pred_conf": detection["det_pred_conf"],
+            })
+        # If any notes (e.g., "No detection found" or "Multiple detections..."), record them
+        if self.weed_detector.missing_detection_notes:
+            row["detection_note"] = "; ".join(self.weed_detector.missing_detection_notes)
+        self.results.append(row)
 
-        detection_json_path = self.detection_save_dir / f"{image_path.stem}_0.json"
-        with open(detection_json_path, "w") as f:
-            json.dump(detection_results, f, indent=4)
-
-        log.info(f"Saved detection results to: {detection_json_path}")
 
     def process_dir(self) -> None:
-        """
-        Processes all JPG images in the 'developed-images' folder of the root directory.
-        
-        Applies weed detection and stores output metadata in JSON format under 'cutouts/'.
-        """
         image_dir = self.mask_gen_dir / "developed-images"
         image_paths = sorted(image_dir.glob("*.jpg"))
         log.info(f"Found {len(image_paths)} images in {image_dir}. Starting detection...")
@@ -130,6 +137,12 @@ class ProcessDetections:
         for image_path in image_paths:
             self.weed_detector.missing_detection_notes = []
             self.process_image(image_path)
+        
+        # Save all results to CSV
+        out_csv = self.detection_save_dir / "temp_db.csv"
+        df = pd.DataFrame(self.results)
+        df.to_csv(out_csv, index=False)
+        log.info(f"Saved all detection results to: {out_csv}")
 
         log.info("Completed processing all images.")
 
