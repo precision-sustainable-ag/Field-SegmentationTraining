@@ -7,7 +7,7 @@ import shutil
 import hydra
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from typing import Dict, Tuple, Any
+from typing import Dict, Optional, Tuple, Any
 
 log = logging.getLogger(__name__)
 
@@ -47,43 +47,47 @@ class GroupImagesBySpecies:
     """
     def __init__(self, cfg: DictConfig) -> None:
         self.db_path = Path(cfg.paths.agir_field_db)
-        self.species_of_interest = cfg.create_project.species
-        self.num_images_per_species = cfg.create_project.images_per_species
-        self.df_field_data = None
+        self.species_image_dict = cfg.create_project.species_images
+        self.random_state = cfg.create_project.seed
+        self.conn: Optional[sqlite3.Connection] = None
 
     def _load_db(self) -> None:
-        conn = sqlite3.connect(self.db_path)
-        self.df_field_data = pd.read_sql_query("SELECT * FROM field_data", conn)
-        conn.close()
-        return self.df_field_data
-
-    def _filter_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Filter for jpg images
+        df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
         filtered_df = df[df['extension'] == 'jpg']
-        # Further filter for species of interest
-        filtered_df = filtered_df[filtered_df['app_species'].isin(self.species_of_interest)]
         return filtered_df
 
-    def _group_images_by_species(self, filtered_df: pd.DataFrame) -> Dict[str, Any]:
-        # Loop through each species and select images
-        species_group_dict = {}
-        for species in self.species_of_interest:
-            species_df = filtered_df[filtered_df['app_species'] == species]
-            if not species_df.empty:
-                # Randomly select the specified number of images
-                selected_images = species_df.sample(n=self.num_images_per_species)
-                species_group_dict[species] = selected_images['image_id'].tolist()
+    def connect(self):
+        self.conn = sqlite3.connect(self.db_path)
+        log.info(f"Connected to {self.db_path}")
 
-        return species_group_dict
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            log.info("Database connection closed.")
+
+    def sample_by_n_species(self, df: pd.DataFrame) -> pd.DataFrame:
+        sampled_dfs = []
+        # Loop through your config species_image_dict
+        for species, n in self.species_image_dict.items():
+            # Species must match the 'app_species' column in the DataFrame
+            sub_df = df[df['app_species'] == species]
+            if len(sub_df) == 0:
+                log.warning(f"No images found for species: {species}")
+                continue  # No rows for this species
+            # If there are fewer rows than requested, sample all available
+            sample_n = min(len(sub_df), n)
+            sampled = sub_df.sample(n=sample_n, random_state=self.random_state )
+            sampled_dfs.append(sampled)
+        return pd.concat(sampled_dfs, ignore_index=True)
     
-    def main_process_filter_by_species(self) -> Dict[str, Any]:
+    def get_sampled_images(self) -> pd.DataFrame:
         """ Main process to filter images by species and number of images per species.
         """
-        # Load the database
-        self.df_field_data = self._load_db()
+        try:
+            self.connect()
+            # Load the database
+            df = self._load_db()
+        finally:
+            self.close()
         # Filter the DataFrame
-        filtered_df = self._filter_df(self.df_field_data)
-        # Group images by species of interest
-        species_group_dict = self._group_images_by_species(filtered_df)
-
-        return species_group_dict
+        return self.sample_by_n_species(df)

@@ -1,10 +1,10 @@
-species:
-  - ragweed parthenium
-  # - brassica complex
-  # - palmer amaranth
-  # - cereal rye
+species_images:
+  ragweed parthenium: 2
+  brassica complex: 2
+  palmer amaranth: 2
+  cereal rye: 1
 
-images_per_species: 2
+seed: 42
 
 # species in the permanent table:
 # ragweed parthenium
