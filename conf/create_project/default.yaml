@@ -1,8 +1,65 @@
 species:
-  - waterhemp
-  - giant ragweed
+  - ragweed parthenium
+  # - brassica complex
+  # - palmer amaranth
+  # - cereal rye
 
-images_per_species:
-  - waterhemp: 20
-  - giant ragweed: 20
+images_per_species: 2
 
+# species in the permanent table:
+# ragweed parthenium
+# cotton
+# brassica complex
+# palmer amaranth
+# cereal rye
+# corn
+# smooth pigweed
+# goosegrass
+# prickly sida
+# large crabgrass
+# jimson weed
+# horseweed
+# johnsongrass
+# common waterhemp
+# hophornbeam copperleaf
+# broadleaf signalgrass
+# spiny amaranth
+# yellow nutsedge
+# common cocklebur
+# giant ragweed
+# giant foxtail
+# yellow foxtail
+# velvetleaf
+# soybean
+# fall panicum
+# raphanus sativus
+# winter pea
+# hairy vetch
+# crimson clover
+# red clover
+# oats
+# barley
+# common ragweed
+# sicklepod
+# triticale
+# winter wheat
+# barnyardgrass
+# ryegrass
+# silverleaf nightshade
+# field bindweed
+# common sunflower
+# waterhemp
+# jungle rice
+# kochia
+# texas millet
+# black oats
+# common lambsquarters
+# crabgrass (large or other spp.)
+# canada thistle
+# redroot pigweed
+# devil’s claw
+# junglerice
+# alfalfa
+# fava
+# buckwheat
+# brown mustard
