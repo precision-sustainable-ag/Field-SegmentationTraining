@@ -16,12 +16,11 @@ class CreateProject:
         and creates a project directory structure and downloads developed images into that 
         project directory structure.
     """
-    def __init__(self, cfg: DictConfig, species_group_dict: Dict[str, Any]) -> None:
+    def __init__(self, cfg: DictConfig) -> None:
         self.local_developed_images_dir = Path(cfg.paths.project_maskgen_dir) / "developed-images"
+        self.lts_source_dir = Path(cfg.paths.longterm_storage)
         self.local_developed_images_dir.mkdir(parents=True, exist_ok=True)
         self.field_image_batches_dir = Path(cfg.paths.field_batches_dir)  
-        # Dict to hold species and their corresponding image IDs
-        self.species_group_dict = species_group_dict
 
 
 
@@ -31,26 +30,16 @@ class CreateProject:
 
 
 
-    
-    def _get_path_for_image_id(self, image_id: str) -> Path | None:
-        try:
-            for subdir in self.field_image_batches_dir.iterdir():
-                lts_developed_images_dir = subdir / "developed-images"
-                for image_path in lts_developed_images_dir.glob("*.jpg"):
-                    if image_path.name == image_id:
-                        log.info(f"Found image {image_id} at {image_path}")
-                return image_path
-        except Exception as e:
-            log.exception(f"Error occurred while getting path for image {image_id}: {e}")
-    
-    def copy_from_lts_to_local(self) -> None:
-        for species, image_ids in self.species_group_dict.items():
-            species_dir = self.local_developed_images_dir / species
-            species_dir.mkdir(parents=True, exist_ok=True)
-            for image_id in image_ids:
-                source_path = self._get_path_for_image_id(image_id)
-                log.info(f"Copying {image_id} from {source_path} to {species_dir}")
-                # shutil.copy(source_path, species_dir / image_id)
+    def copy_from_lts_to_local(self, sample_df: pd.DataFrame) -> None:
+        for _, row in sample_df.iterrows():
+            dst_dir = self.local_developed_images_dir
+            developed_image_path = row["developed_image_path"]
+            source_path = self.lts_source_dir / developed_image_path
+            if source_path.exists():
+                log.info(f"Copying {developed_image_path.name} from {source_path} to {dst_dir}")
+                shutil.copy(source_path, dst_dir)
+            else:
+                log.warning(f"Source image {developed_image_path.name} does not exist at {source_path}. Skipping copy.")
 
 class GroupImagesBySpecies:
     """ Read the sql db and filters images by species name and images per species
