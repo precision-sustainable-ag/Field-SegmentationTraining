@@ -321,7 +321,6 @@ def vis_augmentation_batch(
 
     so_spat = dataset.cfg_aug.train.spatial.some_of
     so_pix  = dataset.cfg_aug.train.pixel.some_of
-    warn_msg = None
     if so_spat.enable or so_pix.enable:
         warn_msg = (
             "‘SomeOf’ is enabled in your augmentation config: "
@@ -330,24 +329,9 @@ def vis_augmentation_batch(
         )
         print(warn_msg)
 
-    # Log both the warning (if any) and the image to all configured loggers
+    # log to all configured loggers
     for lcfg in logger_cfgs:
         logger = hydra.utils.instantiate(lcfg)
-        exp    = getattr(logger, "experiment", None)
-        if not exp:
-            continue
-
-        # 1) if the logger supports alerts (e.g. WandB), send an alert
-        if warn_msg and hasattr(exp, "alert"):
-            exp.alert(
-                title="SomeOf Enabled",
-                text=warn_msg,
-                level=wandb.AlertLevel.WARN
-            )
-        # 2) otherwise log the warning as a string metric so it still shows up
-        elif warn_msg and hasattr(exp, "log"):
-            exp.log({"train/aug_visualization_warning": warn_msg})
-
-        # 3) always log the image
-        if hasattr(exp, "log"):
+        exp = getattr(logger, "experiment", None)
+        if exp and hasattr(exp, "log"):
             exp.log({"train/aug_visualization": [wandb.Image(str(out_file))]})
