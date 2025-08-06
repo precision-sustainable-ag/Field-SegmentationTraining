@@ -22,7 +22,6 @@ test_masks_dir: ${paths.preprocess_split_dir}/test/masks
 
 
 project_train_dir: ${paths.project_dir}/train  
-
 project_maskgen_dir: ${paths.project_dir}/mask_gen
 project_inference_dir: ${paths.project_dir}/inference  
 
@@ -30,8 +29,6 @@ project_inference_dir: ${paths.project_dir}/inference
 mask_gen_cutout_dir: ${paths.project_maskgen_dir}/cutouts
 refined_masks_dir: ${paths.project_maskgen_dir}/refined_masks
 relabeled_masks_dir: ${paths.project_maskgen_dir}/relabeled_masks
-voxel_inspection_results_dir: ${paths.project_maskgen_dir}/mask_inspection_db
-voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
 
 # longterm storage paths
 longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
@@ -44,18 +41,6 @@ unet_segmentation_model: ${paths.longterm_storage}/field-tools/models/unet_segme
 # DB paths
 agir_field_db_dir: ${paths.longterm_storage}/field-tools/agir_field_db
 agir_field_db: ${paths.agir_field_db_dir}/test_agir_field.db
-agir_field_db_schema: ${paths.agir_field_db_dir}/schema.sql
 
-# paths for create_project mode:
-persistent_table_data_path: ${paths.longterm_storage}/field-tools//persistent_data_tables/merged_blobs_tables_metadata_lts.csv
-# local path for create_project mode:
-local_create_project_dir: ${paths.base_dir}/projects/${project.name}/create_project projects/test/create_project
-local_field_train_dataset_dir: ${paths.project_train_dir}/field_train_dataset
-# longterm_images3/field-tool/field_train_dataset
-# longterm_images3/field-tool/field_train_dataset/developed-images
-# longterm_images3/field-tool/field_train_dataset/cutouts
-# longterm_images3/field-tool/field_train_dataset/refined_masks
-# longterm_images3/field-tool/field_train_dataset/relabeled_masks
-# longterm_images3/field-tool/field_train_dataset/field_train_dataset.db
 # Keys
 keys_path: ${paths.base_dir}/.keys/default.yaml
