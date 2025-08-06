@@ -1,5 +1,4 @@
 # All filesystem paths, built from base_dir + project‐specific subfolders
-
 base_dir: ${hydra:runtime.cwd}                      # usually the repo root
 data_dir: ${paths.base_dir}/data
 
@@ -34,18 +33,29 @@ relabeled_masks_dir: ${paths.project_maskgen_dir}/relabeled_masks
 voxel_inspection_results_dir: ${paths.project_maskgen_dir}/mask_inspection_db
 voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.name}_db.csv
 
+# longterm storage paths
+longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
+field_batches_dir : ${paths.longterm_storage}/field-batches
+
 # model paths
-yolo_weed_detection_model: ${paths.data_dir}/field-tools/models/weed_detection/weights/best.pt
-unet_segmentation_model: ${paths.data_dir}/field-tools/models/unet/unet_segmentation.pth
+yolo_weed_detection_model: ${paths.longterm_storage}/field-tools/models/yolo_weed_detection/weights/best.pt
+unet_segmentation_model: ${paths.longterm_storage}/field-tools/models/unet_segmentation_model/unet_seg_model_nav_20250611/weights/unet_segmentation.pth
 
 # DB paths
-longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
 agir_field_db_dir: ${paths.longterm_storage}/field-tools/agir_field_db
 agir_field_db: ${paths.agir_field_db_dir}/test_agir_field.db
 agir_field_db_schema: ${paths.agir_field_db_dir}/schema.sql
 
+# paths for create_project mode:
+persistent_table_data_path: ${paths.longterm_storage}/field-tools//persistent_data_tables/merged_blobs_tables_metadata_lts.csv
+# local path for create_project mode:
+local_create_project_dir: ${paths.base_dir}/projects/${project.name}/create_project projects/test/create_project
+local_field_train_dataset_dir: ${paths.project_train_dir}/field_train_dataset
+# longterm_images3/field-tool/field_train_dataset
+# longterm_images3/field-tool/field_train_dataset/developed-images
+# longterm_images3/field-tool/field_train_dataset/cutouts
+# longterm_images3/field-tool/field_train_dataset/refined_masks
+# longterm_images3/field-tool/field_train_dataset/relabeled_masks
+# longterm_images3/field-tool/field_train_dataset/field_train_dataset.db
 # Keys
 keys_path: ${paths.base_dir}/.keys/default.yaml
-
-# Persistent table data
-pesistent_table_data_path: /mnt/research-projects/r/raatwell/longterm_images3/field-tools/persistent_data_tables/merged_blobs_tables_metadata_lts.csv
