@@ -16,9 +16,9 @@ refine:
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
-
-  missing_white: # focus of v value
-    luminance_thresh: 200
+    
+  missing_white: 
+    luminance_thresh: 0.8 # range [0, 1]
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
