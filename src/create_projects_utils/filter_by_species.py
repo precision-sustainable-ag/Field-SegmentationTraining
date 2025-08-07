@@ -36,7 +36,7 @@ class CreateProject:
             developed_image_path = row["developed_image_path"]
             source_path = self.lts_source_dir / developed_image_path
             if source_path.exists():
-                log.info(f"Copying {developed_image_path.name} from {source_path} to {dst_dir}")
+                log.info(f"Copying {source_path.name} from {source_path} to {dst_dir}")
                 shutil.copy(source_path, dst_dir)
             else:
                 log.warning(f"Source image {developed_image_path.name} does not exist at {source_path}. Skipping copy.")
@@ -53,7 +53,7 @@ class GroupImagesBySpecies:
 
     def _load_db(self) -> None:
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
-        filtered_df = df[df['extension'] == 'jpg']
+        filtered_df = df[(df['extension'] == 'jpg') & (df['is_preprocessed'])]
         return filtered_df
 
     def connect(self):
