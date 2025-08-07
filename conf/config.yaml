@@ -34,8 +34,9 @@ tasks: # TODO: make the other tasks bool key/values
     mask_refine: false
   
   train:
-    vis_augment: true 
-  
+    vis_augment: true
+    vis_dataloader: true
+
   inference:
     - inference
 
