@@ -1,10 +1,6 @@
 # data directory
 data
-projects/test_project/train
-!projects/test_project/preprocess
-!src/data
-scripts/crop_images.py
-logging
+projects/test_project
 
 # trained_models directory
 trained_models

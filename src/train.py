@@ -12,12 +12,12 @@ import hydra.utils
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 
-from src.utils.gpu_utils import select_available_gpus
+from src.train_utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed, seed_worker
-from src.models.lit_segmentation import LitSegmentation
-from src.data.dataset import FieldDataset
-from src.data.collate import get_batch_collate_fn
-from src.utils.augmentation_visualizer import vis_augmentation_batch
+from src.train_utils.models.lit_segmentation import LitSegmentation
+from src.train_utils.data.dataset import FieldDataset
+from src.train_utils.data.collate import get_batch_collate_fn
+from src.train_utils.augmentation_visualizer import vis_augmentation_batch
 
 import torch
 from torch.utils.data._utils.collate import default_collate

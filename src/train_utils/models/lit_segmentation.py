@@ -1,4 +1,4 @@
-# models/lit_segmentation.py
+# src/train_utils/models/lit_segmentation.py
 
 import torch
 import torch.nn as nn

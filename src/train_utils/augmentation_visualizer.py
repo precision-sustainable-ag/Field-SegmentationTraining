@@ -1,4 +1,4 @@
-# src/utils/augmentation_visualizer.py
+# src/train_utils/augmentation_visualizer.py
 
 """
 Augmentation Visualizer
@@ -29,8 +29,8 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 import wandb
 
-from src.data.augment import get_noop_transform
-from src.data.collate import mixup_collate, cutmix_collate, mosaic_collate
+from src.train_utils.data.augment import get_noop_transform
+from src.train_utils.data.collate import mixup_collate, cutmix_collate, mosaic_collate
 
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw

@@ -1,3 +1,5 @@
+# src/train_utils/visualize_dataloader.py
+
 import matplotlib.pyplot as plt
 import torchvision
 import torch
@@ -11,8 +13,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 conf_dir = str(Path(__file__).resolve().parents[2] / "conf")
 
-from src.data.dataset import FieldDataset
-from src.data.collate import get_batch_collate_fn
+from src.train_utils.data.dataset import FieldDataset
+from src.train_utils.data.collate import get_batch_collate_fn
 
 @hydra.main(version_base="1.1", config_path=conf_dir, config_name="config")
 def visualize(cfg: DictConfig):
