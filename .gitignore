@@ -1,4 +1,5 @@
 # data directory
+projects
 data
 !src/train_utils/data
 projects/test_project
