@@ -54,6 +54,8 @@ class GroupImagesBySpecies:
     def _load_db(self) -> None:
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
         filtered_df = df[(df['extension'] == 'jpg') & (df['is_preprocessed'])]
+        # Filter out first two images in the sample which are without mat or with color checker
+        filtered_df = filtered_df[(filtered_df['image_index'] != 0) | (filtered_df['image_index'] != 1)]
         return filtered_df
 
     def connect(self):
