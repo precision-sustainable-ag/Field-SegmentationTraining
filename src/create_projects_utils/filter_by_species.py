@@ -12,76 +12,84 @@ from typing import Dict, Optional, Tuple, Any
 log = logging.getLogger(__name__)
 
 class CreateProject:
-    """ Takes the cfg.create_project object and the filtered images by species name
-        and creates a project directory structure and downloads developed images into that 
-        project directory structure.
-    """
     def __init__(self, cfg: DictConfig) -> None:
+        """ Initialize the CreateProject with Hydra configs."""
         self.mask_gen_dir = Path(cfg.paths.project_maskgen_dir)
         self.local_developed_images_dir = self.mask_gen_dir / "developed-images"
         self.local_developed_images_dir.mkdir(parents=True, exist_ok=True)
         self.lts_source_dir = Path(cfg.paths.longterm_storage)
 
     def copy_from_lts_to_local(self, sample_df: pd.DataFrame) -> pd.DataFrame:
-        """ Parse the database to copy the developed images from the long-term storage to the local project directory while
-        updating the sample_df with a new column for local image paths and species.
-        
-        Returns: Updated sample_df with local image paths and species.
+        """ Copy images from the long-term storage to the local project directory.
+        Args:
+            sample_df (pd.DataFrame): DataFrame containing the sampled images.
+        Returns:
+            pd.DataFrame: DataFrame with updated local image paths.
         """
+        log.info(f"Copying {source_path.name} from {source_path} to {dst_dir}")
         sampled_df_copy = sample_df.copy()
-        for _, row in sampled_df_copy.iterrows():
+        for idx, row in sampled_df_copy.iterrows():
             dst_dir = self.local_developed_images_dir
             developed_image_path = row["developed_image_path"]
             source_path = self.lts_source_dir / developed_image_path
-            if source_path.exists():
-                # TODO: Update the DataFrame with the local path using the image_id index
-                
-
+            if source_path.exists():    
                 # Copy the image from LTS to local directory
-                log.info(f"Copying {source_path.name} from {source_path} to {dst_dir}")
                 shutil.copy(source_path, dst_dir)
+                # Update the DataFrame with the local path
+                sampled_df_copy.at[idx, "local_image_path"] = dst_dir / source_path.name
             else:
                 log.warning(f"Source image {developed_image_path.name} does not exist at {source_path}. Skipping copy.")
-        
-        return sample_df
 
+        return sampled_df_copy
 
     def save_temp_db(self, sampled_df: pd.DataFrame) -> None:
-        """
-        Save the sampled_df as a csv file that stores the sampled images, their species, and local image paths, 
-        saving it in the project directory under mask_gen/cutouts/temp_db.csv.
+        """ Save a temporary database in the project directory.
+        Args:
+            sampled_df (pd.DataFrame): DataFrame containing the sampled images.
         """
         temp_db_path = Path(self.mask_gen_dir) / "temp_db.csv"
         sampled_df.to_csv(temp_db_path, index=False)
         log.info(f"Temporary database saved at {temp_db_path}")
 
-class GroupImagesBySpecies:
-    """ Read the sql db and filters images by species name and images per species
-    to output a list of images to be downloaded.
+class FilterImagesBySpecies:
+    """
+    This class filters images from the database by species and number of images per species.
     """
     def __init__(self, cfg: DictConfig) -> None:
+        """ Initialize the FilterImagesBySpecies with Hydra configs."""
         self.db_path = Path(cfg.paths.agir_field_db)
         self.species_image_dict = cfg.create_project.species_images
         self.random_state = cfg.create_project.seed
         self.conn: Optional[sqlite3.Connection] = None
 
     def _load_db(self) -> None:
+        """ Load the database and filter images based on extension and preprocessing status."""
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
         filtered_df = df[(df['extension'] == 'jpg') & (df['is_preprocessed'])]
         # Filter out first two images in the sample which are without mat or with color checker
         filtered_df = filtered_df[(filtered_df['image_index'] != 0) | (filtered_df['image_index'] != 1)]
         return filtered_df
 
-    def connect(self):
+    def connect(self) -> None:
+        """ Connect to the SQLite database."""
         self.conn = sqlite3.connect(self.db_path)
         log.info(f"Connected to {self.db_path}")
 
-    def close(self):
+    def close(self) -> None:
+        """ Close the database connection."""
         if self.conn:
             self.conn.close()
             log.info("Database connection closed.")
 
     def sample_by_n_species(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Sample images from the DataFrame by species and number of images per species.
+        Args:
+            df (pd.DataFrame): DataFrame containing the images and their species.
+        Returns:
+            pd.DataFrame: DataFrame containing the sampled images.
+        """
+        log.info(f"Sampling images by species with the configuration: {self.species_image_dict}")
         sampled_dfs = []
         # Loop through your config species_image_dict
         for species, n in self.species_image_dict.items():
@@ -97,7 +105,10 @@ class GroupImagesBySpecies:
         return pd.concat(sampled_dfs, ignore_index=True)
     
     def get_sampled_images(self) -> pd.DataFrame:
-        """ Main process to filter images by species and number of images per species.
+        """
+        Main process to filter images by species and number of images per species.
+        Returns:
+            pd.DataFrame: DataFrame containing the sampled images.
         """
         try:
             self.connect()
