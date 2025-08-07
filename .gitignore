@@ -1,4 +1,5 @@
 # data directory
+projects
 data
 projects/test_project/train
 !projects/test_project/preprocess
