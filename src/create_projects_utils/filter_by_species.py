@@ -4,16 +4,15 @@ import pandas as pd
 import sqlite3
 import shutil
 
-import hydra
 from omegaconf import DictConfig
-from omegaconf import OmegaConf
-from typing import Dict, Optional, Tuple, Any
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
 class CreateProject:
     def __init__(self, cfg: DictConfig) -> None:
         """ Initialize the CreateProject with Hydra configs."""
+        self.repo_root = Path(cfg.paths.base_dir)
         self.mask_gen_dir = Path(cfg.paths.project_maskgen_dir)
         self.local_developed_images_dir = self.mask_gen_dir / "developed-images"
         self.local_developed_images_dir.mkdir(parents=True, exist_ok=True)
@@ -36,7 +35,9 @@ class CreateProject:
                 log.info(f"Copying {source_path} to {dst_dir}")
                 shutil.copy(source_path, dst_dir)
                 # Update the DataFrame with the local path
-                sampled_df_copy.at[idx, "local_image_path"] = dst_dir / source_path.name
+                abs_dest_path = dst_dir / source_path.name
+                relative_dest_path = abs_dest_path.relative_to(self.repo_root)
+                sampled_df_copy.at[idx, "local_developed_image_path"] = relative_dest_path
             else:
                 log.warning(f"Source image {developed_image_path.name} does not exist at {source_path}. Skipping copy.")
 
