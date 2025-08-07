@@ -1,11 +1,13 @@
 # data directory
+projects
 data
 projects/test_project/train
 !projects/test_project/preprocess
 !src/data
 scripts/crop_images.py
+projects/test/mask_gen/cutouts/*
 logging
-
+projects/test/mask_gen/cutouts/
 # Ignore exploratory notebooks
 notebooks/
 
