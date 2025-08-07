@@ -17,29 +17,43 @@ class CreateProject:
         project directory structure.
     """
     def __init__(self, cfg: DictConfig) -> None:
-        self.local_developed_images_dir = Path(cfg.paths.project_maskgen_dir) / "developed-images"
-        self.lts_source_dir = Path(cfg.paths.longterm_storage)
+        self.mask_gen_dir = Path(cfg.paths.project_maskgen_dir)
+        self.local_developed_images_dir = self.mask_gen_dir / "developed-images"
         self.local_developed_images_dir.mkdir(parents=True, exist_ok=True)
-        self.field_image_batches_dir = Path(cfg.paths.field_batches_dir)  
+        self.lts_source_dir = Path(cfg.paths.longterm_storage)
 
-
-
-
-
-    # fix this
-
-
-
-    def copy_from_lts_to_local(self, sample_df: pd.DataFrame) -> None:
-        for _, row in sample_df.iterrows():
+    def copy_from_lts_to_local(self, sample_df: pd.DataFrame) -> pd.DataFrame:
+        """ Parse the database to copy the developed images from the long-term storage to the local project directory while
+        updating the sample_df with a new column for local image paths and species.
+        
+        Returns: Updated sample_df with local image paths and species.
+        """
+        sampled_df_copy = sample_df.copy()
+        for _, row in sampled_df_copy.iterrows():
             dst_dir = self.local_developed_images_dir
             developed_image_path = row["developed_image_path"]
             source_path = self.lts_source_dir / developed_image_path
             if source_path.exists():
+                # TODO: Update the DataFrame with the local path using the image_id index
+                
+
+                # Copy the image from LTS to local directory
                 log.info(f"Copying {source_path.name} from {source_path} to {dst_dir}")
                 shutil.copy(source_path, dst_dir)
             else:
                 log.warning(f"Source image {developed_image_path.name} does not exist at {source_path}. Skipping copy.")
+        
+        return sample_df
+
+
+    def save_temp_db(self, sampled_df: pd.DataFrame) -> None:
+        """
+        Save the sampled_df as a csv file that stores the sampled images, their species, and local image paths, 
+        saving it in the project directory under mask_gen/cutouts/temp_db.csv.
+        """
+        temp_db_path = Path(self.mask_gen_dir) / "temp_db.csv"
+        sampled_df.to_csv(temp_db_path, index=False)
+        log.info(f"Temporary database saved at {temp_db_path}")
 
 class GroupImagesBySpecies:
     """ Read the sql db and filters images by species name and images per species
