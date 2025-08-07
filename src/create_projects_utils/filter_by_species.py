@@ -25,8 +25,7 @@ class CreateProject:
         Returns:
             pd.DataFrame: DataFrame with updated local image paths.
         """
-        sampled_df_copy = sample_df.copy()
-        for idx, row in sampled_df_copy.iterrows():
+        for idx, row in sample_df.iterrows():
             dst_dir = self.local_developed_images_dir
             developed_image_path = row["developed_image_path"]
             source_path = self.lts_source_dir / developed_image_path
@@ -37,11 +36,11 @@ class CreateProject:
                 # Update the DataFrame with the local path
                 abs_dest_path = dst_dir / source_path.name
                 relative_dest_path = abs_dest_path.relative_to(self.repo_root)
-                sampled_df_copy.at[idx, "local_developed_image_path"] = relative_dest_path
+                sample_df.at[idx, "local_developed_image_path"] = relative_dest_path
             else:
-                log.warning(f"Source image {developed_image_path.name} does not exist at {source_path}. Skipping copy.")
+                log.warning(f"Source image {source_path.name} does not exist at {source_path}. Skipping copy.")
 
-        return sampled_df_copy
+        return sample_df
 
     def save_temp_db(self, sampled_df: pd.DataFrame) -> None:
         """ Save a temporary database in the project directory.
@@ -67,9 +66,10 @@ class FilterImagesBySpecies:
         """ Load the database and filter images based on extension and preprocessing status."""
         log.info(f"Loading the agir field db...")
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
+        df['extension'] = df['extension'].str.lower()
         filtered_df = df[(df['extension'] == 'jpg') & (df['is_preprocessed'])]
         # Filter out first two images in the sample which are without mat or with color checker
-        filtered_df = filtered_df[(filtered_df['image_index'] != 0) | (filtered_df['image_index'] != 1)]
+        filtered_df = filtered_df[~filtered_df['image_index'].isin([0, 1])]
         return filtered_df
 
     def connect(self) -> None:
