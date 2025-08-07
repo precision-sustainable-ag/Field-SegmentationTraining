@@ -41,7 +41,7 @@ def visualize(cfg: DictConfig):
     plt.imshow(img_grid.permute(1, 2, 0))
     plt.title("Batch Images")
     plt.axis("off")
-    plt.savefig("batch_visualization_image.png")
+    plt.savefig("image_logs/batch_visualization_image.png")
 
     # Create grid of masks (expand to 3 channels for visualization)
     mask_grid = torchvision.utils.make_grid(masks.expand(-1, 3, -1, -1), nrow=4, padding=4)
@@ -49,7 +49,7 @@ def visualize(cfg: DictConfig):
     plt.imshow(mask_grid.permute(1, 2, 0))
     plt.title("Batch Masks")
     plt.axis("off")
-    plt.savefig("batch_visualization_mask.png")
+    plt.savefig("image_logs/batch_visualization_mask.png")
 
 if __name__ == "__main__":
     visualize()
