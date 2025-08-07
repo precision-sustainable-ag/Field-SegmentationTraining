@@ -1,9 +1,6 @@
+species_images:
+  yellow nutsedge: 2
+  fall panicum: 2
 
-species:
-  - waterhemp
-  - giant ragweed
-
-images_per_species:
-  - waterhemp: 20
-  - giant ragweed: 20
+seed: 42
 
