@@ -1,18 +1,12 @@
 species_images:
-  ragweed parthenium: 2
-  brassica complex: 2
-  palmer amaranth: 2
-  cereal rye: 1
+  ragweed parthenium: 5
+  palmer amaranth: 5
 
 seed: 42
 
-# species in the permanent table:
+# species in the agir_field_db:
 # ragweed parthenium
-# cotton
-# brassica complex
 # palmer amaranth
-# cereal rye
-# corn
 # smooth pigweed
 # goosegrass
 # prickly sida
@@ -30,19 +24,9 @@ seed: 42
 # giant foxtail
 # yellow foxtail
 # velvetleaf
-# soybean
 # fall panicum
-# raphanus sativus
-# winter pea
-# hairy vetch
-# crimson clover
-# red clover
-# oats
-# barley
 # common ragweed
 # sicklepod
-# triticale
-# winter wheat
 # barnyardgrass
 # ryegrass
 # silverleaf nightshade
@@ -52,14 +36,10 @@ seed: 42
 # jungle rice
 # kochia
 # texas millet
-# black oats
 # common lambsquarters
 # crabgrass (large or other spp.)
 # canada thistle
 # redroot pigweed
 # devil’s claw
 # junglerice
-# alfalfa
-# fava
-# buckwheat
-# brown mustard
+# ladysthumb

@@ -26,7 +26,6 @@ class CreateProject:
         Returns:
             pd.DataFrame: DataFrame with updated local image paths.
         """
-        log.info(f"Copying {source_path.name} from {source_path} to {dst_dir}")
         sampled_df_copy = sample_df.copy()
         for idx, row in sampled_df_copy.iterrows():
             dst_dir = self.local_developed_images_dir
@@ -34,6 +33,7 @@ class CreateProject:
             source_path = self.lts_source_dir / developed_image_path
             if source_path.exists():    
                 # Copy the image from LTS to local directory
+                log.info(f"Copying {source_path} to {dst_dir}")
                 shutil.copy(source_path, dst_dir)
                 # Update the DataFrame with the local path
                 sampled_df_copy.at[idx, "local_image_path"] = dst_dir / source_path.name
@@ -64,6 +64,7 @@ class FilterImagesBySpecies:
 
     def _load_db(self) -> None:
         """ Load the database and filter images based on extension and preprocessing status."""
+        log.info(f"Loading the agir field db...")
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
         filtered_df = df[(df['extension'] == 'jpg') & (df['is_preprocessed'])]
         # Filter out first two images in the sample which are without mat or with color checker
@@ -73,7 +74,7 @@ class FilterImagesBySpecies:
     def connect(self) -> None:
         """ Connect to the SQLite database."""
         self.conn = sqlite3.connect(self.db_path)
-        log.info(f"Connected to {self.db_path}")
+        log.info(f"Connected to agir field db: {self.db_path}")
 
     def close(self) -> None:
         """ Close the database connection."""
@@ -89,7 +90,7 @@ class FilterImagesBySpecies:
         Returns:
             pd.DataFrame: DataFrame containing the sampled images.
         """
-        log.info(f"Sampling images by species with the configuration: {self.species_image_dict}")
+        log.info(f"Sampling images by species.")
         sampled_dfs = []
         # Loop through your config species_image_dict
         for species, n in self.species_image_dict.items():
