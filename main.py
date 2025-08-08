@@ -1,12 +1,11 @@
 # main.py
 
-import logging, warnings, traceback, os
+import logging, warnings, traceback
 from pathlib import Path
 import hydra
 from omegaconf import DictConfig
 from hydra.core.hydra_config import HydraConfig
 
-from src.create_project import create_project
 from src.utils.pipeline_log import PipelineLogger
 from src.train import train
 from src.mask_gen import main as mask_gen
@@ -17,7 +16,6 @@ log = logging.getLogger(__name__)
 # Define a registry of tasks
 TASK_REGISTRY = {
     "train": train,
-    "create_project": create_project,
     "mask_gen": mask_gen,
     "preprocess": preprocess,
     # Add more tasks here as needed

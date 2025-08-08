@@ -22,12 +22,12 @@ project:
 mode: preprocess                  # one of: mask_gen / preprocess / train / inference
 
 tasks: # TODO: make the other tasks bool key/values
-  create_project:
-    create_project: false
+    
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    detect: false
-    segment: false
+    create_project: true
+    detect: true
+    segment: true
     inspect: false
     refine: false
     upload_cvat: false
