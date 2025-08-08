@@ -4,6 +4,7 @@ from omegaconf import DictConfig
 
 # Import the task functions
 # TODO: move these into a subdirectory src/mask_gen when incorporating into larger pipeline
+from src.mask_gen_utils.create_project import main as create_project
 from src.mask_gen_utils.detect import main as detect
 from src.mask_gen_utils.segment import main as segment
 from src.mask_gen_utils.inspect import main as inspect
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 
 # Define a registry of tasks
 TASK_REGISTRY = {
+    "create_project": create_project,
     "detect": detect,
     "segment": segment,
     "inspect": inspect,
