@@ -65,9 +65,9 @@ class UNetInference:
     
     def _prepare_dataframe_columns(self) -> None:
         """Ensure required output columns exist in the DataFrame."""
-        for col in ("initial_mask_path", "cutout_name", "seg_note"):
+        for col in ("initial_mask_path", "seg_note"):
             if col not in self.df.columns:
-                self.df[col] = pd.NA
+                self.df[col] = pd.Series([None] * len(self.df), dtype="object")
     
     def _load_model(self) -> None:
         """Load the UNet segmentation model and weights."""
@@ -278,15 +278,14 @@ class UNetInference:
         # Update CSV row
         self.df.loc[idx, "initial_mask_path"] = str(mask_full_rel)
         self.df.loc[idx, "initial_cutout_mask_path"] = str(mask_rel)
-        self.df.loc[idx, "cutout_name"] = cutout_name
         self.df.loc[idx, "seg_note"] = pd.NA
 
     def run(self) -> None:
         updated, skipped = 0, 0
         for idx, row in self.df.iterrows():
-            before = self.df.loc[idx, ["initial_mask_path", "cutout_name", "seg_note"]].copy()
+            before = self.df.loc[idx, ["initial_mask_path", "seg_note"]].copy()
             self.process_row(idx, row)
-            after = self.df.loc[idx, ["initial_mask_path", "cutout_name", "seg_note"]]
+            after = self.df.loc[idx, ["initial_mask_path", "seg_note"]]
             if not after.equals(before):
                 updated += 1
             else:
