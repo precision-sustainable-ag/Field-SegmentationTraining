@@ -24,6 +24,7 @@ test_masks_dir: ${paths.preprocess_split_dir}/test/masks
 project_train_dir: ${paths.project_dir}/train  
 project_maskgen_dir: ${paths.project_dir}/mask_gen
 project_inference_dir: ${paths.project_dir}/inference  
+project_temp_db: ${paths.project_dir}/temp_db.csv
 
 # paths for mask_gen mode:
 mask_gen_cutout_dir: ${paths.project_maskgen_dir}/cutouts
