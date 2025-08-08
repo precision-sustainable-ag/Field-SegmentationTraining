@@ -87,7 +87,7 @@ class ProcessDetections:
         """
         self.repo_root = Path(cfg.paths.base_dir)
         self.mask_gen_dir = Path(cfg.paths.project_maskgen_dir)
-        self.input_csv = self.mask_gen_dir / "temp_db.csv"
+        self.input_csv = Path(cfg.paths.project_temp_db)
         self.weed_detector = WeedDetector(Path(cfg.paths.yolo_weed_detection_model))
 
         self.results = []
