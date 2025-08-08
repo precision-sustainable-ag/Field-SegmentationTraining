@@ -1,331 +1,350 @@
 """
-Voxel Mask Inspection and Tagging Pipeline
-------------------------------------------
+Voxel Mask Inspection and Tagging Pipeline (temp_db version)
+------------------------------------------------------------
 
-This script provides an automated pipeline for the inspection, validation, and interactive tagging of image segmentation masks using the FiftyOne toolkit.
-
-Key Features:
-- Automatically detects and adds new image/mask pairs to a persistent SQLite database.
-- Loads `.jpg` images and their corresponding mask files (`*_mask.png` for initial masks and optionally refined masks).
-- Wraps each image and its mask(s) into FiftyOne samples for visualization and manual review.
-- Launches the FiftyOne App for inspection and tagging of segmentation masks.
-- Tracks image status and user-generated tags in the database.
-- (Not implemented) Moves images tagged as 'good' to a long-term storage location as needed. TODO: Implement this in mask_refine.py.
+- Loads mask entries from the shared project temp CSV.
+- Creates a FiftyOne dataset for interactive review.
+- Writes normalized tags and status back to the same CSV.
 """
 
 import os
+import logging
+import datetime
+from pathlib import Path
+from typing import List, Dict, Optional
+
+import numpy as np
+import pandas as pd
+from PIL import Image
+
 import fiftyone as fo
 from omegaconf import DictConfig
-from PIL import Image
-import numpy as np
-from pathlib import Path
-import logging
-import sqlite3
-import datetime
-from typing import List, Dict, Set, Tuple
 
-from src.mask_gen_utils.db_utils import InspectionDB
-
-# Logging configuration
 log = logging.getLogger(__name__)
 
-
-TABLE_NAME = "mask_gen_images"
+INSPECT_COLS = [
+    "initial_mask_issue_tag",
+    "final_mask_issue_tag",
+    "tags",
+    "mask_status",        # unreviewed | inspected | reviewed
+    "mask_reviewer",
+    "mask_review_datetime",
+    ]
 
 class FiftyOneMaskInspector:
     """
-    Manages image-mask datasets and interactive inspection using FiftyOne.
-
-    Functionality:
-    - Load image-mask pairs from specified directories.
-    - Create and manage FiftyOne datasets.
-    - Launch FiftyOne UI for visual inspection and tagging.
-    - Export tagging results to a CSV.
-    - Move images tagged as 'good' to a directory in lts or test directory based on mode.
+    Mask inspection tied to the project temp CSV (same artifact used by create_project/detect/segment).
     """
 
     def __init__(self, cfg: DictConfig) -> None:
-        """
-        Initializes the inspector with configuration parameters.
+        self.cfg = cfg
+        self.base_dir = Path(cfg.paths.base_dir).resolve()
+        self.project_dir = Path(cfg.paths.project_maskgen_dir)
+        self.temp_csv = Path(cfg.paths.project_temp_db)
 
-        Args:
-            cfg (DictConfig): Configuration object with the required fields:
-        """
-        # Initialize required paths from the configuration
-        self.mask_gen_cutout_dir = Path(cfg.paths.mask_gen_cutout_dir)
-        self.refined_masks_dir = Path(cfg.paths.refined_masks_dir)
-        self.relabeled_masks_dir = Path(cfg.paths.relabeled_masks_dir)
-        self.db_path = cfg.paths.agir_field_db
+        # Where segment wrote things
+        self.cutouts_dir = self.project_dir / "cutouts"
+        self.initial_masks_dir = self.project_dir / "initial_masks"
 
-        # Use persistent DB connection
-        self.db = InspectionDB(cfg)
-        self._populate_db_with_images()
-
-        # Configuration parameters for FiftyOne Voxel
-        self.port = cfg.mask_gen.inspect.port
+        # FiftyOne settings
+        self.port = int(cfg.mask_gen.inspect.port)
         self.dataset_name = cfg.mask_gen.inspect.dataset_name
-        self.dataset = None # Place holder for FiftyOne dataset
-        self.session = None # Place holder for FiftyOne session
+        self.only_tags: Optional[List[str]] = cfg.mask_gen.inspect.only_tags
 
-        # Canonical tag mapping for user-defined tags
-        self.canonical_mapping = cfg.mask_gen.canonical_tag_mapping
+        # Canonical tags
+        self.canonical_mapping: Dict[str, str] = dict(cfg.mask_gen.canonical_tag_mapping)
 
-        # Reviewer name for tagging
-        self.reviewer = os.getenv("USER")
+        # Who’s reviewing
+        self.reviewer = os.getenv("USER") or "unknown"
 
-        self.only_tags = cfg.mask_gen.inspect.only_tags
+        # state
+        self.dataset: Optional[fo.Dataset] = None
+        self.session: Optional[fo.Session] = None
 
-    def _populate_db_with_images(self) -> None:
-        
-        try:
-            log.info("Populating DB with missing images...")
-            existing_ids = self.db.get_all_image_ids()
-            masks_to_add = []
-            for mask_path in self.mask_gen_cutout_dir.glob("*_mask.png"):
-                image_name = mask_path.name.replace("_mask.png", ".jpg")
-                if image_name in existing_ids:
-                    log.debug(f"Skipping {image_name} (already in DB)")
-                    continue
-                image_path = str(self.mask_gen_cutout_dir / image_name)
-                mask_path_str = str(mask_path)
-                # Set mask paths if they exist
-                refined_path = self.refined_masks_dir / mask_path.name
-                relabeled_path = self.relabeled_masks_dir / mask_path.name
-                refined_path = str(refined_path) if refined_path.exists() else ""
-                relabeled_path = str(relabeled_path) if relabeled_path.exists() else ""
+        # Load CSV once
+        self.df = self._load_csv()
+        self._ensure_inspect_columns()
 
-                masks_to_add.append((image_name, image_path, mask_path_str, refined_path, relabeled_path))
-            if 0 < len(masks_to_add) <= 3:
-                log.info(f"Adding {len(masks_to_add)} images one by one to DB")
-                for entry in masks_to_add:
-                    try:
-                        self.db.add_or_update_image(*entry)
-                    except Exception as e:
-                        log.error(f"Error adding image {entry[0]}: {e}")
-            elif masks_to_add:
-                log.info(f"Adding {len(masks_to_add)} images in bulk to DB")
-                self.db.add_images_bulk(masks_to_add)
+    # ---------------- CSV I/O ----------------
+
+    def _load_csv(self) -> pd.DataFrame:
+        if not self.temp_csv.exists():
+            raise FileNotFoundError(f"project_temp_db CSV not found: {self.temp_csv}")
+        df = pd.read_csv(self.temp_csv)
+        log.info(f"Loaded temp CSV with {len(df)} rows: {self.temp_csv}")
+        return df
+
+
+    def _save_csv(self) -> None:
+        self.df.to_csv(self.temp_csv, index=False)
+        log.info(f"Wrote updates to temp CSV: {self.temp_csv}")
+
+    def _ensure_inspect_columns(self) -> None:
+        for col in INSPECT_COLS:
+            if col not in self.df.columns:
+                self.df[col] = pd.Series([None] * len(self.df), dtype="object")
             else:
-                log.info("No new images to add to the database.")
-        except Exception as e:
-            log.error(f"Error populating DB with images: {e}")
+                # Force dtype to object so strings are fine
+                self.df[col] = self.df[col].astype("object")
+
+    # ---------------- Tag normalization ----------------
 
     def normalize_tags(self, user_tags: List[str]) -> List[str]:
         """
-        Maps a list of user tags to canonical tags using keywords.
+        Map arbitrary user tags -> canonical tags based on substring keywords.
 
-        Args:
-            user_tags (list of str): Tags as entered by user or FiftyOne UI.
-            canonical_mapping (dict): {canonical: keyword}
-
-        Returns:
-            List of canonical tags (de-duplicated).
+        canonical_mapping example:
+          { "good": "good", "bad": "bad", "other": "other", "flower": "flow", ... }
         """
-        normalized = set()
-        user_tags = [str(t).lower() for t in user_tags if t]
+        user_tags = [str(t).strip().lower() for t in (user_tags or []) if t]
+        norm = set()
         for canonical, keyword in self.canonical_mapping.items():
-            for user_tag in user_tags:
-                if keyword in user_tag:
-                    normalized.add(canonical)
-        log.debug(f"Normalized tags {user_tags} -> {list(normalized)}")
-        return list(normalized)
+            kw = str(keyword).lower().strip()
+            if not kw:
+                continue
+            if any(kw in t for t in user_tags):
+                norm.add(canonical.lower())
+        return sorted(norm)
+
+    # ---------------- Sample loading ----------------
+
+    def _row_to_paths(self, row: pd.Series) -> Optional[Dict[str, Path]]:
+        """
+        Resolve image (cutout) and mask paths for a row. Returns None if not usable.
+        Expects columns produced by `segment`:
+          - initial_cutout_mask_path (preferred)
+          - cutout_name (fallback to cutouts/<cutout_name>)
+        """
+        mask_path = None
+        if pd.notna(row.get("initial_cutout_mask_path", None)):
+            mask_path = Path(row["initial_cutout_mask_path"])
+            # rebase to repo if relative
+            if not mask_path.is_absolute():
+                mask_path = (self.base_dir / mask_path).resolve()
+        else:
+            # final fallback: infer from cutout_name
+            cname = row.get("cutout_name", None)
+            if pd.isna(cname):
+                return None
+            mask_path = (self.cutouts_dir / cname.replace(".jpg", "_mask.png")).resolve()
+
+        if not mask_path.exists():
+            return None
+
+        # image (cutout) path
+        if pd.notna(row.get("cutout_name", None)):
+            image_path = (self.cutouts_dir / str(row["cutout_name"])).resolve()
+        else:
+            # infer from mask name
+            image_path = Path(str(mask_path).replace("_mask.png", ".jpg"))
+
+        if not image_path.exists():
+            # sometimes crop image might be PNG
+            alt = Path(str(mask_path).replace("_mask.png", ".png"))
+            image_path = alt if alt.exists() else image_path
+
+        if not image_path.exists():
+            # as a last resort, try the full-frame image
+            # not ideal for inspection, but keeps row from being dropped
+            if pd.notna(row.get("local_developed_image_path", None)):
+                image_path = (self.base_dir / str(row["local_developed_image_path"])).resolve()
+
+        if not image_path.exists():
+            return None
+
+        return {"image": image_path, "mask": mask_path}
+    
+    def _populate_sample_fields(self, sample: fo.Sample, row: pd.Series) -> fo.Sample:
+        def _val(v):
+            return "" if (v is None or pd.isna(v)) else v
+
+        fields = [
+            "det_pred_conf","app_species","upload_datetime_utc","camera_datetime",
+            "image_index","us_state","plant_type","cloud_cover","ground_residue",
+            "ground_cover","cover_crop_family","growth_stage","cotton_variety",
+            "crop_or_fallow","crop_type_secondary","size_class","flower_fruit_or_seeds",
+            "growth_habit","duration","taxonomic_genus","taxonomic_family",
+            "taxonomic_order","taxonomic_subclass","taxonomic_group",
+        ]
+        for f in fields:
+            name = f if not f.startswith("taxonomic_") else f.split("taxonomic_")[1]
+            sample[name if f.startswith("taxonomic_") else f] = _val(row.get(f))
+        sample["row_index"] = int(row.name)
+        return sample
+
+    def _iter_rows_for_review(self):
+        """
+        Filter rows to review. If `only_tags` is provided, restrict to rows whose
+        final_mask_issue_tag (or mask_status) match that condition. Otherwise,
+        default to anything not yet reviewed.
+        """
+        df = self.df
+
+        # By default: anything not final-reviewed
+        mask = (df["mask_status"].isna()) | (df["mask_status"].isin(["unreviewed", "inspected"]))
+        if self.only_tags:
+            # Example semantics:
+            #   only_tags: ["unreviewed"] or ["good","bad"] etc.
+            mask = mask & (
+                df["final_mask_issue_tag"].isin(self.only_tags) |
+                df["mask_status"].isin(self.only_tags) |
+                df["initial_mask_issue_tag"].isin(self.only_tags) |
+                df["tags"].fillna("").str.contains("|".join(self.only_tags), case=False)
+            )
+
+        for _, row in df[mask].iterrows():
+            yield row
 
     def _load_samples(self) -> List[fo.Sample]:
         """
-        Loads FiftyOne samples from the database.
-        Returns:
-            list: A list of FiftyOne samples created from the database entries.
+        Build FiftyOne samples from the CSV rows we plan to review.
         """
-        db_rows = self.db.get_images_for_review(only_tags=self.only_tags)
-        samples = []
-        mask_paths_in_db = set()  # Track mask paths for deduplication
+        samples: List[fo.Sample] = []
+        count_missing = 0
 
-        for row in db_rows:
-            (
-                image_id, image_path, mask_path, refined_mask_path, relabeled_mask_path,
-                initial_tag, final_tag, tags, status, reviewer, timestamp,
-                refine_params_str
-            ) = row
-
-            mask_paths_in_db.add(str(mask_path))  # Store as string for easy comparison
-
-            # Skip if files are missing
-            if not Path(mask_path).exists():
-                log.warning(f"Mask file not found for {image_path}. Skipping.")
+        for row in self._iter_rows_for_review():
+            paths = self._row_to_paths(row)
+            if not paths:
+                count_missing += 1
                 continue
 
-            # Load the initial mask and create a sample
-            initial_mask_array = np.array(Image.open(mask_path).convert("L"), dtype=np.uint8)
-            sample = fo.Sample(filepath=image_path)
-            sample["initial_mask"] = fo.Segmentation(mask=initial_mask_array)
+            try:
+                # Initial mask
+                init_mask = np.array(Image.open(paths["mask"]).convert("L"), dtype=np.uint8)
+                sample = fo.Sample(filepath=str(paths["image"]))
+                sample = self._populate_sample_fields(sample, row)
+                sample["initial_mask"] = fo.Segmentation(mask=init_mask)
 
-            # Attach refined mask if present
-            if refined_mask_path and Path(refined_mask_path).exists():
-                try:
-                    refined_mask_array = np.array(Image.open(refined_mask_path).convert("L"), dtype=np.uint8)
-                    sample["refined_mask"] = fo.Segmentation(mask=refined_mask_array)
-                except Exception as e:
-                    log.warning(f"Error loading refined mask for {refined_mask_path}: {e}")
+                # Propagate currently known tags (display-only)
+                display_tags = []
+                if pd.notna(row.get("final_mask_issue_tag", None)):
+                    display_tags = [t.strip() for t in str(row["final_mask_issue_tag"]).split(",") if t.strip()]
+                elif pd.notna(row.get("initial_mask_issue_tag", None)):
+                    display_tags = [t.strip() for t in str(row["initial_mask_issue_tag"]).split(",") if t.strip()]
+                elif pd.notna(row.get("tags", None)):
+                    display_tags = [t.strip() for t in str(row["tags"]).split(",") if t.strip()]
 
-            # Always display the final tag if it exists and is non-empty
-            display_tags = []
-            
-            if final_tag:
-                display_tags = [t.strip() for t in final_tag.split(",") if t.strip()]
-            elif initial_tag:
-                display_tags = [t.strip() for t in initial_tag.split(",") if t.strip()]
+                if display_tags:
+                    sample.tags = display_tags
 
-            if display_tags:
-                sample.tags = display_tags
+                # Optionally attach refined mask when you start writing those paths to CSV
+                if pd.notna(row.get("refined_cutout_mask_path", None)):
+                    rpath = Path(row["refined_cutout_mask_path"])
+                    if not rpath.is_absolute():
+                        rpath = (self.base_dir / rpath).resolve()
+                    if rpath.exists():
+                        refined = np.array(Image.open(rpath).convert("L"), dtype=np.uint8)
+                        sample["refined_mask"] = fo.Segmentation(mask=refined)
 
-            samples.append(sample)
-        
-        log.info(f"Loaded {len(samples)} samples (DB + new files).")
+                # Cache key so we can write back by row index later
+                sample["row_index"] = int(row.name)
+                samples.append(sample)
+
+            except Exception as e:
+                log.warning(f"Error building sample for row {row.name}: {e}")
+
+        if count_missing:
+            log.info(f"Skipped {count_missing} rows with missing image/mask files")
+
+        log.info(f"Prepared {len(samples)} samples for review")
         return samples
 
+    # ---------------- FiftyOne dataset/session ----------------
 
-    def create_dataset(self, samples: List[fo.Sample]) -> fo.Dataset:
-        """
-        Creates a FiftyOne dataset from samples defined in the SQLite DB.
-        If dataset with same name exists, it will be deleted (optionally you can skip this for persistence).
+    def _create_dataset(self, samples: List[fo.Sample]) -> fo.Dataset:
+        if self.dataset_name in fo.list_datasets():
+            # keep it simple and replace
+            fo.delete_dataset(self.dataset_name)
 
-        Args:
-            samples (list): Ignored—samples are loaded from DB.
+        ds = fo.Dataset(self.dataset_name)
+        ds.add_samples(samples)
+        return ds
 
-        Returns:
-            fo.Dataset: The newly created FiftyOne dataset.
-        """
-        log.info(f"Creating dataset: {self.dataset_name}")
-        try:
-            if self.dataset_name in fo.list_datasets():
-                log.info(f"Dataset '{self.dataset_name}' already exists. Load it.")
-                # dataset = fo.load_dataset(self.dataset_name)
-                # dataset.add_samples(samples)
-                fo.delete_dataset(self.dataset_name)  # removes registry entry
+    def run(self) -> None:
+        samples = self._load_samples()
+        if not samples:
+            log.info("No eligible samples to review. Exiting.")
+            return
 
-            
-            dataset = fo.Dataset(self.dataset_name)
-            dataset.add_samples(samples)
-            return dataset
-        except Exception as e:
-            log.error(f"Error creating/loading dataset {self.dataset_name}: {e}")
-            raise
-
-    def _get_voxel_dataset_map(self) -> Dict[str, str]:
-        """
-        Creates a dictionary of image_name -> user tags from self.dataset.
-
-        Returns:
-            dict: A dictionary where keys are image filenames and values are comma-separated tag strings.
-        """
-        dataset_map = {}
-        for sample in self.dataset:
-            image_name = Path(sample.filepath).name
-            tags = sample.tags if sample.tags else []
-            tags_str = ",".join(tags)
-            dataset_map[image_name] = tags_str
-        return dataset_map
-
-    def run_voxel_inspection(self) -> None:
-        """
-        Runs the full inspection workflow:
-        """
-        log.info("Starting voxel inspection workflow.")
-        samples: List[fo.Sample] = self._load_samples()
-        self.dataset: fo.Dataset = self.create_dataset(samples)
+        self.dataset = self._create_dataset(samples)
         self.session = fo.launch_app(self.dataset, port=self.port)
-        log.info("FiftyOne session started. Waiting for tagging to finish...")
 
+        log.info("FiftyOne session running — close the app when you're done tagging.")
         try:
             self.session.wait()
         except KeyboardInterrupt:
-            print("\nSession manually interrupted by user.")
+            log.info("Session interrupted by user")
         except Exception as e:
             log.error(f"FiftyOne session error: {e}")
         finally:
             try:
                 self.session.refresh()
                 self.session.close()
-                log.info("FiftyOne session ended. Saving tags to database.")
-            except Exception as e:
-                log.warning(f"Error closing FiftyOne session: {e}")
+            except Exception:
+                pass
 
-        self._update_sqlite_db_with_tags()
-        log.info("Voxel inspection workflow complete.")
-        
+        self._write_back_tags()
+        self._save_csv()
 
+    # ---------------- Write-back logic ----------------
 
-    def _update_sqlite_db_with_tags(self) -> None:
+    def _write_back_tags(self) -> None:
         """
-        After the session, updates SQLite DB with tags for all samples in the dataset.
+        Collect tags from the FiftyOne dataset and update rows in self.df.
         """
+        if not self.dataset:
+            return
+
         timestamp = datetime.datetime.now().isoformat()
-        updates = []
-        for sample in self.dataset:
-            image_name = Path(sample.filepath).name
-            canonical_tags = self.normalize_tags(sample.tags)
-            tags = set([t.lower() for t in canonical_tags if t])
-            refine_params = sample["refine_params"] if "refine_params" in sample else None
-            
-            if "initial_tag" in sample:
-                initial_tag = sample["initial_tag"]
-            else:
-                initial_tag = None
-                
-            # initial tag already exists and hasn't changed
-            if initial_tag and initial_tag.lower() in tags:
-                initial_tag = initial_tag.lower()
 
-            # if initial tag doesn't exist or the initial tag is not in tags, set it to the current tags other than good, bad, or other
-            elif not initial_tag or initial_tag.lower() not in tags:
-                initial_tag = ",".join(sorted(tags - {"good", "bad", "other"})) if tags else None
-            
-            # Update the initial tag if anything in the tags is anything other than good, bad, other, or the initial_tag
+        for sample in self.dataset:
+            row_idx = int(sample["row_index"]) if "row_index" in sample else -1
+            if row_idx < 0 or row_idx >= len(self.df):
+                continue
+
+            # Normalize tags
+            canonical = self.normalize_tags(sample.tags or [])
+            tags_set = set(t.lower() for t in canonical)
+
+            # Determine state machine
             final_tag = None
             status = None
-            reviewer = None
+            initial_tag = self.df.at[row_idx, "initial_mask_issue_tag"]
+            initial_tag = str(initial_tag).lower() if pd.notna(initial_tag) else None
 
-            if "good" in tags:
-                final_tag = "good"
-                status = "reviewed"
-                reviewer = self.reviewer
-            elif "bad" in tags:
-                final_tag = "bad"
-                status = "reviewed"
-                reviewer = self.reviewer
-            elif "other" in tags:
-                final_tag = "other"
-                status = "reviewed"
-                reviewer = self.reviewer
-            elif tags:
-                initial_tag = ",".join(sorted(tags))
+            if "good" in tags_set:
+                final_tag, status = "good", "finalized"
+            elif "bad" in tags_set:
+                final_tag, status = "bad", "reviewed"
+            elif "other" in tags_set:
+                final_tag, status = "other", "reviewed"
+            elif tags_set:
+                # inspected but not finalized
                 status = "inspected"
-                reviewer = self.reviewer
             else:
                 status = "unreviewed"
-                reviewer = None
 
-            if isinstance(tags, set):
-                tags = ",".join(sorted(tags))
-            updates.append((initial_tag, final_tag, tags, status, reviewer, timestamp, refine_params, image_name))
-        self.db.bulk_update_tags(updates)
-        self.db.commit()
+            # Init tag: if none or stale, set to anything except terminal states
+            if not initial_tag or initial_tag not in tags_set:
+                non_terminal = tags_set - {"good", "bad", "other"}
+                initial_tag = ",".join(sorted(non_terminal)) if non_terminal else initial_tag
 
-    def __del__(self):
-        try:
-            self.db.close()
-        except Exception as e:
-            log.warning(f"Error on DB close: {e}")
+            tags_str = ",".join(sorted(tags_set)) if tags_set else None
+
+
+            # Write back
+            self.df.at[row_idx, "initial_mask_issue_tag"] = initial_tag
+            self.df.at[row_idx, "final_mask_issue_tag"] = final_tag
+            self.df.at[row_idx, "tags"] = tags_str
+            self.df.at[row_idx, "mask_status"] = status
+            self.df.at[row_idx, "mask_reviewer"] = self.reviewer if status in ("inspected", "reviewed") else None
+            self.df.at[row_idx, "mask_review_datetime"] = timestamp
+
 
 def main(cfg: DictConfig) -> None:
-    """
-    Entry point for launching the voxel inspection process.
-    """
-    # TODO: Move images marked as good to long-term storage or test directory.
-    log.info("Mask inspection script started.")
+    log.info("Starting mask inspection (temp_db mode)")
     try:
-        inspector = FiftyOneMaskInspector(cfg)
-        inspector.run_voxel_inspection()
+        FiftyOneMaskInspector(cfg).run()
     except Exception as e:
-        log.error(f"Fatal error in main(): {e}")
-    log.info("Mask inspection script finished.")
+        log.error(f"Fatal error in inspection: {e}")
+    log.info("Finished mask inspection")
