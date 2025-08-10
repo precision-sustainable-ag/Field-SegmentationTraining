@@ -9,6 +9,10 @@ seed: 42
 use_data_normalization: false
 use_data_augmentation: true
 
+dataloader_visualizer:
+  enabled: true
+  num_samples: 6
+
 # Optimizer:
 optimizer:
   _target_: "torch.optim.AdamW"

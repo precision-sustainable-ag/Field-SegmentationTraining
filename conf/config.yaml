@@ -35,7 +35,6 @@ tasks: # TODO: make the other tasks bool key/values
   
   train:
     vis_augment: true
-    vis_dataloader: true
 
   inference:
     - inference

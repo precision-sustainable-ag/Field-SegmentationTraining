@@ -18,6 +18,7 @@ from src.train_utils.models.lit_segmentation import LitSegmentation
 from src.train_utils.data.dataset import FieldDataset
 from src.train_utils.data.collate import get_batch_collate_fn
 from src.train_utils.augmentation_visualizer import vis_augmentation_batch
+from src.train_utils.dataloader_visualizer import vis_dataloader_batch
 
 import torch
 from torch.utils.data._utils.collate import default_collate
@@ -88,6 +89,10 @@ def train(cfg: DictConfig) -> None:
     # If augmentation visualization is enabled, log a sample batch before training
     if cfg.tasks.train.vis_augment and train_loader.dataset.use_augment:
         vis_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_visualizer.num_samples)
+
+    # If dataloader visualization is enabled, visualize a batch from the training DataLoader
+    if cfg.train.dataloader_visualizer:
+        vis_dataloader_batch(cfg)
 
     # === 5. Callbacks ===
     checkpoint_cb = ModelCheckpoint(
