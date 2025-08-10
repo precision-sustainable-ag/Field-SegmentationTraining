@@ -20,17 +20,21 @@ Legends list only the transforms actually applied.
 import random
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+
 import numpy as np
 from pathlib import Path
 from torchvision.utils import make_grid, save_image
 from PIL import Image, ImageDraw, ImageFont
 from torchvision.transforms import ToTensor
+from omegaconf import DictConfig
 import hydra
 from hydra.core.hydra_config import HydraConfig
 import wandb
 
+from src.train_utils.data.dataset import FieldDataset
 from src.train_utils.data.augment import get_noop_transform
-from src.train_utils.data.collate import mixup_collate, cutmix_collate, mosaic_collate
+from src.train_utils.data.collate import mixup_collate, cutmix_collate, mosaic_collate, get_batch_collate_fn
 
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw
@@ -335,3 +339,27 @@ def vis_augmentation_batch(
         exp = getattr(logger, "experiment", None)
         if exp and hasattr(exp, "log"):
             exp.log({"train/aug_visualization": [wandb.Image(str(out_file))]})
+
+def run_viz_augments(cfg: DictConfig) -> None:
+    """
+    Standalone augmentation preview:
+    builds a minimal train DataLoader and renders the augmentation grid.
+    """
+    # dataset & loader (no Lightning/Trainer involved)
+    ds = FieldDataset(cfg, mode="train")
+    collate = get_batch_collate_fn(cfg.augment.train.batch)
+    loader = DataLoader(
+        ds,
+        batch_size=max(1, min(8, len(ds))),  # small batch is plenty for viz
+        shuffle=True,
+        num_workers=cfg.train.num_workers,
+        pin_memory=cfg.train.pin_memory,
+        collate_fn=collate,
+    )
+
+    # reuse the in-file renderer
+    vis_augmentation_batch(
+        loader,
+        cfg.train.logger,
+        num_samples=cfg.augment.augmentation_visualizer.num_samples,
+    )
