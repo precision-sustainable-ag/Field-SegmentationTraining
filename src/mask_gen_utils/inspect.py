@@ -353,7 +353,7 @@ class FiftyOneMaskInspector:
             self.df.at[row_idx, "final_mask_issue_tag"] = final_tag
             self.df.at[row_idx, "tags"] = tags_str
             self.df.at[row_idx, "mask_status"] = status
-            self.df.at[row_idx, "mask_reviewer"] = self.reviewer if status in ("inspected", "reviewed") else None
+            self.df.at[row_idx, "mask_reviewer"] = self.reviewer if status in ("inspected", "reviewed", "finalized") else None
             self.df.at[row_idx, "mask_review_datetime"] = timestamp
 
 
