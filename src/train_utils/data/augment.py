@@ -279,12 +279,17 @@ def _build_contrast_enhancement(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
 
 def _build_context_independence(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
     ops: List[A.BasicTransform] = []
-    spec = cfg.get("grid_shuffle", {})
-    if spec.get("enable", False):
-        cls = _maybe("GridShuffle")
-        if cls:
-            params = _translate_params("grid_shuffle", {k: v for k, v in spec.items() if k != "enable"})
-            ops.append(cls(**params))
+    # Support the new key; optionally keep backward-compat for old 'grid_shuffle'
+    for key, cls_name in [
+        ("random_grid_shuffle", "RandomGridShuffle"),  # v2 name
+        ("grid_shuffle",        "RandomGridShuffle"),  # legacy config key, optional
+    ]:
+        spec = cfg.get(key, {})
+        if spec.get("enable", False):
+            cls = _maybe(cls_name)
+            if cls:
+                params = _translate_params(key, {k: v for k, v in spec.items() if k != "enable"})
+                ops.append(cls(**params))
     return ops
 
 

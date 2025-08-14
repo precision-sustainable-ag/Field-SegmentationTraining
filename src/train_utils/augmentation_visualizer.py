@@ -52,7 +52,7 @@ SPATIAL_MASK_SAFE = {
     "HorizontalFlip", "VerticalFlip", "RandomRotate90",
     "Affine", "ShiftScaleRotate", "Perspective",
     "ElasticTransform", "GridDistortion", "OpticalDistortion",
-    "RandomScale","ThinPlateSpline", "GridShuffle"
+    "RandomScale","ThinPlateSpline", "RandomGridShuffle"
     # spatial sizing
     "RandomCrop", "SmallestMaxSize", "LongestMaxSize", "PadIfNeeded",
     # your custom dual op for masks

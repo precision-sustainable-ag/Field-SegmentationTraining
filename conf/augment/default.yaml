@@ -156,7 +156,7 @@ train:
         enable: true
         p: 0.2
         replace: false
-      grid_shuffle:
+      random_grid_shuffle:
         enable: true
         p: 1.0
         grid: [3, 3]
