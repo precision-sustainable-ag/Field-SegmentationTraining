@@ -448,8 +448,6 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
-    return blocks
-
     # L) weather_effects
     sub = getattr(t_pixel, "weather_effects", None)
     if sub and getattr(sub.mode, "enable", False):
@@ -474,6 +472,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
+    return blocks
 
 def get_train_transforms(cfg) -> A.ReplayCompose:
     """

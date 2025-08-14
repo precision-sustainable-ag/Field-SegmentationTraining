@@ -335,10 +335,14 @@ train:
         p: 0.3
         replace: false
       xy_masking:
-        enable: true        # A.XYMasking if present
+        enable: false     # set to true only if you really want this
         p: 1.0
-        x_ranges: [[0.10, 0.20]]
-        y_ranges: [[0.30, 0.40]]
+        num_masks_x: 2
+        num_masks_y: 0
+        mask_x_length: [0.10, 0.20]   # pick sensible fractions or ints per docs
+        mask_y_length: [0.00, 0.00]
+        fill: 0
+        fill_mask: 0
     # ── N) Domain Adaptation (requires reference images) ─────────────────────────
     domain_adaptation:
       mode:
@@ -347,11 +351,11 @@ train:
         p: 0.2
         replace: false
       fda:
-        enable: true        # A.FDA if available
+        enable: false        # A.FDA if available
         p: 1.0
         beta_limit: [0.01, 0.05]
       histogram_matching:
-        enable: true        # A.HistogramMatching
+        enable: false        # A.HistogramMatching
         p: 1.0
 
   # ─── batch-level mixing ops ─────────────────────────────────────

@@ -59,6 +59,8 @@ SPATIAL_MASK_SAFE = {
     "CoarseDropoutDual",
 }
 
+WRAPPER_NAMES = {"SomeOf", "OneOf", "Sequential"}
+
 # Things we generally don't want in the legend
 LEGEND_SKIP = {"ToTensorV2", "ReplayCompose", "Resize", "PadIfNeeded"}
 
@@ -84,6 +86,76 @@ def _wrap_label_for_wrapper(cls_name: str, rec: dict) -> str:
         base = "All"
     return base
 
+def _extract_applied_leaf_names(replay_obj) -> list[str]:
+    """
+    Recursively traverse an Albumentations ReplayCompose replay structure and
+    return class names for *leaf* transforms with applied=True.
+
+    Handles nesting under various keys Albumentations uses for wrappers.
+    """
+    names = []
+
+    if not replay_obj:
+        return names
+
+    # unify to a list of transform records
+    if isinstance(replay_obj, dict):
+        transforms = replay_obj.get("transforms", [])
+    elif isinstance(replay_obj, list):
+        transforms = replay_obj
+    else:
+        return names
+
+    for rec in transforms:
+        if not isinstance(rec, dict):
+            continue
+
+        cls_name = rec.get("__class_fullname__", "").split(".")[-1]
+        applied  = rec.get("applied", False)
+
+        # If this is a wrapper, dive into potential children locations.
+        if cls_name in WRAPPER_NAMES:
+            # Common places children may live:
+            # 1) rec.get("children")                (some versions)
+            # 2) rec.get("replay", {}).get("transforms")
+            # 3) rec.get("params", {}).get("transforms")  (init-time objects; may lack 'applied')
+            # 4) rec.get("transforms")                   (already a list)
+            child_lists = []
+
+            # 1
+            if isinstance(rec.get("children"), list):
+                child_lists.append(rec["children"])
+
+            # 2
+            if isinstance(rec.get("replay"), dict) and isinstance(rec["replay"].get("transforms"), list):
+                child_lists.append(rec["replay"]["transforms"])
+
+            # 3
+            if isinstance(rec.get("params"), dict) and isinstance(rec["params"].get("transforms"), list):
+                child_lists.append(rec["params"]["transforms"])
+
+            # 4
+            if isinstance(rec.get("transforms"), list):
+                child_lists.append(rec["transforms"])
+
+            found_child = False
+            for child in child_lists:
+                child_names = _extract_applied_leaf_names(child)
+                if child_names:
+                    names.extend(child_names)
+                    found_child = True
+
+            # Fallback: if wrapper is applied but we couldn't discover children,
+            # at least record the wrapper with a star to indicate something ran.
+            if applied and not found_child:
+                names.append(f"{cls_name}*")
+            continue
+
+        # Leaf transform: only record if applied
+        if applied:
+            names.append(cls_name)
+
+    return names
 
 def render_legend(
     replay: dict,
@@ -95,7 +167,8 @@ def render_legend(
     min_font_size: int,
 ) -> torch.Tensor:
     """
-    Render a vertical legend panel listing applied transform names.
+    Render a vertical legend panel listing applied *leaf* transform names.
+    For mask_mode, filter to only mask-safe class names.
 
     Args:
         replay: Albumentations ReplayCompose output dict or custom replay.
@@ -110,40 +183,26 @@ def render_legend(
     except IOError:
         font = ImageFont.load_default()
 
-    labels: list[str] = []
-    for rec in replay.get("transforms", []):
-        if not rec.get("applied", False):
-            continue
+    # 1) collect applied leaf names (recursively expands wrappers)
+    labels = _extract_applied_leaf_names(replay)
 
-        cls_name = rec.get("__class_fullname__", "").split(".")[-1]
-        if cls_name in LEGEND_SKIP:
-            continue
+    # 2) filter for mask legend
+    if mask_mode:
+        labels = [n for n in labels if n in mask_names]
 
-        # For wrappers, show a concise label
-        if cls_name in {"SomeOf", "OneOf", "Sequential"}:
-            lbl = _wrap_label_for_wrapper(cls_name, rec)
-            # Always show wrappers; they explain selection behavior
-            labels.append(lbl)
-            continue
-
-        # Only include mask-safe transforms if we're rendering the mask legend
-        if mask_mode and cls_name not in mask_names:
-            continue
-
-        labels.append(cls_name)
-
+    # 3) fallback
     if not labels:
         labels = ["No augmentations applied"]
 
+    # 4) draw panel
     legend_width = max(full_width // 2, 100)
     panel = Image.new("RGB", (legend_width, height), color=(255, 255, 255))
-    draw = ImageDraw.Draw(panel)
+    draw  = ImageDraw.Draw(panel)
     y = 5
     for lbl in labels:
         draw.text((5, y), lbl, fill="black", font=font)
         bbox = draw.textbbox((0, 0), lbl, font=font)
-        text_h = bbox[3] - bbox[1]
-        y += text_h + 4
+        y += (bbox[3] - bbox[1]) + 4
 
     legend = ToTensor()(panel)
     pad_w = full_width - legend_width
