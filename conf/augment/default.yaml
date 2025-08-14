@@ -79,6 +79,8 @@ train:
         enable: true
         p: 0.7
         replace: false
+
+      # core rigid-ish geometry first
       affine:
         enable: true
         p: 0.8
@@ -92,21 +94,11 @@ train:
         scale: [0.05, 0.10]
         fit_output: false
       shift_scale_rotate:
-        enable: false
+        enable: false           # prefer Affine; keep off to avoid warning
         p: 0.5
         shift_limit: 0.1
         scale_limit: 0.1
         rotate_limit: 30
-      elastic_transform:
-        enable: true
-        p: 0.2
-        alpha: 120
-        sigma: 8
-      grid_distortion:
-        enable: true
-        p: 0.2
-        num_steps: 5
-        distort_limit: [-0.3, 0.3]
       optical_distortion:
         enable: true
         p: 0.2
@@ -115,6 +107,21 @@ train:
         enable: true
         p: 0.3
         scale_limit: [0.8, 1.2]   # random zoom in/out
+
+      # ── put non‑linear warps at the END of this group ───────────────
+      grid_distortion:
+        enable: true
+        p: 0.2
+        num_steps: 5
+        distort_limit: [-0.3, 0.3]
+      elastic_transform:
+        enable: true
+        p: 0.2
+        alpha: 120
+        sigma: 8
+      thin_plate_spline:
+        enable: true            # only if A.ThinPlateSpline exists in your version
+        p: 0.2
 
     # ── D) Occlusion / Dropout (HIGHLY RECOMMENDED; choose ONE) ──────
     dropout_occlusion:
@@ -142,13 +149,25 @@ train:
         scale: [0.02, 0.10]
         ratio: [0.3, 3.3]
 
+    # ── E) Context Independence (use with caution for segmentation) ─────────────
+    context_independence:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.2
+        replace: false
+      grid_shuffle:
+        enable: true
+        p: 1.0
+        grid: [3, 3]
+
   # =========================
   # PIXEL-LEVEL TRANSFORM GROUPS
   # =========================
   pixel:
     enable: true     # master switch for all pixel‐level transforms
 
-    # ── E) Color Space Reduction (sparingly; choose ONE) ─────────────
+    # ── F) Color Space Reduction (sparingly; choose ONE) ─────────────
     color_space_reduction:
       mode:
         type: one_of
@@ -163,7 +182,7 @@ train:
         p: 0.3
         channel_drop_range: [1, 1]
 
-    # ── F) Color Augmentations (choose ONE) ──────────────────────────
+    # ── G) Color Augmentations (choose ONE) ──────────────────────────
     color_augmentations:
       mode:
         type: one_of
@@ -192,6 +211,9 @@ train:
         enable: true
         p: 0.8
         gamma_limit: [80, 120]
+      planckian_jitter:
+        enable: true       # A.PlanckianJitter if available
+        p: 0.3
       # optionally include slight channel operations in this bucket:
       rgb_shift:
         enable: true
@@ -203,7 +225,7 @@ train:
         enable: true
         p: 0.2
 
-    # ── G) Blur (low probability; choose ONE) ────────────────────────
+    # ── H) Blur (low probability; choose ONE) ────────────────────────
     blur:
       mode:
         type: one_of
@@ -222,8 +244,14 @@ train:
         enable: true
         p: 0.5
         blur_limit: [3, 7]
+      advanced_blur:
+        enable: true       # A.AdvancedBlur if available
+        p: 0.3
+      zoom_blur:
+        enable: true       # A.ZoomBlur if available
+        p: 0.3
 
-    # ── H) Noise (low probability; choose ONE) ───────────────────────
+    # ── I) Noise (low probability; choose ONE) ───────────────────────
     noise:
       mode:
         type: one_of
@@ -248,7 +276,7 @@ train:
         enable: true
         p: 0.5
 
-    # ── I) Compression / Downscaling (very low prob; choose ONE) ────
+    # ── J) Compression / Downscaling (very low prob; choose ONE) ────
     compression_downscale:
       mode:
         type: one_of
@@ -264,7 +292,7 @@ train:
         p: 0.5
         scale_range: [0.25, 0.50]
 
-    # ── J) Contrast Enhancement (optional; choose ONE) ───────────────
+    # ── K) Contrast Enhancement (optional; choose ONE) ───────────────
     contrast_enhancement:
       mode:
         type: one_of
@@ -276,6 +304,55 @@ train:
         p: 1.0
         clip_limit: 2.0
         tile_grid_size: [8, 8]
+    # ── L) Weather / Outdoor Effects (image-only) ────────────────────────────────
+    weather_effects:
+      mode:
+        type: some_of       # pick n of them per sample
+        enable: true
+        p: 0.3
+        n: 1
+        replace: false
+      random_sun_flare:
+        enable: true
+        p: 0.2
+      random_shadow:
+        enable: true
+        p: 0.3
+      random_fog:
+        enable: true
+        p: 0.2
+      random_rain:
+        enable: true
+        p: 0.2
+      random_snow:
+        enable: true
+        p: 0.2
+    # ── M) Spectrogram Augmentation (only if your data are spectrograms) ─────────
+    spectrogram:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.3
+        replace: false
+      xy_masking:
+        enable: true        # A.XYMasking if present
+        p: 1.0
+        x_ranges: [[0.10, 0.20]]
+        y_ranges: [[0.30, 0.40]]
+    # ── N) Domain Adaptation (requires reference images) ─────────────────────────
+    domain_adaptation:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.2
+        replace: false
+      fda:
+        enable: true        # A.FDA if available
+        p: 1.0
+        beta_limit: [0.01, 0.05]
+      histogram_matching:
+        enable: true        # A.HistogramMatching
+        p: 1.0
 
   # ─── batch-level mixing ops ─────────────────────────────────────
   batch:

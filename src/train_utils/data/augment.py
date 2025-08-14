@@ -114,17 +114,19 @@ def _build_basic_geometric(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
 
 
 def _build_affine_perspective(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
-    mapping = {
-        "affine": "Affine",
-        "perspective": "Perspective",
-        "shift_scale_rotate": "ShiftScaleRotate",
-        "elastic_transform": "ElasticTransform",
-        "grid_distortion": "GridDistortion",
-        "optical_distortion": "OpticalDistortion",
-        "random_scale": "RandomScale",
-    }
+    entries = [
+        ("affine",             "Affine"),
+        ("perspective",        "Perspective"),
+        ("shift_scale_rotate", "ShiftScaleRotate"),
+        ("optical_distortion", "OpticalDistortion"),
+        ("random_scale",       "RandomScale"),
+        # non‑linear warps placed at the end of the group
+        ("grid_distortion",    "GridDistortion"),
+        ("elastic_transform",  "ElasticTransform"),
+        ("thin_plate_spline",  "ThinPlateSpline"),  # may not exist in some installs
+    ]
     ops: List[A.BasicTransform] = []
-    for key, cls_name in mapping.items():
+    for key, cls_name in entries:
         spec = cfg.get(key, {})
         if spec.get("enable", False):
             cls = _maybe(cls_name)
@@ -191,11 +193,12 @@ def _build_color_space_reduction(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
 def _build_color_augmentations(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
     mapping = {
         "random_brightness_contrast": "RandomBrightnessContrast",
-        "color_jitter": "ColorJitter",
-        "hue_saturation_value": "HueSaturationValue",
-        "random_gamma": "RandomGamma",
-        "rgb_shift": "RGBShift",
-        "channel_shuffle": "ChannelShuffle",
+        "color_jitter":               "ColorJitter",
+        "hue_saturation_value":       "HueSaturationValue",
+        "random_gamma":               "RandomGamma",
+        "rgb_shift":                  "RGBShift",
+        "channel_shuffle":            "ChannelShuffle",
+        "planckian_jitter":           "PlanckianJitter",   # NEW (if available)
     }
     ops: List[A.BasicTransform] = []
     for key, cls_name in mapping.items():
@@ -206,13 +209,16 @@ def _build_color_augmentations(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
                 params = _translate_params(key, {k: v for k, v in spec.items() if k != "enable"})
                 ops.append(cls(**params))
     return ops
+
 
 
 def _build_blur(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
     mapping = {
         "gaussian_blur": "GaussianBlur",
-        "median_blur": "MedianBlur",
-        "motion_blur": "MotionBlur",
+        "median_blur":   "MedianBlur",
+        "motion_blur":   "MotionBlur",
+        "advanced_blur": "AdvancedBlur",  # NEW (if available)
+        "zoom_blur":     "ZoomBlur",      # NEW (if available)
     }
     ops: List[A.BasicTransform] = []
     for key, cls_name in mapping.items():
@@ -223,6 +229,7 @@ def _build_blur(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
                 params = _translate_params(key, {k: v for k, v in spec.items() if k != "enable"})
                 ops.append(cls(**params))
     return ops
+
 
 
 def _build_noise(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
@@ -266,6 +273,64 @@ def _build_contrast_enhancement(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
         cls = _maybe("CLAHE")
         if cls:
             params = _translate_params("clahe", {k: v for k, v in spec.items() if k != "enable"})
+            ops.append(cls(**params))
+    return ops
+
+
+def _build_context_independence(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
+    ops: List[A.BasicTransform] = []
+    spec = cfg.get("grid_shuffle", {})
+    if spec.get("enable", False):
+        cls = _maybe("GridShuffle")
+        if cls:
+            params = _translate_params("grid_shuffle", {k: v for k, v in spec.items() if k != "enable"})
+            ops.append(cls(**params))
+    return ops
+
+
+def _build_weather_effects(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
+    mapping = {
+        "random_sun_flare": "RandomSunFlare",
+        "random_shadow":    "RandomShadow",
+        "random_fog":       "RandomFog",
+        "random_rain":      "RandomRain",
+        "random_snow":      "RandomSnow",
+    }
+    ops: List[A.BasicTransform] = []
+    for key, cls_name in mapping.items():
+        spec = cfg.get(key, {})
+        if spec.get("enable", False):
+            cls = _maybe(cls_name)
+            if cls:
+                params = _translate_params(key, {k: v for k, v in spec.items() if k != "enable"})
+                ops.append(cls(**params))
+    return ops
+
+
+def _build_spectrogram(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
+    ops: List[A.BasicTransform] = []
+    spec = cfg.get("xy_masking", {})
+    if spec.get("enable", False):
+        cls = _maybe("XYMasking")
+        if cls:
+            params = _translate_params("xy_masking", {k: v for k, v in spec.items() if k != "enable"})
+            ops.append(cls(**params))
+    return ops
+
+
+def _build_domain_adaptation(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
+    ops: List[A.BasicTransform] = []
+    spec = cfg.get("fda", {})
+    if spec.get("enable", False):
+        cls = _maybe("FDA")
+        if cls:
+            params = _translate_params("fda", {k: v for k, v in spec.items() if k != "enable"})
+            ops.append(cls(**params))
+    spec = cfg.get("histogram_matching", {})
+    if spec.get("enable", False):
+        cls = _maybe("HistogramMatching")
+        if cls:
+            params = _translate_params("histogram_matching", {k: v for k, v in spec.items() if k != "enable"})
             ops.append(cls(**params))
     return ops
 
@@ -315,6 +380,14 @@ def _build_spatial_block(t_spatial: Any, H: int, W: int) -> List[A.BasicTransfor
         if blk:
             blocks.append(blk)
 
+    # E) context_independence (optional; careful for segmentation)
+    sub = getattr(t_spatial, "context_independence", None)
+    if sub and getattr(sub.mode, "enable", False):
+        ops = _build_context_independence(sub)
+        blk = _wrap_mode(ops, dict(sub.mode))
+        if blk:
+            blocks.append(blk)
+
     return blocks
 
 
@@ -327,7 +400,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
     if not getattr(t_pixel, "enable", False):
         return blocks
 
-    # E) color_space_reduction
+    # F) color_space_reduction
     sub = getattr(t_pixel, "color_space_reduction", None)
     if sub and getattr(sub.mode, "enable", False):
         ops = _build_color_space_reduction(sub)
@@ -335,7 +408,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
-    # F) color_augmentations
+    # G) color_augmentations
     sub = getattr(t_pixel, "color_augmentations", None)
     if sub and getattr(sub.mode, "enable", False):
         ops = _build_color_augmentations(sub)
@@ -343,7 +416,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
-    # G) blur
+    # H) blur
     sub = getattr(t_pixel, "blur", None)
     if sub and getattr(sub.mode, "enable", False):
         ops = _build_blur(sub)
@@ -351,7 +424,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
-    # H) noise
+    # I) noise
     sub = getattr(t_pixel, "noise", None)
     if sub and getattr(sub.mode, "enable", False):
         ops = _build_noise(sub)
@@ -359,7 +432,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
-    # I) compression_downscale
+    # J) compression_downscale
     sub = getattr(t_pixel, "compression_downscale", None)
     if sub and getattr(sub.mode, "enable", False):
         ops = _build_compression_downscale(sub)
@@ -367,7 +440,7 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
         if blk:
             blocks.append(blk)
 
-    # J) contrast_enhancement
+    # K) contrast_enhancement
     sub = getattr(t_pixel, "contrast_enhancement", None)
     if sub and getattr(sub.mode, "enable", False):
         ops = _build_contrast_enhancement(sub)
@@ -376,6 +449,30 @@ def _build_pixel_block(t_pixel: Any) -> List[A.BasicTransform]:
             blocks.append(blk)
 
     return blocks
+
+    # L) weather_effects
+    sub = getattr(t_pixel, "weather_effects", None)
+    if sub and getattr(sub.mode, "enable", False):
+        ops = _build_weather_effects(sub)
+        blk = _wrap_mode(ops, dict(sub.mode))
+        if blk:
+            blocks.append(blk)
+
+    # M) spectrogram (optional)
+    sub = getattr(t_pixel, "spectrogram", None)
+    if sub and getattr(sub.mode, "enable", False):
+        ops = _build_spectrogram(sub)
+        blk = _wrap_mode(ops, dict(sub.mode))
+        if blk:
+            blocks.append(blk)
+
+    # N) domain_adaptation (requires reference images; keep disabled until wired)
+    sub = getattr(t_pixel, "domain_adaptation", None)
+    if sub and getattr(sub.mode, "enable", False):
+        ops = _build_domain_adaptation(sub)
+        blk = _wrap_mode(ops, dict(sub.mode))
+        if blk:
+            blocks.append(blk)
 
 
 def get_train_transforms(cfg) -> A.ReplayCompose:
