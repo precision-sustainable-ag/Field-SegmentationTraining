@@ -1,6 +1,6 @@
-# All data‐augmentation transforms. Your datamodule should read these keys 
+# conf/augment/default_grouped.yaml
+# All data‐augmentation transforms. Your datamodule should read these keys
 # and apply the appropriate torchvision / albumentations transforms.
-# conf/augment/default.yaml
 
 # ─── how many samples to visualize each epoch ─────────────────────────────
 augmentation_visualizer:
@@ -16,162 +16,284 @@ augmentation_visualizer:
 # ─── train transformations ──────────────────────────────────────────
 train:
   enable: true
-  
+
   # target size for all spatial ops (pad/crop/resize happens upstream)
   img_size:
     height: ${preprocess.pad_gridcrop_resize.size.height}
     width:  ${preprocess.pad_gridcrop_resize.size.width}
 
+  # =========================
+  # SPATIAL TRANSFORM GROUPS
+  # =========================
   spatial:
     enable: true     # master switch for all spatial transforms
 
-    # ─── pick some spatial ops ───────────────────────────────
-    # with probability p, applies some n of the spatial transforms with/without replacement
-    some_of:
-      enable: true
-      p: 1.0
-      n: 4
-      replace: false
+    # ── A) Initial Resizing / Cropping (choose ONE strategy) ─────────
+    initial_resize_crop:
+      mode:
+        type: one_of      # one_of | some_of | all
+        enable: true
+        p: 1.0
+        n: 1              # used only if type == some_of
+        replace: false
+      random_crop:
+        enable: true
+        p: 1.0
+        height: ${augment.train.img_size.height}
+        width:  ${augment.train.img_size.width}
+      # Alternative strategies if you ever want them (disabled by default):
+      smallest_max_size_then_random_crop:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        final_height: ${augment.train.img_size.height}
+        final_width:  ${augment.train.img_size.width}
+      longest_max_size_then_pad_if_needed:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        pad_if_needed: true
+        border_mode: "constant"
 
-    # simple flips & rotations
-    horizontal_flip:
-      enable: true
-      p: 0.5         # mirror left‐right
-    vertical_flip:
-      enable: true
-      p: 0.3         # mirror up‐down
-    random_rotate90:
-      enable: true
-      p: 0.5         # rotate by a multiple of 90°
+    # ── B) Basic Geometric (usually “always include”) ────────────────
+    basic_geometric:
+      mode:
+        type: all         # horizontal/vertical/90° rotations in one block
+        enable: true
+        p: 1.0
+        replace: false
+      horizontal_flip:
+        enable: true
+        p: 0.5         # mirror left‐right
+      vertical_flip:
+        enable: true
+        p: 0.3         # mirror up‐down
+      random_rotate90:
+        enable: true
+        p: 0.5         # rotate by a multiple of 90°
 
-    # cropping and geometric warps
-    random_crop:
-      enable: true
-      p: 0.5
-      height: ${augment.train.img_size.height}
-      width:  ${augment.train.img_size.width}
-    affine:
-      enable: true
-      p: 0.3
-      scale: [0.9, 1.1]
-      translate_percent: [-0.1, 0.1]
-      rotate: [-15, 15]
-      shear: [-10, 10]
-    elastic_transform:
-      enable: true
-      p: 0.2
-      alpha: 120
-      sigma: 8            # elastic distortions
-    grid_distortion:
-      enable: true
-      p: 0.2
-      num_steps: 5
-      distort_limit: [-0.3, 0.3]
-    perspective:
-      enable: true
-      p: 0.2
-      scale: [0.1, 0.2]
-      fit_output: false
-    optical_distortion:
-      enable: true
-      p: 0.2
-      distort_limit: [-0.2, 0.2]
-    random_scale:
-      enable: true
-      p: 0.3
-      scale_limit: [0.8, 1.2]         # random zoom in/out
-    shift_scale_rotate:
-      enable: true
-      p: 0.3
-      shift_limit: 0.1
-      scale_limit: 0.1
-      rotate_limit: 30
-    coarse_dropout:
-      enable: true
-      p: 0.2                   # “black out”
-      
+    # ── C) Affine / Perspective / Warps (choose ONE) ─────────────────
+    affine_perspective:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.7
+        replace: false
+      affine:
+        enable: true
+        p: 0.8
+        scale: [0.9, 1.1]
+        translate_percent: [-0.1, 0.1]
+        rotate: [-15, 15]
+        shear: [-10, 10]
+      perspective:
+        enable: true
+        p: 0.8
+        scale: [0.05, 0.10]
+        fit_output: false
+      shift_scale_rotate:
+        enable: false
+        p: 0.5
+        shift_limit: 0.1
+        scale_limit: 0.1
+        rotate_limit: 30
+      elastic_transform:
+        enable: true
+        p: 0.2
+        alpha: 120
+        sigma: 8
+      grid_distortion:
+        enable: true
+        p: 0.2
+        num_steps: 5
+        distort_limit: [-0.3, 0.3]
+      optical_distortion:
+        enable: true
+        p: 0.2
+        distort_limit: [-0.2, 0.2]
+      random_scale:
+        enable: true
+        p: 0.3
+        scale_limit: [0.8, 1.2]   # random zoom in/out
+
+    # ── D) Occlusion / Dropout (HIGHLY RECOMMENDED; choose ONE) ──────
+    dropout_occlusion:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.5
+        replace: false
+      coarse_dropout:
+        enable: true
+        p: 1.0
+        # hole sizing in fraction of image side (typical ranges)
+        num_holes_range: [1, 8]
+        hole_height_range: [0.1, 0.25]
+        hole_width_range:  [0.1, 0.25]
+        fill_value: 0
+      grid_dropout:
+        enable: true
+        p: 0.5
+        ratio: 0.5
+        unit_size_range: [12, 26]
+      random_erasing:
+        enable: true
+        p: 0.5
+        scale: [0.02, 0.10]
+        ratio: [0.3, 3.3]
+
+  # =========================
+  # PIXEL-LEVEL TRANSFORM GROUPS
+  # =========================
   pixel:
     enable: true     # master switch for all pixel‐level transforms
 
-    # ─── pick some pixel‐level ops ─────────────────────────────
-    # with probability p, applies some n of the pixel transforms with/without replacement
-    some_of:
-      enable: true
-      p: 1.0
-      n: 4
-      replace: false
+    # ── E) Color Space Reduction (sparingly; choose ONE) ─────────────
+    color_space_reduction:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.2
+        replace: false
+      to_gray:
+        enable: true
+        p: 0.3
+      channel_dropout:
+        enable: true
+        p: 0.3
+        channel_drop_range: [1, 1]
 
-    # color and brightness adjustments
-    color_jitter:
-      enable: true
-      p: 0.5
-      brightness: 0.2
-      contrast: 0.2
-      saturation: 0.2
-      hue: 0.1
-    random_brightness_contrast:
-      enable: true
-      p: 0.5
-      brightness_limit: 0.2
-      contrast_limit: 0.2
-    random_gamma:
-      enable: true
-      p: 0.3
-      gamma_limit: [80, 120]
+    # ── F) Color Augmentations (choose ONE) ──────────────────────────
+    color_augmentations:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.7
+        replace: false
+      random_brightness_contrast:
+        enable: true
+        p: 0.8
+        brightness_limit: 0.2
+        contrast_limit: 0.2
+      color_jitter:
+        enable: true
+        p: 0.8
+        brightness: 0.2
+        contrast: 0.2
+        saturation: 0.2
+        hue: 0.1
+      hue_saturation_value:
+        enable: true
+        p: 0.8
+        hue_shift_limit: 20
+        sat_shift_limit: 30
+        val_shift_limit: 20
+      random_gamma:
+        enable: true
+        p: 0.8
+        gamma_limit: [80, 120]
+      # optionally include slight channel operations in this bucket:
+      rgb_shift:
+        enable: true
+        p: 0.3
+        r_shift_limit: [-20, 20]
+        g_shift_limit: [-20, 20]
+        b_shift_limit: [-20, 20]
+      channel_shuffle:
+        enable: true
+        p: 0.2
 
-    # noise injection
-    gauss_noise:
-      enable: true
-      p: 0.3
-    multiplicative_noise:
-      enable: true
-      p: 0.2
-      multiplier: [0.9, 1.1]
-      per_channel: true
-    iso_noise:
-      enable: true
-      p: 0.2
-      color_shift: [0.01, 0.05]
-      intensity: [0.05, 0.2]
+    # ── G) Blur (low probability; choose ONE) ────────────────────────
+    blur:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.3
+        replace: false
+      gaussian_blur:
+        enable: true
+        p: 0.5
+        blur_limit: [3, 7]
+      median_blur:
+        enable: true
+        p: 0.5
+        blur_limit: 5
+      motion_blur:
+        enable: true
+        p: 0.5
+        blur_limit: [3, 7]
 
-    # advanced pixel ops
-    clahe:
-      enable: true
-      p: 0.3
-      clip_limit: 2.0
-      tile_grid_size: [8, 8]  # adaptive histogram equalization
-    image_compression:
-      enable: true
-      p: 0.3                   # simulate JPEG artifacts
+    # ── H) Noise (low probability; choose ONE) ───────────────────────
+    noise:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.3
+        replace: false
+      gauss_noise:
+        enable: true
+        p: 0.5
+        # keep params minimal to avoid version warnings
+      iso_noise:
+        enable: true
+        p: 0.5
+        color_shift: [0.01, 0.05]
+        intensity: [0.10, 0.50]
+      multiplicative_noise:
+        enable: true
+        p: 0.5
+        multiplier: [0.9, 1.1]
+        per_channel: true
+      salt_and_pepper:
+        enable: true
+        p: 0.5
 
-    # new pixel‐level additions
-    rgb_shift:
-      enable: true
-      p: 0.2
-      r_shift_limit: [-20, 20]
-      g_shift_limit: [-20, 20]
-      b_shift_limit: [-20, 20]
-    channel_shuffle:
-      enable: true
-      p: 0.2                   # random re‐ordering of channels
+    # ── I) Compression / Downscaling (very low prob; choose ONE) ────
+    compression_downscale:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.2
+        replace: false
+      image_compression:
+        enable: true
+        p: 0.5
+        quality_range: [20, 80]
+      downscale:
+        enable: true
+        p: 0.5
+        scale_range: [0.25, 0.50]
 
-    # ─── batch-level mixing ops ─────────────────────────────────────
+    # ── J) Contrast Enhancement (optional; choose ONE) ───────────────
+    contrast_enhancement:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.3
+        replace: false
+      clahe:
+        enable: true
+        p: 1.0
+        clip_limit: 2.0
+        tile_grid_size: [8, 8]
+
+  # ─── batch-level mixing ops ─────────────────────────────────────
   batch:
     enable: true           # master switch for batch mixing ops
 
     mosaic:
-      enable: true         # master switch for Mosaic
+      enable: true
       p: 0.5               # probability per batch
 
     cutmix:
-      enable: true         # master switch for CutMix
-      p: 0.5               # probability per batch
+      enable: true
+      p: 0.5
       alpha: 1.0           # Beta(alpha,alpha) hyperparameter
 
     mixup:
-      enable: false        # master switch for MixUp
-      p: 0.5               # probability per batch
-      alpha: 0.4           # Beta(alpha,alpha) hyperparameter
+      enable: false
+      p: 0.5
+      alpha: 0.4
 
 # ─── validation (only resize/pad) ────────────────────────────────────
 val:
@@ -182,17 +304,31 @@ val:
 
   spatial:
     enable: true
-    horizontal_flip:
-      enable: false
-    random_crop:
-      enable: false
+    initial_resize_crop:
+      mode:
+        type: one_of
+        enable: true
+        p: 1.0
+      random_crop:
+        enable: false
+    basic_geometric:
+      mode:
+        type: all
+        enable: false
+    affine_perspective:
+      mode:
+        type: one_of
+        enable: false
+    dropout_occlusion:
+      mode:
+        type: one_of
+        enable: false
 
   pixel:
     enable: false
-  
+
   batch:
     enable: false           # no batch mixing on validation
-
 
 # ─── test (no augment) ───────────────────────────────────────────────
 test:
