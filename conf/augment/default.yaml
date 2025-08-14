@@ -36,30 +36,92 @@ train:
         p: 1.0
         n: 1              # used only if type == some_of
         replace: false
+
       random_crop:
-        enable: true
+        enable: false
         p: 1.0
-        height: ${augment.train.img_size.height}
-        width:  ${augment.train.img_size.width}
+        height: ${augment.train.img_size.height} # these need to be changed
+        width:  ${augment.train.img_size.width} # these need to be changed
+
+        # Optional padding when crop > image (Albumentations pads first, then crops)
+        pad_if_needed: false          # ← set true if your dataset has small images
+
+        # If you enable pad_if_needed, these control how padding looks:
+        border_mode: constant         # constant | reflect | reflect101 | replicate | wrap
+        fill: 0                       # image padding value (int or [r,g,b])
+        fill_mask: 0                  # mask padding value (usually 0 for background)
+        pad_position: center          # center | top_left | top_right | bottom_left | bottom_right | random
+
       # Alternative strategies if you ever want them (disabled by default):
+      # Option 1: SmallestMaxSize -> RandomCrop to your fixed train size
       smallest_max_size_then_random_crop:
         enable: false
         p: 1.0
-        max_size: ${augment.train.img_size.height}
+
+        # Choose exactly one of these:
+        # max_size: scales so min(side) == max_size
+        # OR max_size_hw: scales to meet (height,width) constraints
+        max_size: ${augment.train.img_size.height}   # or a list, e.g. [256, 320, 384]
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+
+        # Interpolation settings (strings mapped to cv2 codes in augment.py)
+        interpolation: linear         # nearest | linear | cubic | area | lanczos4
+        mask_interpolation: nearest   # usually 'nearest' for masks
+        area_for_downscale: image     # null | image | image_mask
+
+        # Final crop to the training size (kept as-is)
         final_height: ${augment.train.img_size.height}
         final_width:  ${augment.train.img_size.width}
-      longest_max_size_then_pad_if_needed:
+
+      # Option 2: SmallestMaxSize only (no crop)
+      smallest_max_size:
         enable: false
         p: 1.0
         max_size: ${augment.train.img_size.height}
-        pad_if_needed: true
-        border_mode: "constant"
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+        interpolation: linear
+        mask_interpolation: nearest
+        area_for_downscale: image
+
+      # Option 3: LongestMaxSize -> PadIfNeeded (keeps aspect, then pads)
+      longest_max_size_then_pad_if_needed:
+        enable: false
+        p: 1.0
+
+        # Choose exactly one of these (like the docs):
+        #   - max_size: int or list[int] (sampled if list)
+        #   - max_size_hw: [height|null, width|null]
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+
+        # Interpolation settings (strings; mapped to cv2 in code)
+        interpolation: linear         # nearest | linear | cubic | area | lanczos4
+        mask_interpolation: nearest   # usually nearest for masks
+        area_for_downscale: image     # null | image | image_mask
+
+        # Final padding target (usually your train size)
+        pad_min_height: ${augment.train.img_size.height}
+        pad_min_width:  ${augment.train.img_size.width}
+        pad_border_mode: constant     # constant | reflect | reflect101 | replicate | wrap
+        # pad_fill: 0                 # (optional) image padding fill value
+        # pad_fill_mask: 0            # (optional) mask padding fill value
+        # pad_position: center        # (optional) center/top_left/.../random
+
+      # Option 4: LongestMaxSize only (no padding)
+      longest_max_size:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+        interpolation: linear
+        mask_interpolation: nearest
+        area_for_downscale: image
 
     # ── B) Basic Geometric (usually “always include”) ────────────────
     basic_geometric:
       mode:
         type: all         # horizontal/vertical/90° rotations in one block
-        enable: true
+        enable: false
         p: 1.0
         replace: false
       horizontal_flip:
@@ -76,7 +138,7 @@ train:
     affine_perspective:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.7
         replace: false
 
@@ -127,7 +189,7 @@ train:
     dropout_occlusion:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.5
         replace: false
       coarse_dropout:
@@ -153,7 +215,7 @@ train:
     context_independence:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.2
         replace: false
       random_grid_shuffle:
@@ -171,7 +233,7 @@ train:
     color_space_reduction:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.2
         replace: false
       to_gray:
@@ -186,7 +248,7 @@ train:
     color_augmentations:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.7
         replace: false
       random_brightness_contrast:
@@ -229,7 +291,7 @@ train:
     blur:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.3
         replace: false
       gaussian_blur:
@@ -255,7 +317,7 @@ train:
     noise:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.3
         replace: false
       gauss_noise:
@@ -280,7 +342,7 @@ train:
     compression_downscale:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.2
         replace: false
       image_compression:
@@ -296,7 +358,7 @@ train:
     contrast_enhancement:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.3
         replace: false
       clahe:
@@ -308,7 +370,7 @@ train:
     weather_effects:
       mode:
         type: some_of       # pick n of them per sample
-        enable: true
+        enable: false
         p: 0.3
         n: 1
         replace: false
@@ -331,7 +393,7 @@ train:
     spectrogram:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.3
         replace: false
       xy_masking:
@@ -347,7 +409,7 @@ train:
     domain_adaptation:
       mode:
         type: one_of
-        enable: true
+        enable: false
         p: 0.2
         replace: false
       fda:

@@ -47,6 +47,70 @@ def _wrap_mode(ops: List[A.BasicTransform], mode: Dict[str, Any]) -> Optional[A.
         # Apply all, but honor the group's probability p
         return A.Sequential(ops, p=p)
 
+def _cv2_border_code(mode: Any) -> Any:
+    """
+    Map human-friendly strings to cv2 border codes.
+    Accepts either string or int; returns input unchanged if cv2 unavailable.
+    """
+    try:
+        import cv2
+    except Exception:
+        cv2 = None
+
+    if cv2 is None or mode is None:
+        return mode
+
+    if isinstance(mode, int):
+        return mode
+
+    table = {
+        "constant":   getattr(cv2, "BORDER_CONSTANT", 0),
+        "reflect":    getattr(cv2, "BORDER_REFLECT", 2),
+        "reflect101": getattr(cv2, "BORDER_REFLECT_101", 4),
+        "replicate":  getattr(cv2, "BORDER_REPLICATE", 1),
+        "wrap":       getattr(cv2, "BORDER_WRAP", 3),
+    }
+    key = str(mode).strip().lower()
+    return table.get(key, getattr(cv2, "BORDER_CONSTANT", 0))
+
+def _cv2_interp_code(name: any) -> any:
+    """
+    Map user-friendly strings to cv2 interpolation codes.
+    Accepts string or int; returns input unchanged if cv2 unavailable or already int.
+    """
+    try:
+        import cv2
+    except Exception:
+        cv2 = None
+
+    if cv2 is None or name is None or isinstance(name, int):
+        return name
+
+    lut = {
+        "nearest":  getattr(cv2, "INTER_NEAREST", 0),
+        "linear":   getattr(cv2, "INTER_LINEAR", 1),
+        "cubic":    getattr(cv2, "INTER_CUBIC", 2),
+        "area":     getattr(cv2, "INTER_AREA", 3),
+        "lanczos4": getattr(cv2, "INTER_LANCZOS4", 4),
+    }
+    return lut.get(str(name).strip().lower(), getattr(cv2, "INTER_LINEAR", 1))
+
+
+def _normalize_area_for_downscale(val: any) -> any:
+    """
+    Ensure area_for_downscale is one of: None, "image", "image_mask".
+    Accepts strings like 'none', 'image', 'image_mask'.
+    """
+    if val is None:
+        return None
+    s = str(val).strip().lower()
+    if s in ("", "none", "null"):
+        return None
+    if s in ("image", "image_mask"):
+        return s
+    # default: keep None rather than invalid string
+    return None
+    
 
 # ───────────────────────────────
 # Builders for specific sub-groups
@@ -59,39 +123,194 @@ def _build_initial_resize_crop(cfg: Dict[str, Any], H: int, W: int) -> List[A.Ba
     """
     candidates: List[A.BasicTransform] = []
 
-    # RandomCrop only (default)
+    # ---- RandomCrop (full param coverage) ----
     spec = cfg.get("random_crop", {})
     if spec.get("enable", False):
-        params = _translate_params("random_crop", {k: v for k, v in spec.items() if k != "enable"})
-        height = params.get("height", H)
-        width = params.get("width", W)
-        candidates.append(A.RandomCrop(height=height, width=width, p=float(spec.get("p", 1.0))))
+        # collect params, apply defaults, and convert border_mode if present
+        params = {k: v for k, v in spec.items() if k not in ("enable")}
+        height = int(params.pop("height", H))
+        width  = int(params.pop("width",  W))
 
-    # SmallestMaxSize -> RandomCrop
+        # Handle optional padding behavior
+        pad_if_needed = bool(params.pop("pad_if_needed", False))
+        border_mode   = _cv2_border_code(params.pop("border_mode", None))
+        # Albumentations v2 RandomCrop supports: pad_if_needed, border_mode, fill, fill_mask, pad_position, p
+
+        rc = A.RandomCrop(
+            height=height,
+            width=width,
+            pad_if_needed=pad_if_needed,
+            border_mode=border_mode,
+            **params  # includes: fill, fill_mask, pad_position, p (and any future-safe keys)
+        )
+        candidates.append(rc)
+
+    # ---- SmallestMaxSize -> RandomCrop ----
     spec = cfg.get("smallest_max_size_then_random_crop", {})
     if spec.get("enable", False):
-        max_size = int(spec.get("max_size", min(H, W)))
+        pval = float(spec.get("p", 1.0))
+
+        # decide which size constraint to use
+        max_size = spec.get("max_size", None)
+        max_size_hw = spec.get("max_size_hw", None)  # list/tuple or None
+
+        # prepare interpolation args
+        interp = _cv2_interp_code(spec.get("interpolation", "linear"))
+        mask_interp = _cv2_interp_code(spec.get("mask_interpolation", "nearest"))
+        area = _normalize_area_for_downscale(spec.get("area_for_downscale", None))
+
+        # final crop size
         final_h = int(spec.get("final_height", H))
-        final_w = int(spec.get("final_width", W))
+        final_w = int(spec.get("final_width",  W))
+
+        smm_kwargs = {
+            "interpolation": interp,
+            "mask_interpolation": mask_interp,
+            "area_for_downscale": area,
+            "p": 1.0,
+        }
+        if max_size_hw is not None:
+            # accept list/tuple like [H, W] or [H, null]
+            if isinstance(max_size_hw, (list, tuple)) and len(max_size_hw) == 2:
+                h0 = None if max_size_hw[0] in (None, "null") else int(max_size_hw[0])
+                w0 = None if max_size_hw[1] in (None, "null") else int(max_size_hw[1])
+                smm_kwargs["max_size_hw"] = (h0, w0)
+            else:
+                # if malformed, fall back to max_size
+                if max_size is None:
+                    max_size = min(H, W)
+        if max_size is not None and "max_size_hw" not in smm_kwargs:
+            # allow int or list of ints
+            smm_kwargs["max_size"] = max_size
+
         seq = A.Sequential(
-            [A.SmallestMaxSize(max_size=max_size, p=float(spec.get("p", 1.0))),
-             A.RandomCrop(height=final_h, width=final_w, p=1.0)],
-            p=float(spec.get("p", 1.0))
+            [
+                A.SmallestMaxSize(**smm_kwargs),
+                A.RandomCrop(height=final_h, width=final_w, p=1.0),
+            ],
+            p=pval,
         )
         candidates.append(seq)
 
-    # LongestMaxSize -> PadIfNeeded
+    # ---- SmallestMaxSize only (standalone) ----
+    spec = cfg.get("smallest_max_size", {})
+    if spec.get("enable", False):
+        pval = float(spec.get("p", 1.0))
+        max_size = spec.get("max_size", None)
+        max_size_hw = spec.get("max_size_hw", None)
+        interp = _cv2_interp_code(spec.get("interpolation", "linear"))
+        mask_interp = _cv2_interp_code(spec.get("mask_interpolation", "nearest"))
+        area = _normalize_area_for_downscale(spec.get("area_for_downscale", None))
+
+        smm_kwargs = {
+            "interpolation": interp,
+            "mask_interpolation": mask_interp,
+            "area_for_downscale": area,
+            "p": pval,
+        }
+        if max_size_hw is not None:
+            if isinstance(max_size_hw, (list, tuple)) and len(max_size_hw) == 2:
+                h0 = None if max_size_hw[0] in (None, "null") else int(max_size_hw[0])
+                w0 = None if max_size_hw[1] in (None, "null") else int(max_size_hw[1])
+                smm_kwargs["max_size_hw"] = (h0, w0)
+        elif max_size is not None:
+            smm_kwargs["max_size"] = max_size
+        else:
+            smm_kwargs["max_size"] = min(H, W)  # sensible default
+
+        candidates.append(A.SmallestMaxSize(**smm_kwargs))
+
+    # ---- LongestMaxSize -> PadIfNeeded ----
     spec = cfg.get("longest_max_size_then_pad_if_needed", {})
     if spec.get("enable", False):
-        max_size = int(spec.get("max_size", min(H, W)))
-        border_mode = spec.get("border_mode", "constant")
-        border_code = getattr(cv2, f"BORDER_{border_mode.upper()}", 0) if cv2 else 0
+        pval = float(spec.get("p", 1.0))
+
+        # Which constraint to use
+        max_size = spec.get("max_size", None)
+        max_size_hw = spec.get("max_size_hw", None)
+
+        # Interpolation settings
+        interp       = _cv2_interp_code(spec.get("interpolation", "linear"))
+        mask_interp  = _cv2_interp_code(spec.get("mask_interpolation", "nearest"))
+        area         = _normalize_area_for_downscale(spec.get("area_for_downscale", None))
+
+        # Padding target
+        pad_h = int(spec.get("pad_min_height", H))
+        pad_w = int(spec.get("pad_min_width",  W))
+        pad_border = _cv2_border_code(spec.get("pad_border_mode", "constant"))
+        # (Optional) If you later want fill values/position:
+        # pad_fill      = spec.get("pad_fill", None)
+        # pad_fill_mask = spec.get("pad_fill_mask", None)
+        # pad_position  = spec.get("pad_position", None)
+
+        lms_kwargs = {
+            "interpolation": interp,
+            "mask_interpolation": mask_interp,
+            "area_for_downscale": area,
+            "p": 1.0,
+        }
+        if max_size_hw is not None:
+            if isinstance(max_size_hw, (list, tuple)) and len(max_size_hw) == 2:
+                h0 = None if max_size_hw[0] in (None, "null") else int(max_size_hw[0])
+                w0 = None if max_size_hw[1] in (None, "null") else int(max_size_hw[1])
+                lms_kwargs["max_size_hw"] = (h0, w0)
+        elif max_size is not None:
+            lms_kwargs["max_size"] = max_size
+        else:
+            lms_kwargs["max_size"] = max(H, W)  # sensible default for "longest"
+
+        # Build sequence: resize to longest, then pad to (pad_h, pad_w)
+        pad_kwargs = {
+            "min_height": pad_h,
+            "min_width":  pad_w,
+            "border_mode": pad_border,
+            "p": 1.0,
+        }
+        # If you later want to support pad fill/position safely, uncomment and map:
+        # if pad_fill is not None:
+        #     pad_kwargs["fill"] = pad_fill
+        # if pad_fill_mask is not None:
+        #     pad_kwargs["fill_mask"] = pad_fill_mask
+        # if pad_position is not None:
+        #     pad_kwargs["position"] = pad_position
+
         seq = A.Sequential(
-            [A.LongestMaxSize(max_size=max_size, p=float(spec.get("p", 1.0))),
-             A.PadIfNeeded(min_height=H, min_width=W, border_mode=border_code, p=1.0)],
-            p=float(spec.get("p", 1.0))
+            [
+                A.LongestMaxSize(**lms_kwargs),
+                A.PadIfNeeded(**pad_kwargs),
+            ],
+            p=pval,
         )
         candidates.append(seq)
+
+    # ---- LongestMaxSize only ----
+    spec = cfg.get("longest_max_size", {})
+    if spec.get("enable", False):
+        pval = float(spec.get("p", 1.0))
+        max_size = spec.get("max_size", None)
+        max_size_hw = spec.get("max_size_hw", None)
+
+        interp      = _cv2_interp_code(spec.get("interpolation", "linear"))
+        mask_interp = _cv2_interp_code(spec.get("mask_interpolation", "nearest"))
+        area        = _normalize_area_for_downscale(spec.get("area_for_downscale", None))
+
+        lms_kwargs = {
+            "interpolation": interp,
+            "mask_interpolation": mask_interp,
+            "area_for_downscale": area,
+            "p": pval,
+        }
+        if max_size_hw is not None:
+            if isinstance(max_size_hw, (list, tuple)) and len(max_size_hw) == 2:
+                h0 = None if max_size_hw[0] in (None, "null") else int(max_size_hw[0])
+                w0 = None if max_size_hw[1] in (None, "null") else int(max_size_hw[1])
+                lms_kwargs["max_size_hw"] = (h0, w0)
+        elif max_size is not None:
+            lms_kwargs["max_size"] = max_size
+        else:
+            lms_kwargs["max_size"] = max(H, W)
+
+        candidates.append(A.LongestMaxSize(**lms_kwargs))
 
     return candidates
 
