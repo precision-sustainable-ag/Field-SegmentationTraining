@@ -50,7 +50,7 @@ class UNetInference:
         self.developed_images_dir = self.maskgen_dir / "developed-images"
         self.cutout_dir = self.maskgen_dir / "cutouts"
         self.cutout_dir.mkdir(parents=True, exist_ok=True)
-        self.initial_mask_dir = self.maskgen_dir / "initial_masks"
+        self.initial_mask_dir = self.developed_images_dir
         self.initial_mask_dir.mkdir(parents=True, exist_ok=True)
 
         self.input_csv = Path(self.cfg.paths.project_temp_db)
@@ -65,7 +65,7 @@ class UNetInference:
     
     def _prepare_dataframe_columns(self) -> None:
         """Ensure required output columns exist in the DataFrame."""
-        for col in ("initial_mask_path", "seg_note"):
+        for col in ("temp_initial_mask_path", "seg_note"):
             if col not in self.df.columns:
                 self.df[col] = pd.Series([None] * len(self.df), dtype="object")
     
@@ -253,8 +253,11 @@ class UNetInference:
         # Save crop image (for review), mask, and cutout
         # (Note: cutout here simply zeroes background using the crop mask)
         crop_bgr = cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(str(self.cutout_dir / cropout_name), crop_bgr, [cv2.IMWRITE_JPEG_QUALITY, 100])
-        cv2.imwrite(str(self.cutout_dir / final_mask_name), (pred_crop * 255).astype(np.uint8))
+        temp_initial_cutout_path = str(self.cutout_dir / cropout_name)
+        cv2.imwrite(temp_initial_cutout_path, crop_bgr, [cv2.IMWRITE_JPEG_QUALITY, 100])
+        
+        temp_initial_cutout_mask_path = str(self.cutout_dir / final_mask_name)
+        cv2.imwrite(temp_initial_cutout_mask_path, (pred_crop * 255).astype(np.uint8))
 
         # Create a 3-channel masked crop as PNG
         crop_mask_3c = np.repeat(pred_crop[:, :, None], 3, axis=2).astype(np.uint8)
@@ -263,29 +266,29 @@ class UNetInference:
 
         # Save the initial mask as a PNG
         full_mask_name = f"{stem}_mask.png"
-        mask_full_rel = (self.initial_mask_dir / full_mask_name).relative_to(self.repo_root)
-        cv2.imwrite(str(self.initial_mask_dir / full_mask_name), (full_mask * 255).astype(np.uint8))
+        temp_initial_mask_path = str(self.initial_mask_dir / full_mask_name).relative_to(self.repo_root)
+        cv2.imwrite(temp_initial_mask_path, (full_mask * 255).astype(np.uint8))
 
 
         # Record repo-relative mask path
-        mask_rel = (self.cutout_dir / final_mask_name)
         try:
-            mask_rel = mask_rel.relative_to(self.repo_root)
+            mask_rel = Path(temp_initial_cutout_mask_path).relative_to(self.repo_root)
         except ValueError:
             # If cutout_dir isn't inside repo_root, fall back to absolute path
-            mask_rel = mask_rel
+            mask_rel = temp_initial_cutout_mask_path
 
         # Update CSV row
-        self.df.loc[idx, "initial_mask_path"] = str(mask_full_rel)
-        self.df.loc[idx, "initial_cutout_mask_path"] = str(mask_rel)
+        self.df.loc[idx, "temp_initial_mask_path"] = temp_initial_mask_path
+        self.df.loc[idx, "temp_initial_cutout_mask_path"] = str(mask_rel)
+        self.df.loc[idx, "temp_initial_cutout_path"] = Path(temp_initial_cutout_path).relative_to(self.repo_root)
         self.df.loc[idx, "seg_note"] = pd.NA
 
     def run(self) -> None:
         updated, skipped = 0, 0
         for idx, row in self.df.iterrows():
-            before = self.df.loc[idx, ["initial_mask_path", "seg_note"]].copy()
+            before = self.df.loc[idx, ["temp_initial_mask_path", "seg_note"]].copy()
             self.process_row(idx, row)
-            after = self.df.loc[idx, ["initial_mask_path", "seg_note"]]
+            after = self.df.loc[idx, ["temp_initial_mask_path", "seg_note"]]
             if not after.equals(before):
                 updated += 1
             else:
