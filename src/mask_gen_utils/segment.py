@@ -68,6 +68,9 @@ class UNetInference:
         for col in ("temp_initial_mask_path", "seg_note"):
             if col not in self.df.columns:
                 self.df[col] = pd.Series([None] * len(self.df), dtype="object")
+            else:
+                # If the column already exists, convert its type to object
+                self.df[col] = self.df[col].astype("object")
     
     def _load_model(self) -> None:
         """Load the UNet segmentation model and weights."""

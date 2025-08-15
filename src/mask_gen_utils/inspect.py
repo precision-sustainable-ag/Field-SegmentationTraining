@@ -68,18 +68,26 @@ class FiftyOneMaskInspector:
     # ---------------- CSV I/O ----------------
 
     def _load_csv(self) -> pd.DataFrame:
+        """
+        Load the project_temp_db CSV into a DataFrame.
+        """
         if not self.temp_csv.exists():
             raise FileNotFoundError(f"project_temp_db CSV not found: {self.temp_csv}")
         df = pd.read_csv(self.temp_csv)
         log.info(f"Loaded temp CSV with {len(df)} rows: {self.temp_csv}")
         return df
 
-
     def _save_csv(self) -> None:
+        """
+        Save the updated DataFrame back to the project_temp_db CSV.
+        """
         self.df.to_csv(self.temp_csv, index=False)
         log.info(f"Wrote updates to temp CSV: {self.temp_csv}")
 
     def _ensure_inspect_columns(self) -> None:
+        """
+        Ensure all inspection-related columns exist in the DataFrame.
+        """
         for col in INSPECT_COLS:
             if col not in self.df.columns:
                 self.df[col] = pd.Series([None] * len(self.df), dtype="object")
@@ -155,6 +163,9 @@ class FiftyOneMaskInspector:
         return {"image": image_path, "mask": mask_path}
     
     def _populate_sample_fields(self, sample: fo.Sample, row: pd.Series) -> fo.Sample:
+        """
+        Populate the FiftyOne sample fields from the DataFrame row.
+        """
         def _val(v):
             return "" if (v is None or pd.isna(v)) else v
 
@@ -252,6 +263,9 @@ class FiftyOneMaskInspector:
     # ---------------- FiftyOne dataset/session ----------------
 
     def _create_dataset(self, samples: List[fo.Sample]) -> fo.Dataset:
+        """
+        Create a FiftyOne dataset from the provided samples.
+        """
         if self.dataset_name in fo.list_datasets():
             # keep it simple and replace
             fo.delete_dataset(self.dataset_name)
@@ -261,6 +275,9 @@ class FiftyOneMaskInspector:
         return ds
 
     def run(self) -> None:
+        """
+        Run the FiftyOne mask inspection workflow.
+        """
         samples = self._load_samples()
         if not samples:
             log.info("No eligible samples to review. Exiting.")
@@ -331,17 +348,19 @@ class FiftyOneMaskInspector:
 
             tags_str = ",".join(sorted(tags_set)) if tags_set else None
 
-
             # Write back
             self.df.at[row_idx, "initial_mask_issue_tag"] = initial_tag
             self.df.at[row_idx, "final_mask_issue_tag"] = final_tag
             self.df.at[row_idx, "tags"] = tags_str
             self.df.at[row_idx, "mask_status"] = status
-            self.df.at[row_idx, "mask_reviewer"] = self.reviewer if status in ("inspected", "reviewed") else None
+            self.df.at[row_idx, "mask_reviewer"] = self.reviewer if status in ("inspected", "reviewed", "finalized") else None
             self.df.at[row_idx, "mask_review_datetime"] = timestamp
 
 
 def main(cfg: DictConfig) -> None:
+    """
+    Main entry point for the FiftyOne mask inspection.
+    """
     log.info("Starting mask inspection (temp_db mode)")
     try:
         FiftyOneMaskInspector(cfg).run()
