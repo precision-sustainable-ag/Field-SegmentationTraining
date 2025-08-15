@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 # Columns we’ll ensure exist in the temp CSV
 REFINE_COLS = [
-    "refined_cutout_mask_path",
+    "temp_refined_cutout_mask_path",
     "refine_params",              # JSON string of the config used for this refine op
     "mask_status",                # keep in sync with inspect.py
     "mask_reviewer",
@@ -124,7 +124,7 @@ class RefineMask:
         Prefers 'initial_cutout_mask_path' as written by segment.py.
         """
         mask_path = None
-        val = row.get("initial_cutout_mask_path", None)
+        val = row.get("temp_initial_cutout_mask_path", None)
         if pd.notna(val) and val:
             p = Path(str(val))
             if not p.is_absolute():
@@ -191,6 +191,7 @@ class RefineMask:
 
             paths = self._resolve_paths(row)
             if not paths:
+                log.warning(f"Row {idx} ({tag_key}) has no valid image/mask paths")
                 missing += 1
                 continue
 
@@ -211,7 +212,7 @@ class RefineMask:
                     rel = out_path
 
                 # Update row
-                self.df.at[idx, "refined_cutout_mask_path"] = str(rel)
+                self.df.at[idx, "temp_refined_cutout_mask_path"] = str(rel)
                 self.df.at[idx, "refine_params"] = json.dumps(params)
                 self.df.at[idx, "mask_status"] = "refined"
                 self.df.at[idx, "mask_reviewer"] = self.reviewer

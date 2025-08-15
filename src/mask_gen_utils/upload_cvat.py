@@ -18,10 +18,10 @@ log = logging.getLogger(__name__)
 
 # Columns we expect / write back into the temp CSV
 NEEDED_COLS = [
-    "filepath",                        # path to cutout image (jpg/png)
-    "initial_cutout_mask_path",        # path to initial cutout mask
-    "refined_cutout_mask_path",        # path to refined mask (may be empty)
-    "relabeled_cutout_mask_path",      # path to relabeled mask (we'll fill later)
+    "temp_initial_cutout_path",                        # path to cutout image (jpg/png)
+    "temp_initial_cutout_mask_path",        # path to initial cutout mask
+    "temp_refined_cutout_mask_path",        # path to refined mask (may be empty)
+    "temp_relabeled_cutout_mask_path",      # path to relabeled mask (we'll fill later)
     "initial_mask_issue_tag",          # e.g., "missing_red"
     "final_mask_issue_tag",            # optional override/after-inspect tag
     "tags",                            # comma separated
@@ -98,17 +98,20 @@ class UploadToCVAT:
 
     def _resolve_paths(self, row: pd.Series) -> Optional[Dict[str, Path]]:
         # image path
-        fp = row.get("filepath")
+
+        fp = row.get("temp_initial_cutout_path")
         if not fp:
+            log.warning("Row has no initial cutout path; skipping")
             return None
         img_path = Path(str(fp))
         if not img_path.is_absolute():
             img_path = (self.repo_root / img_path).resolve()
         if not img_path.exists():
+            log.warning(f"Row has missing image path {img_path}; skipping")
             return None
 
         # initial mask (prefer explicit column)
-        m0 = row.get("initial_cutout_mask_path")
+        m0 = row.get("temp_initial_cutout_mask_path")
         if pd.notna(m0) and m0:
             m0p = Path(str(m0))
             if not m0p.is_absolute():
@@ -122,7 +125,7 @@ class UploadToCVAT:
             m0p = None
 
         # refined mask
-        mr = row.get("refined_cutout_mask_path")
+        mr = row.get("temp_refined_cutout_mask_path")
         if pd.notna(mr) and mr:
             mrp = Path(str(mr))
             if not mrp.is_absolute():
@@ -152,15 +155,17 @@ class UploadToCVAT:
             # Skip rows already uploaded or finished unless you want to re-upload
             status = (row.get("mask_status") or "").strip().lower()
             if status in {"cvat_uploaded", "relabelled"}:
+                log.warning(f"Skipping row {idx} with status '{status}'")
                 continue
 
             t = self._row_has_target_tag(row)
             if t is None:
+                log.warning(f"Row {idx} has no target tag; skipping")
                 continue
 
             paths = self._resolve_paths(row)
-            print(paths)
             if not paths or not paths["image"].exists():
+                log.warning(f"Row {idx} has missing image or mask paths; skipping")
                 continue
 
             # Build sample
