@@ -112,12 +112,12 @@ class FiftyOneMaskInspector:
         """
         Resolve image (cutout) and mask paths for a row. Returns None if not usable.
         Expects columns produced by `segment`:
-          - initial_cutout_mask_path (preferred)
+          - temp_initial_cutout_mask_path (preferred)
           - cutout_name (fallback to cutouts/<cutout_name>)
         """
         mask_path = None
-        if pd.notna(row.get("initial_cutout_mask_path", None)):
-            mask_path = Path(row["initial_cutout_mask_path"])
+        if pd.notna(row.get("temp_initial_cutout_mask_path", None)):
+            mask_path = Path(row["temp_initial_cutout_mask_path"])
             # rebase to repo if relative
             if not mask_path.is_absolute():
                 mask_path = (self.base_dir / mask_path).resolve()
@@ -228,8 +228,8 @@ class FiftyOneMaskInspector:
                     sample.tags = display_tags
 
                 # Optionally attach refined mask when you start writing those paths to CSV
-                if pd.notna(row.get("refined_cutout_mask_path", None)):
-                    rpath = Path(row["refined_cutout_mask_path"])
+                if pd.notna(row.get("temp_refined_cutout_mask_path", None)):
+                    rpath = Path(row["temp_refined_cutout_mask_path"])
                     if not rpath.is_absolute():
                         rpath = (self.base_dir / rpath).resolve()
                     if rpath.exists():
