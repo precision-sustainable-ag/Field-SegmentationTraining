@@ -93,6 +93,7 @@ class CVATRelabelProcessor:
     COL_TEMP_REFINED_CUTOUT_MASK = "temp_refined_cutout_mask_path"
     COL_TEMP_RELABELED_CUTOUT_MASK = "temp_relabeled_cutout_mask_path"
     COL_TEMP_RELABELED_FULL_MASK = "temp_relabeled_full_mask_path"
+    COL_TEMP_RELABELED_CUTOUT_IMAGE = "temp_relabeled_cutout_image_path"
 
     COL_STATUS = "mask_status"
     COL_REVIEWER = "mask_reviewer"
@@ -120,7 +121,6 @@ class CVATRelabelProcessor:
 
         # CVAT
         keys = read_yaml(cfg.paths.keys_path)
-        self.cvat_url = cfg.mask_gen.relabel.get("cvat_url", "http://sunny.ece.ncsu.edu:8080/")
         self.cvat_username = keys["cvat"]["username"]
         self.cvat_password = keys["cvat"]["password"]
         self.task_ids = list(cfg.mask_gen.export_cvat.task_ids or [])
@@ -137,6 +137,8 @@ class CVATRelabelProcessor:
         self.output_full_masks_dir = Path(cfg.paths.project_maskgen_dir) / "final_fullsized_masks"
         self.output_full_masks_dir.mkdir(parents=True, exist_ok=True)
 
+        self.output_cutout_images_dir = Path(cfg.paths.project_maskgen_dir) / "relabeled_cutouts"
+        self.output_cutout_images_dir.mkdir(parents=True, exist_ok=True)
 
     # ---------- IO ----------
     def load_df(self) -> pd.DataFrame:
@@ -432,6 +434,74 @@ class CVATRelabelProcessor:
             updated += 1
 
         log.info(f"Created {updated} full-sized mask(s) from relabeled cutouts.")
+    
+    def create_masked_cutout_images(self) -> None:
+        """
+        Create a new masked cutout image using the relabeled cutout mask.
+        Saves as RGBA PNG with transparency from the mask.
+        """
+        assert self.df is not None, "Call load_df() first."
+
+        made = 0
+        for idx, row in self.df.iterrows():
+            cutout_img_str  = row.get(self.COL_TEMP_INITIAL_CUTOUT_IMG, "")
+            rel_mask_str    = row.get(self.COL_TEMP_RELABELED_CUTOUT_MASK, "")
+
+            if not cutout_img_str or pd.isna(cutout_img_str):
+                continue
+            if not rel_mask_str or pd.isna(rel_mask_str):
+                continue
+
+            cutout_img_path = (self.repo_root / str(cutout_img_str)).resolve()
+            rel_mask_path   = (self.repo_root / str(rel_mask_str)).resolve()
+
+            if not cutout_img_path.exists():
+                log.warning(f"[row {idx}] Missing cutout image: {cutout_img_path}")
+                continue
+            if not rel_mask_path.exists():
+                log.warning(f"[row {idx}] Missing relabeled cutout mask: {rel_mask_path}")
+                continue
+
+            # Load cutout image (BGR)
+            cutout_bgr = cv2.imread(str(cutout_img_path), cv2.IMREAD_COLOR)
+            if cutout_bgr is None:
+                log.warning(f"[row {idx}] Failed to read cutout image: {cutout_img_path}")
+                continue
+            H, W = cutout_bgr.shape[:2]
+
+            # Load mask (grayscale), resize if needed
+            mask_gray = cv2.imread(str(rel_mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask_gray is None:
+                log.warning(f"[row {idx}] Failed to read relabeled mask: {rel_mask_path}")
+                continue
+            if mask_gray.shape[:2] != (H, W):
+                mask_gray = self._resize_mask_nearest(mask_gray, W, H)
+
+            # Robust binarization: treat >0 as foreground
+            # (works for both 0/1 and 0/255 masks)
+            mask_bin = (mask_gray > 0).astype(np.uint8)
+
+            # Expand to 3 channels and apply
+            mask_3c = np.repeat(mask_bin[:, :, None], 3, axis=2)
+            masked_bgr = cutout_bgr * mask_3c  # background → black
+
+            # Save PNG with transparency
+            base_stem = Path(cutout_img_path).stem
+            out_path = self.output_cutout_images_dir / f"{base_stem}.png"
+            if not cv2.imwrite(str(out_path), masked_bgr):
+                log.warning(f"[row {idx}] Failed to write masked cutout image: {out_path}")
+                continue
+
+            # Update CSV path
+            try:
+                rel_to_repo = out_path.resolve().relative_to(self.repo_root)
+                self.df.at[idx, self.COL_TEMP_RELABELED_CUTOUT_IMAGE] = str(rel_to_repo)
+            except Exception:
+                self.df.at[idx, self.COL_TEMP_RELABELED_CUTOUT_IMAGE] = str(out_path.resolve())
+
+            made += 1
+
+        log.info(f"Created {made} masked cutout image(s) with transparency.")
     # ---------- Orchestration ----------
     def run(self) -> None:
         # 1) Load CSV
@@ -461,8 +531,11 @@ class CVATRelabelProcessor:
 
         # 7) Create full-sized masks from cutouts
         self.create_fullsize_masks_from_cutouts()
-        
-        # 8) Save the updated DataFrame back to CSV
+
+        # 8) Create masked cutout images
+        self.create_masked_cutout_images()
+
+        # 9) Save the updated DataFrame back to CSV
         self.save_df()
 
 
@@ -481,6 +554,7 @@ def main(cfg: DictConfig) -> None:
       cfg.mask_gen.relabel.task_name
       cfg.mask_gen.relabel.cvat_url (optional; defaults to 'http://sunny.ece.ncsu.edu:8080/')
     """
+    # TODO: Create new cutout from relabeled cutout mask
     processor = CVATRelabelProcessor(cfg)
     processor.run()
 
