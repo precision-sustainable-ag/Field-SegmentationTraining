@@ -23,7 +23,7 @@ REFINE_COLS = [
     "refine_params",              # JSON string of the config used for this refine op
     "mask_status",                # keep in sync with inspect.py
     "mask_reviewer",
-    "mask_review_datetime",
+    "mask_timestamp",
 ]
 
 class RefineMask:
@@ -216,7 +216,7 @@ class RefineMask:
                 self.df.at[idx, "refine_params"] = json.dumps(params)
                 self.df.at[idx, "mask_status"] = "refined"
                 self.df.at[idx, "mask_reviewer"] = self.reviewer
-                self.df.at[idx, "mask_review_datetime"] = self.run_timestamp
+                self.df.at[idx, "mask_timestamp"] = self.run_timestamp
                 updated += 1
 
             except Exception as e:
