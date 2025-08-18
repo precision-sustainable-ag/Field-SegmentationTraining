@@ -185,7 +185,10 @@ class UploadToCVAT:
             init_arr = self._load_mask_array_or_empty(paths["image"], paths["mask_initial"])
             s["initial_mask"] = fo.Segmentation(mask=init_arr)
 
-            ref_arr = self._load_mask_array_or_empty(paths["image"], paths["mask_refined"])
+            if paths["mask_refined"] and paths["mask_refined"].exists():
+                ref_arr = self._load_mask_array_or_empty(paths["image"], paths["mask_refined"])
+            else:
+                ref_arr = init_arr.copy()
             s["refined_mask"] = fo.Segmentation(mask=ref_arr)
 
             # placeholder relabeled (CVAT will write back)
