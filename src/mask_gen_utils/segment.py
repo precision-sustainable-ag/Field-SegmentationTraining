@@ -269,8 +269,8 @@ class UNetInference:
 
         # Save the initial mask as a PNG
         full_mask_name = f"{stem}_mask.png"
-        temp_initial_mask_path = str(self.initial_mask_dir / full_mask_name).relative_to(self.repo_root)
-        cv2.imwrite(temp_initial_mask_path, (full_mask * 255).astype(np.uint8))
+        temp_initial_mask_path = Path(self.initial_mask_dir / full_mask_name).relative_to(self.repo_root)
+        cv2.imwrite(str(temp_initial_mask_path), (full_mask * 255).astype(np.uint8))
 
 
         # Record repo-relative mask path

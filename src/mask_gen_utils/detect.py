@@ -115,6 +115,7 @@ class ProcessDetections:
     def process_temp_db(self) -> None:
         log.info(f"Loading CSV: {self.input_csv}")
         df = pd.read_csv(self.input_csv)
+        df["bbox_xywh"] = df["bbox_xywh"].astype("object")
 
         # Ensure columns exist
         for col in ("bbox_xywh", "det_pred_conf", "detection_note"):
