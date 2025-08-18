@@ -27,7 +27,7 @@ NEEDED_COLS = [
     "tags",                            # comma separated
     "mask_status",                     # unreviewed|refined|cvat_uploaded|relabelled|...
     "mask_reviewer",
-    "mask_review_datetime",
+    "mask_timestamp",
     "refine_params",                   # json string
 ]
 
@@ -177,7 +177,7 @@ class UploadToCVAT:
             # carry reviewer/timestamp/refine_params forward
             s["status"] = status or ""
             s["reviewer"] = (row.get("mask_reviewer") or self.reviewer)
-            s["timestamp"] = (row.get("mask_review_datetime") or self.timestamp)
+            s["timestamp"] = (row.get("mask_timestamp") or self.timestamp)
             rp = row.get("refine_params")
             s["refine_params"] = rp if (rp and isinstance(rp, str)) else "{}"
 
@@ -239,7 +239,7 @@ class UploadToCVAT:
             self.df.at[i, "mask_status"] = "cvat_uploaded"
             # keep reviewer/timestamp coherent
             self.df.at[i, "mask_reviewer"] = self.reviewer
-            self.df.at[i, "mask_review_datetime"] = self.timestamp
+            self.df.at[i, "mask_timestamp"] = self.timestamp
             # ensure refine_params is at least "{}"
             if not self.df.at[i, "refine_params"]:
                 self.df.at[i, "refine_params"] = "{}"

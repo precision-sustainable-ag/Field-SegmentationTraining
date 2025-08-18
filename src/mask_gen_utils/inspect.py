@@ -28,7 +28,7 @@ INSPECT_COLS = [
     "tags",
     "mask_status",        # unreviewed | inspected | reviewed
     "mask_reviewer",
-    "mask_review_datetime",
+    "mask_timestamp",
     ]
 
 class FiftyOneMaskInspector:
@@ -354,7 +354,7 @@ class FiftyOneMaskInspector:
             self.df.at[row_idx, "tags"] = tags_str
             self.df.at[row_idx, "mask_status"] = status
             self.df.at[row_idx, "mask_reviewer"] = self.reviewer if status in ("inspected", "reviewed", "finalized") else None
-            self.df.at[row_idx, "mask_review_datetime"] = timestamp
+            self.df.at[row_idx, "mask_timestamp"] = timestamp
 
 
 def main(cfg: DictConfig) -> None:
