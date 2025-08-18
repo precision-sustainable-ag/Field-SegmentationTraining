@@ -104,7 +104,7 @@ class CVATRelabelProcessor:
     COL_FINAL_ISSUE_TAG = "final_mask_issue_tag"
     COL_REFINE_PARAMS = "refine_params"
 
-    STATUS_IGNORE = ["cvat_uploaded", "relabelled", "finalized"]
+    STATUS_IGNORE = ["inspected", "good", "finalized"]
     STATUS_RELABELLED = "relabelled"
 
     BBOX_XYWH = "bbox_xywh"  # CVAT bbox format: [x, y, width, height]
@@ -142,10 +142,10 @@ class CVATRelabelProcessor:
 
     # ---------- IO ----------
     def load_df(self) -> pd.DataFrame:
-        df = pd.read_csv(self.temp_csv_path)
-        self.df = df
-        log.info(f"Loaded temp DB: {self.temp_csv_path} with {len(df)} rows")
-        return df
+        self.df = pd.read_csv(self.temp_csv_path)
+        log.info(f"Loaded temp DB: {self.temp_csv_path} with {len(self.df)} rows")
+        print(self.df)
+        
 
     def save_df(self) -> None:
         assert self.df is not None, "No DataFrame loaded to save."
@@ -202,7 +202,10 @@ class CVATRelabelProcessor:
             init_arr = _load_mask_array_or_empty(img_p, init_mask_p)
             s["initial_mask"] = fo.Segmentation(mask=init_arr)
 
-            ref_arr = _load_mask_array_or_empty(img_p, refined_mask_p)
+            if refined_mask_p and Path(refined_mask_p).exists():
+                ref_arr = _load_mask_array_or_empty(img_p, refined_mask_p)
+            else:
+                ref_arr = init_arr
             s["refined_mask"] = fo.Segmentation(mask=ref_arr)
 
             # Placeholder that CVAT will update back into 'detections'
@@ -278,9 +281,9 @@ class CVATRelabelProcessor:
                 mask_path = str(self._save_relabeled_mask_png(sample))
             else:
                 # No change; keep original meta
-                status = str(sample.get("status") or "").strip().lower()
-                reviewer = sample.get("reviewer") or self.reviewer
-                timestamp = sample.get("timestamp") or self.run_timestamp
+                status = str(sample["status"] or "").strip().lower()
+                reviewer = sample["reviewer"] or self.reviewer
+                timestamp = sample["timestamp"] or self.run_timestamp
                 mask_path = ""  # don't create new file
 
             updates[str(Path(sample.filepath).resolve())] = {
@@ -505,7 +508,7 @@ class CVATRelabelProcessor:
     # ---------- Orchestration ----------
     def run(self) -> None:
         # 1) Load CSV
-        self.load_df()
+        df = self.load_df()
 
         # 2) Build samples
         samples = self.build_samples()

@@ -66,11 +66,8 @@ class FilterImagesBySpecies:
         """ Load the database and filter images based on extension and preprocessing status."""
         log.info(f"Loading the agir field db...")
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
-        # Create a temporary column for filtering
-        df['filtering_extension'] = df['extension'].str.lower()
-        filtered_df = df[(df['filtering_extension'] == '.jpg') & (df['is_preprocessed'])]
-        filtered_df.drop(columns=['filtering_extension'], inplace=True, errors='ignore')
-        log.info(f"Filtered {len(filtered_df)} images with 'jpg' extension and preprocessed status.")
+        filtered_df = df[(df['extension'].str.lower() == '.jpg') & (df['is_preprocessed'])& (df['mask_status'] != "finalized")]
+        log.info(f"Filtered {len(filtered_df)} images with '.jpg' extension and preprocessed status.")
         # Filter out first two images in the sample which are without mat or with color checker
         filtered_df = filtered_df[~filtered_df['image_index'].isin([0, 1])]
         return filtered_df
