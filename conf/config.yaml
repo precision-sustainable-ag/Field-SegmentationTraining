@@ -25,9 +25,9 @@ tasks: # TODO: make the other tasks bool key/values
     
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    create_project: true
-    detect: true
-    segment: true
+    create_project: false
+    detect: false
+    segment: false
     inspect: false
     refine: false
     upload_cvat: false
@@ -51,6 +51,9 @@ tasks:
   train:
     vis_augment: false
     train_pipeline: false
+
+  finalize:
+    finalize_lts: false
 
   inference:
     - inference

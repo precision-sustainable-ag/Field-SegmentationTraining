@@ -10,6 +10,7 @@ from src.utils.pipeline_log import PipelineLogger
 from src.train import train
 from src.mask_gen import main as mask_gen
 from src.preprocess import preprocess
+from src.finalize import main as finalize
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ TASK_REGISTRY = {
     "train": train,
     "mask_gen": mask_gen,
     "preprocess": preprocess,
+    "finalize": finalize,
     # Add more tasks here as needed
 }
 

@@ -36,6 +36,8 @@ relabeled_masks_dir: ${paths.project_maskgen_dir}/relabeled_masks
 # longterm storage paths
 longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
 field_batches_dir : ${paths.longterm_storage}/field-batches
+field_masks_dir: ${paths.longterm_storage}/field-masks
+field_cutouts_dir: ${paths.longterm_storage}/field-cutouts
 
 # model paths
 yolo_weed_detection_model: ${paths.longterm_storage}/field-tools/models/yolo_weed_detection/weights/best.pt
