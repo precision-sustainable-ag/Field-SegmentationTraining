@@ -372,20 +372,24 @@ def _build_dropout_occlusion(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
             params = _translate_params("grid_dropout", {k: v for k, v in spec.items() if k != "enable"})
             ops.append(cls(**params))
 
-    # RandomErasing (if available in albumentations). If not, approximate with CoarseDropout.
-    spec = cfg.get("random_erasing", {})
+    # Erasing (v2) — replaces RandomErasing. Accepts legacy 'random_erasing' key too.
+    spec = cfg.get("erasing", cfg.get("random_erasing", {}))
     if spec.get("enable", False):
-        cls = _maybe("RandomErasing")
+        cls = _maybe("Erasing")
         if cls:
-            params = _translate_params("random_erasing", {k: v for k, v in spec.items() if k != "enable"})
+            # Only pass valid v2 params to avoid warnings
+            scale = spec.get("scale", (0.02, 0.33))
+            ratio = spec.get("ratio", (0.3, 3.3))
+            params = {
+                "scale": tuple(scale) if isinstance(scale, list) else scale,
+                "ratio": tuple(ratio) if isinstance(ratio, list) else ratio,
+                "p": float(spec.get("p", 0.5)),
+            }
             ops.append(cls(**params))
         else:
-            # Fallback approximation using CoarseDropoutDual with a single hole sized by scale/ratio
-            # (Albumentations RandomErasing is not always available)
-            scale = spec.get("scale", [0.02, 0.10])
-            ratio = spec.get("ratio", [0.3, 3.3])
-            approx = CoarseDropoutDual(max_holes=1, p=float(spec.get("p", 0.5)))
-            ops.append(approx)
+            # Fallback: approximate with a single coarse hole if Erasing isn't available
+            ops.append(CoarseDropoutDual(max_holes=1, p=float(spec.get("p", 0.5))))
+
 
     return ops
 
