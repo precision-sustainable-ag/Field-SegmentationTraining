@@ -64,6 +64,29 @@ WRAPPER_NAMES = {"SomeOf", "OneOf", "Sequential"}
 # Things we generally don't want in the legend
 LEGEND_SKIP = {"ToTensorV2", "ReplayCompose", "Resize", "PadIfNeeded"}
 
+def _detect_sample_norm_kind_from_dataset(dataset) -> str | None:
+    norm_cfg = getattr(dataset.cfg_aug.train, "normalization", None)
+    if norm_cfg and norm_cfg.get("enable", False):
+        k = str(norm_cfg.get("kind", "")).lower()
+        if k in ("image", "image_per_channel"):
+            return k
+    return None
+
+def _to_display(img: torch.Tensor, norm_kind: str | None) -> torch.Tensor:
+    """
+    Map CxHxW float tensor to [0,1] for visualization.
+    - If Albumentations sample-specific normalization ran, min–max per image.
+    - Otherwise assume 0..255 and divide by 255.
+    """
+    x = img.detach()
+    if norm_kind in ("image", "image_per_channel"):
+        x_min = float(x.min())
+        x_max = float(x.max())
+        if x_max <= x_min + 1e-12:
+            return torch.zeros_like(x)
+        return ((x - x_min) / (x_max - x_min + 1e-12)).clamp(0.0, 1.0)
+    else:
+        return (x / 255.0).clamp(0.0, 1.0)
 
 def snake_to_pascal(name: str) -> str:
     """Convert snake_case to PascalCase."""
@@ -233,6 +256,9 @@ def vis_augmentation_batch(
     if total == 0:
         return
 
+    # detect if albumentations did per-sample normalization
+    vis_norm_kind = _detect_sample_norm_kind_from_dataset(dataset)
+
     # With the new grouped config, just use the known mask-safe class names.
     mask_names = set(SPATIAL_MASK_SAFE)
 
@@ -241,27 +267,27 @@ def vis_augmentation_batch(
 
     for idx in torch.randperm(total)[: min(num_samples, total)].tolist():
         # --- 1) per-sample augment via ReplayCompose ---
-        img_np = np.array(Image.open(dataset.images[idx]).convert("RGB"))
+        img_np  = np.array(Image.open(dataset.images[idx]).convert("RGB"))
         mask_np = np.array(Image.open(dataset.masks[idx]).convert("L"))
         out1 = dataset.transform(image=img_np, mask=mask_np)
-        aug_img = out1["image"].float() / 255.0
 
-        tmp_mask = out1["mask"].float() / 255.0  # [H0, W0] or [1,H0,W0]
+        # DISPLAY-RANGE tensors
+        aug_img = _to_display(out1["image"].float(), vis_norm_kind)
+
+        tmp_mask = out1["mask"].float()
         if tmp_mask.ndim == 2:
-            tmp_mask = tmp_mask.unsqueeze(0)  # [1,H0,W0]
-        tmp_mask = tmp_mask.unsqueeze(0).repeat(1, 3, 1, 1)  # [1,3,H0,W0]
+            tmp_mask = tmp_mask.unsqueeze(0)
+        tmp_mask = tmp_mask.unsqueeze(0).repeat(1, 3, 1, 1) / 255.0
         _, C, H, W = tmp_mask.shape
-        aug_mask = F.interpolate(tmp_mask, size=(H, W), mode="nearest").squeeze(0)  # [3,H,W]
+        aug_mask = F.interpolate(tmp_mask, size=(H, W), mode="nearest").squeeze(0)
 
         replay1 = out1.get("replay", {"transforms": []})
 
-        # Resize original image/mask to match H,W
+        # Original to DISPLAY-RANGE
         orig = get_noop_transform()(image=img_np, mask=mask_np)
         orig_img = F.interpolate(
-            orig["image"].float().unsqueeze(0) / 255.0,
-            size=(H, W),
-            mode="bilinear",
-            align_corners=False,
+            _to_display(orig["image"].float(), None).unsqueeze(0),
+            size=(H, W), mode="bilinear", align_corners=False
         ).squeeze(0)
 
         tmp_o_mask = orig["mask"].float()
@@ -270,7 +296,7 @@ def vis_augmentation_batch(
         tmp_o_mask = tmp_o_mask.unsqueeze(0).repeat(1, 3, 1, 1) / 255.0
         orig_mask = F.interpolate(tmp_o_mask, size=(H, W), mode="nearest").squeeze(0)
 
-        # --- 2) batch-level mixing simulation ---
+        # --- 2) batch-level mixing simulation (work in DISPLAY RANGE) ---
         mix_img, mix_mask = aug_img.clone(), aug_mask.clone()
         batch_replay = {"transforms": []}
 
@@ -284,26 +310,24 @@ def vis_augmentation_batch(
                     image=np.array(Image.open(ip).convert("RGB")),
                     mask=np.array(Image.open(mp).convert("L")),
                 )
-                ij = oj["image"].float() / 255.0
+                ij = _to_display(oj["image"].float(), vis_norm_kind)
                 mj = oj["mask"].float()
                 if mj.ndim == 2:
                     mj = mj.unsqueeze(0)
-                mj = mj / 255.0
-                mj = mj.unsqueeze(0).repeat(1, 3, 1, 1).squeeze(0)
+                mj = mj.unsqueeze(0).repeat(1, 3, 1, 1) / 255.0
+                mj = F.interpolate(mj, size=(H, W), mode="nearest").squeeze(0)
                 samples.append((ij, mj))
 
             mos_imgs, mos_masks = mosaic_collate(samples, p=1.0)
             mix_img, mix_mask = mos_imgs[0], mos_masks[0]
-            batch_replay["transforms"].append(
-                {"__class_fullname__": "BatchMosaic", "applied": True}
-            )
+            batch_replay["transforms"].append({"__class_fullname__": "BatchMosaic", "applied": True})
 
-        # CutMix (manual, so we can draw the rectangle)
+        # CutMix (manual)
         if batch_cfg.cutmix.enable and random.random() < batch_cfg.cutmix.p:
             lam = np.random.beta(batch_cfg.cutmix.alpha, batch_cfg.cutmix.alpha)
             cut_rat = np.sqrt(1.0 - lam)
-            cut_w = int(W * cut_rat)
-            cut_h = int(H * cut_rat)
+            cut_w   = int(W * cut_rat)
+            cut_h   = int(H * cut_rat)
             cx = np.random.randint(0, W)
             cy = np.random.randint(0, H)
             x1 = np.clip(cx - cut_w // 2, 0, W)
@@ -317,27 +341,26 @@ def vis_augmentation_batch(
                 image=np.array(Image.open(ip).convert("RGB")),
                 mask=np.array(Image.open(mp).convert("L")),
             )
-            i2 = o2["image"].float() / 255.0
+            i2 = _to_display(o2["image"].float(), vis_norm_kind)
             m2 = o2["mask"].float()
             if m2.ndim == 2:
                 m2 = m2.unsqueeze(0)
-            m2 = m2 / 255.0
-            m2 = m2.unsqueeze(0).repeat(1, 3, 1, 1).squeeze(0)
+            m2 = m2.unsqueeze(0).repeat(1, 3, 1, 1) / 255.0
+            m2 = F.interpolate(m2, size=(H, W), mode="nearest").squeeze(0)
 
-            mixed_img = mix_img.clone()
+            mixed_img  = mix_img.clone()
             mixed_mask = mix_mask.clone()
-            mixed_img[:, y1:y2, x1:x2] = i2[:, y1:y2, x1:x2]
+            mixed_img[:, y1:y2, x1:x2]  = i2[:, y1:y2, x1:x2]
             mixed_mask[:, y1:y2, x1:x2] = m2[:, y1:y2, x1:x2]
 
-            pil = to_pil_image(mixed_img)
+            # draw rectangle on DISPLAY copy
+            pil = to_pil_image(mixed_img.clamp(0, 1))
             draw = ImageDraw.Draw(pil)
             draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
             mix_img = ToTensor()(pil)
             mix_mask = mixed_mask
 
-            batch_replay["transforms"].append(
-                {"__class_fullname__": "BatchCutMix", "applied": True}
-            )
+            batch_replay["transforms"].append({"__class_fullname__":"BatchCutMix","applied": True})
 
         # MixUp
         if batch_cfg.mixup.enable and random.random() < batch_cfg.mixup.p:
@@ -347,20 +370,18 @@ def vis_augmentation_batch(
                 image=np.array(Image.open(ip).convert("RGB")),
                 mask=np.array(Image.open(mp).convert("L")),
             )
-            i2 = o2["image"].float() / 255.0
+            i2 = _to_display(o2["image"].float(), vis_norm_kind)
             m2 = o2["mask"].float()
             if m2.ndim == 2:
                 m2 = m2.unsqueeze(0)
-            m2 = m2 / 255.0
-            m2 = m2.unsqueeze(0).repeat(1, 3, 1, 1).squeeze(0)
+            m2 = m2.unsqueeze(0).repeat(1, 3, 1, 1) / 255.0
+            m2 = F.interpolate(m2, size=(H, W), mode="nearest").squeeze(0)
 
             mix_imgs, mix_masks = mixup_collate([(mix_img, mix_mask), (i2, m2)], p=1.0, alpha=batch_cfg.mixup.alpha)
             mix_img, mix_mask = mix_imgs[0], mix_masks[0]
-            batch_replay["transforms"].append(
-                {"__class_fullname__": "BatchMixUp", "applied": True}
-            )
+            batch_replay["transforms"].append({"__class_fullname__": "BatchMixUp","applied": True})
 
-        # --- 3) render legends (always include batch legend) ---
+        # --- 3) render legends (unchanged) ---
         img_leg = render_legend(
             replay1, height=H, full_width=W,
             mask_mode=False, mask_names=set(),
@@ -377,11 +398,9 @@ def vis_augmentation_batch(
             font_divisor=font_div, min_font_size=min_fs,
         )
 
-        # --- 4) assemble rows with exactly 5 columns each ---
-        row1 = [orig_img, aug_img, img_leg, mix_img, batch_leg]
-        row2 = [orig_mask, aug_mask, mask_leg, mix_mask, batch_leg]
-
-        cells = row1 + row2 if 'cells' not in locals() else cells + row1 + row2
+        # --- 4) assemble rows (everything already in [0,1]) ---
+        cells.extend([orig_img, aug_img, img_leg, mix_img, batch_leg])
+        cells.extend([orig_mask, aug_mask, mask_leg, mix_mask, batch_leg])
 
     # build & save grid with fixed 5 columns
     ncols = 5
@@ -392,10 +411,8 @@ def vis_augmentation_batch(
     save_image(grid, str(out_file))
     print(f"Saved comparison grid to: {out_file}")
 
-    # Warn once if wrappers are present (now common with grouped config)
     print(
-        "Note: Group wrappers (SomeOf/OneOf/Sequential) are shown as blocks in the legend. "
-        "Only the actually applied inner transforms are recorded by Albumentations."
+        "Note: Group wrappers (SomeOf/OneOf/Sequential) are expanded; only applied inner transforms are listed."
     )
 
     # log to all configured loggers

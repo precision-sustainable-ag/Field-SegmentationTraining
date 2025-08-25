@@ -562,6 +562,16 @@ def _build_domain_adaptation(cfg: Dict[str, Any]) -> List[A.BasicTransform]:
             ops.append(cls(**params))
     return ops
 
+def _build_final_normalization(cfg_norm: Dict[str, Any]) -> list[A.BasicTransform]:
+    if not cfg_norm or not cfg_norm.get("enable", False):
+        return []
+    kind = str(cfg_norm.get("kind", "image_per_channel")).strip().lower()
+    if kind not in ("image", "image_per_channel"):
+        # enforce your requirement: only these two modes are allowed
+        raise ValueError(f"Normalization kind '{kind}' not allowed. Use 'image' or 'image_per_channel'.")
+    p = float(cfg_norm.get("p", 1.0))
+    return [A.Normalize(normalization=kind, p=p)]
+
 
 # ───────────────────────────────
 # Public API
@@ -717,10 +727,12 @@ def get_train_transforms(cfg) -> A.ReplayCompose:
 
     spatial_blocks = _build_spatial_block(t.spatial, H, W) if getattr(t, "spatial", None) else []
     pixel_blocks   = _build_pixel_block(t.pixel) if getattr(t, "pixel", None) else []
+    final_norm = _build_final_normalization(getattr(cfg.augment.train, "normalization", {}))
 
     pipeline: List[A.BasicTransform] = []
     pipeline.extend(spatial_blocks)
     pipeline.extend(pixel_blocks)
+    pipeline.extend(final_norm)
 
     # Ensure fixed output dimensions for batching
     pipeline.append(A.Resize(height=H, width=W, p=1.0))
@@ -748,10 +760,12 @@ def get_val_transforms(cfg) -> A.Compose:
 
     spatial_blocks = _build_spatial_block(t.spatial, H, W) if getattr(t, "spatial", None) else []
     pixel_blocks   = _build_pixel_block(t.pixel) if getattr(t, "pixel", None) else []
+    final_norm = _build_final_normalization(getattr(t, "normalization", {}))
 
     pipeline: List[A.BasicTransform] = []
     pipeline.extend(spatial_blocks)
     pipeline.extend(pixel_blocks)
+    pipeline.extend(final_norm)
     pipeline.append(A.PadIfNeeded(min_height=H, min_width=W, p=1.0))
     pipeline.append(ToTensorV2())
 

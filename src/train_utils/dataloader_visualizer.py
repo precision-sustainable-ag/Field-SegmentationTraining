@@ -21,6 +21,38 @@ def _get_run_dir() -> Path:
         return Path(HydraConfig.get().runtime.output_dir)
     return Path.cwd()
 
+# --- NEW: display conversion helpers -----------------------------------------
+
+def _detect_sample_norm_kind(cfg: DictConfig) -> Optional[str]:
+    """Return 'image' | 'image_per_channel' | None based on augment.train.normalization."""
+    norm_cfg = getattr(cfg.augment.train, "normalization", None)
+    if norm_cfg and norm_cfg.get("enable", False):
+        kind = str(norm_cfg.get("kind", "")).lower()
+        if kind in ("image", "image_per_channel"):
+            return kind
+    return None
+
+def _to_display_batch(imgs: torch.Tensor, norm_kind: Optional[str]) -> torch.Tensor:
+    """
+    Convert a batch [B, C, H, W] to [0,1] for visualization.
+    - If sample-specific normalization was applied by Albumentations,
+      do per-image min–max scaling for display.
+    - Else, clamp.
+    """
+    x = imgs.detach()
+    if norm_kind in ("image", "image_per_channel"):
+        B = x.shape[0]
+        # global per-image min–max across channels for natural colors
+        x_flat = x.view(B, -1)
+        mins = x_flat.min(dim=1).values.view(B, 1, 1, 1)
+        maxs = x_flat.max(dim=1).values.view(B, 1, 1, 1)
+        denom = (maxs - mins).clamp_min(1e-6)
+        x_disp = (x - mins) / denom
+        return x_disp.clamp(0.0, 1.0)
+    else:
+        return x.clamp(0.0, 1.0)
+
+# -----------------------------------------------------------------------------
 
 def vis_dataloader_batch(cfg: DictConfig, logger_cfgs: Optional[List] = None) -> None:
     """
@@ -65,50 +97,58 @@ def vis_dataloader_batch(cfg: DictConfig, logger_cfgs: Optional[List] = None) ->
     out_dir = _get_run_dir() / "image_logs"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Images grid
-    img_grid = torchvision.utils.make_grid(images, nrow=nrow, padding=4)
+    # --- NEW: decide how to display and message about it
+    norm_kind = _detect_sample_norm_kind(cfg)
+    if norm_kind:
+        vis_msg = f"Note: sample-specific normalization ({norm_kind}) detected; min–max rescaled per image for visualization."
+    else:
+        vis_msg = "Note: images clamped for visualization."
+
+    # Images grid (convert to display range first)
+    images_disp = _to_display_batch(images, norm_kind)
+    img_grid = torchvision.utils.make_grid(images_disp, nrow=nrow, padding=4)
     img_path = out_dir / "batch_visualization_image.png"
     plt.figure(figsize=(8, 8))
     plt.imshow(img_grid.permute(1, 2, 0))
-    plt.title("Batch Images")
+    plt.title("Batch Images\n" + vis_msg, fontsize=10)
     plt.axis("off")
     plt.tight_layout()
     plt.savefig(img_path)
     plt.close()
 
-    # Masks grid (expand to 3 channels for display)
+    # Masks grid (expand to 3 channels for display) – masks are already 0/1
     if masks.ndim == 4 and masks.size(1) == 1:
         masks_vis = masks.expand(-1, 3, -1, -1)
     elif masks.ndim == 3:
         masks_vis = masks.unsqueeze(1).expand(-1, 3, -1, -1)
     else:
         masks_vis = masks
-
     mask_grid = torchvision.utils.make_grid(masks_vis, nrow=nrow, padding=4)
     mask_path = out_dir / "batch_visualization_mask.png"
     plt.figure(figsize=(8, 8))
     plt.imshow(mask_grid.permute(1, 2, 0))
-    plt.title("Batch Masks")
+    plt.title("Batch Masks", fontsize=10)
     plt.axis("off")
     plt.tight_layout()
     plt.savefig(mask_path)
     plt.close()
 
-    # Optional: log to configured loggers (e.g., WandbLogger)
+    # Console note as well
+    print("[vis_dataloader]", vis_msg)
+
+    # Log to W&B / other
     if wandb.run is not None:
-        # log to the current run (preferred)
         wandb.log({
-            "train/dataloader_image_grid": wandb.Image(str(img_path)),
+            "train/dataloader_image_grid": wandb.Image(str(img_path), caption=vis_msg),
             "train/dataloader_mask_grid":  wandb.Image(str(mask_path)),
         })
     elif logger_cfgs:
-        # fallback: create a run only if none exists
         for lcfg in logger_cfgs:
             logger = hydra.utils.instantiate(lcfg)
             exp = getattr(logger, "experiment", None)
             if exp and hasattr(exp, "log"):
                 exp.log({
-                    "train/dataloader_image_grid": wandb.Image(str(img_path)),
+                    "train/dataloader_image_grid": wandb.Image(str(img_path), caption=vis_msg),
                     "train/dataloader_mask_grid":  wandb.Image(str(mask_path)),
                 })
 

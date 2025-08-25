@@ -593,6 +593,13 @@ train:
       p: 0.5
       alpha: 0.4
 
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: true
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
+
 # ─── validation (only resize/pad) ────────────────────────────────────
 val:
   enable: true
@@ -627,6 +634,13 @@ val:
 
   batch:
     enable: false           # no batch mixing on validation
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: false
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
 
 # ─── test (no augment) ───────────────────────────────────────────────
 test:
