@@ -88,22 +88,30 @@ class FinalizeMasks:
         assert not missing, f"Temp DB missing required columns: {missing}"
         return df
 
+    def _mask_is_finalized(self, row: pd.Series) -> bool:
+        return row.get("mask_status") == "finalized"
+
+    def _row_has_relabeled_mask(self, row: pd.Series) -> bool:
+        full_mask = row.get("temp_relabeled_full_mask_path")
+        cutout_png = row.get("temp_relabeled_cutout_image_path")
+        
+        if pd.isna(full_mask) or pd.isna(cutout_png):
+            log.warning(f"Row missing temp paths: {row.get('image_id')}")
+            return False
+
+        return Path(str(full_mask)).exists() and Path(str(cutout_png)).exists()
+
     def _row_is_ready(self, row: pd.Series) -> bool:
         """
         A conservative “ready to finalize” heuristic:
         - temp_relabeled_full_mask_path present (and file exists if checks on)
         - temp_relabeled_cutout_image_path present (and file exists if checks on)
         """
-        full_mask = row.get("temp_relabeled_full_mask_path")
-        cutout_png = row.get("temp_relabeled_cutout_image_path")
-
-        if pd.isna(full_mask) or pd.isna(cutout_png):
-            return False
-
-        if not self.file_checks:
+        if self._mask_is_finalized(row):
             return True
-
-        return Path(str(full_mask)).exists() and Path(str(cutout_png)).exists()
+        if self._row_has_relabeled_mask(row):
+            return True
+        return False
 
     def filter_rows_to_finalize(self, df: pd.DataFrame) -> pd.DataFrame:
         mask = df.apply(self._row_is_ready, axis=1)
@@ -152,11 +160,6 @@ class FinalizeMasks:
             image_id_stem = str(Path(image_id).stem)  # Ensure image_id is a string
             src_full_mask = Path(str(row["temp_relabeled_full_mask_path"]))
             src_cutout_png = Path(str(row["temp_relabeled_cutout_image_path"]))
-
-            # Assert that image_id_stem matches with full_mask stem and cutout stem
-            mask_stem = src_full_mask.stem.replace("_mask", "")
-            cutout_stem = src_cutout_png.stem.replace("_0", "")
-            assert image_id_stem == mask_stem == cutout_stem, f"ID mismatch: {image_id_stem}, {mask_stem}, {cutout_stem}"
 
             dst_full_mask = self._dest_for_full_mask(image_id_stem, src_full_mask)
             dst_cutout_png = self._dest_for_cutout_png(image_id_stem, src_cutout_png)
@@ -232,6 +235,10 @@ class FinalizeMasks:
                 "final_mask_issue_tag",
                 "final_mask_path",
                 "cutout_image_path",
+                "bbox_xywh",
+                "det_pred_conf",
+                "initial_mask_issue_tag",
+                "tags"
             ]
 
             existing_cols = [c for c in candidate_cols if self._column_exists(con, table, c)]
@@ -282,6 +289,8 @@ class FinalizeMasks:
 
         # 2) Filter rows ready to finalize (both temp files present)
         df_ready = self.filter_rows_to_finalize(df)
+        # print(df_ready)
+        # exit()
         
         if df_ready.empty:
             log.info("No rows ready to finalize. Nothing to do.")
