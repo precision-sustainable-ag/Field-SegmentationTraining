@@ -256,7 +256,7 @@ train:
       channel_dropout:
         enable: true
         p: 0.3
-        channel_drop_range: [1, 1]
+        channel_drop_range: [1, 1]        # Range from which to choose the number of channels to drop. The actual number will be randomly selected from the inclusive range [min, max]. Default: (1, 1).
 
     # ── G) Color Augmentations (choose ONE) ──────────────────────────
     color_augmentations:
@@ -268,8 +268,11 @@ train:
       random_brightness_contrast:
         enable: true
         p: 0.8
-        brightness_limit: 0.2
+        # Factor range for changing brightness/contrast. If a single float value is provided, the range will be (-brightness_limit, brightness_limit).
+        # Values should typically be in the range [-1.0, 1.0], where 0 means no change, 1.0 means maximum brightness, and -1.0 means minimum brightness. Default: (-0.2, 0.2).
+        brightness_limit: 0.2 
         contrast_limit: 0.2
+      # Randomly changes the brightness, contrast, saturation, and hue of an image. This transform is similar to torchvision's ColorJitter but with some differences due to the use of OpenCV instead of Pillow.
       color_jitter:
         enable: true
         p: 0.8
@@ -277,6 +280,7 @@ train:
         contrast: 0.2
         saturation: 0.2
         hue: 0.1
+      # This transform adjusts the HSV (Hue, Saturation, Value) channels of an input RGB image. It allows for independent control over each channel, providing a wide range of color and brightness modifications.
       hue_saturation_value:
         enable: true
         p: 0.8
@@ -286,14 +290,26 @@ train:
       random_gamma:
         enable: true
         p: 0.8
+        # If gamma_limit is a single float value, the range will be (1, gamma_limit). If it's a tuple of two floats, they will serve as the lower and upper bounds for gamma adjustment.
+        # Values are in terms of percentage change, e.g., (80, 120) means the gamma will be between 80% and 120% of the original. Default: (80, 120).
         gamma_limit: [80, 120]
       planckian_jitter:
         enable: true       # A.PlanckianJitter if available
         p: 0.3
+        # physics-based color temperature jitter
+        mode: blackbody     # blackbody | cied
+        temperature_limit: [3000, 9000]   # K (blackbody: 3000–15000, cied: 4000–15000)
+        sampling_method: uniform          # uniform | gaussian
       # optionally include slight channel operations in this bucket:
       rgb_shift:
         enable: true
         p: 0.3
+        # Range for shifting the channels. Options:
+        # - If tuple (min, max): Sample shift value from this range
+        # - If int: Sample shift value from (-r_shift_limit, r_shift_limit)
+        # - For uint8 images: Values represent absolute shifts in [0, 255]
+        # - For float images: Values represent relative shifts in [0, 1]
+        # Default: (-20, 20)
         r_shift_limit: [-20, 20]
         g_shift_limit: [-20, 20]
         b_shift_limit: [-20, 20]
@@ -311,21 +327,58 @@ train:
       gaussian_blur:
         enable: true
         p: 0.5
+        # Controls the range of the Gaussian kernel size.
+        # If a single int is provided, the kernel size will be randomly chosen
+        # between 0 and that value.
+        # If a tuple of two ints is provided, it defines the inclusive range
+        # of possible kernel sizes.
+        # Must be zero or odd and in range [0, inf). If set to 0 (default), the kernel size
+        # will be computed from sigma as `int(sigma * 3.5) * 2 + 1` to exactly match PIL's
+        # implementation.
+        # Default: 0
         blur_limit: [3, 7]
+        # Range for the Gaussian kernel standard deviation (sigma). Must be more or equal than 0.
+        # If a single float is provided, sigma will be randomly chosen
+        # between 0 and that value.
+        # If a tuple of two floats is provided, it defines the inclusive range
+        # of possible sigma values.
+        # Default: (0.5, 3.0)
+        sigma_limit: [0.5, 3.0]
       median_blur:
         enable: true
         p: 0.5
         blur_limit: 5
       motion_blur:
         enable: true
-        p: 0.5
-        blur_limit: [3, 7]
+        p: 0.3
+        # kernel size (int or [lo, hi]); must be odd and ≥ 3
+        blur_limit: [3, 9]
+        # orientation and bias
+        angle_range: [0.0, 360.0]     # degrees
+        direction_range: [-1.0, 1.0]  # -1..1
+        # whether kernel may be off-center
+        allow_shifted: true
       advanced_blur:
-        enable: true       # A.AdvancedBlur if available
+        enable: true
         p: 0.3
+        # kernel size (int or [lo, hi]); must be odd and ≥ 3
+        blur_limit: [3, 9]
+        # anisotropic spreads (float or [lo, hi])
+        sigma_x_limit: [0.2, 1.0]
+        sigma_y_limit: [0.2, 1.0]
+        # rotate the kernel (int or [lo, hi] in degrees)
+        rotate_limit: [-90, 90]
+        # generalized Gaussian shape (float or [lo, hi])
+        beta_limit: [0.5, 8.0]
+        # multiplicative kernel noise (float or [lo, hi])
+        noise_limit: [0.75, 1.25]
       zoom_blur:
-        enable: true       # A.ZoomBlur if available
+        enable: true
         p: 0.3
+        # zoom strength (> 1). Use a narrow range for subtle, wider for strong.
+        max_factor: [1.10, 1.30]
+        # step size (> 0). Smaller = smoother blur, larger = chunkier.
+        step_factor: [0.01, 0.03]
 
     # ── I) Noise (low probability; choose ONE) ───────────────────────
     noise:
@@ -337,20 +390,40 @@ train:
       gauss_noise:
         enable: true
         p: 0.5
-        # keep params minimal to avoid version warnings
+        # normalized to image max (uint8: 255, float32: 1.0)
+        std_range:  [0.10, 0.20]   # clamp to [0, 1]
+        mean_range: [0.0, 0.0]     # clamp to [-1, 1]
+
+        per_channel: true          # sample noise per-channel
+        noise_scale_factor: 1.0    # (0, 1]; <1 speeds up with coarser noise      
       iso_noise:
         enable: true
         p: 0.5
+        # Range for changing color hue.
+        # Values should be in the range [0, 1], where 1 represents a full 360° hue rotation.
+        # Default: (0.01, 0.05)
         color_shift: [0.01, 0.05]
+        # Range for the noise intensity.
+        # Higher values increase the strength of both color and luminance noise.
+        # Default: (0.1, 0.5)
         intensity: [0.10, 0.50]
       multiplicative_noise:
         enable: true
         p: 0.5
+        #   The range for the random multiplier.
+        #   Defines the range from which the multiplier is sampled.
+        #   Default: (0.9, 1.1)
         multiplier: [0.9, 1.1]
+        # If True, use a different random multiplier for each channel.
+        # If False, use the same multiplier for all channels.
+        # Setting this to False is slightly faster.
+        # Default: False
         per_channel: true
       salt_and_pepper:
-        enable: true
-        p: 0.5
+        enable: false      # set true to use
+        p: 0.3
+        amount: [0.01, 0.06]        # fraction of pixels to flip (0..1)
+        salt_vs_pepper: [0.4, 0.6]  # fraction of “salt” among noisy pixels (0..1)
 
     # ── J) Compression / Downscaling (very low prob; choose ONE) ────
     compression_downscale:
@@ -362,10 +435,20 @@ train:
       image_compression:
         enable: true
         p: 0.5
+        # Range for the compression quality.
+        # The values should be in [1, 100] range, where:
+        # - 1 is the lowest quality (maximum compression)
+        # - 100 is the highest quality (minimum compression)
+        # Default: (99, 100)
         quality_range: [20, 80]
       downscale:
         enable: true
         p: 0.5
+        # Range for the downscaling factor.
+        # Should be two float values between 0 and 1, where the first value is less than or equal to the second.
+        # The actual downscaling factor will be randomly chosen from this range for each image.
+        # Lower values result in more aggressive downscaling.
+        # Default: (0.25, 0.25)
         scale_range: [0.25, 0.50]
 
     # ── K) Contrast Enhancement (optional; choose ONE) ───────────────
@@ -378,31 +461,79 @@ train:
       clahe:
         enable: true
         p: 1.0
+        # Controls the contrast enhancement limit.
+        # If a single float is provided, the range will be (1, clip_limit).
+        # If a tuple of two floats is provided, it defines the range for random selection.
+        # Higher values allow for more contrast enhancement, but may also increase noise.
+        # Default: (1, 4)
         clip_limit: 2.0
+        # Defines the number of tiles in the row and column directions.
+        # Format is (rows, columns). Smaller tile sizes can lead to more localized enhancements,
+        # while larger sizes give results closer to global histogram equalization.
+        # Default: (8, 8)
         tile_grid_size: [8, 8]
     # ── L) Weather / Outdoor Effects (image-only) ────────────────────────────────
     weather_effects:
       mode:
         type: some_of       # pick n of them per sample
-        enable: false
-        p: 0.3
-        n: 1
+        enable: true
+        p: 1.0
+        n: 5
         replace: false
       random_sun_flare:
         enable: true
         p: 0.2
+        # Where the sun can appear (relative coords in [0,1]: x_min,y_min,x_max,y_max)
+        flare_roi: [0.0, 0.0, 1.0, 0.5]
+        # Direction in radians, expressed as [0,1] → [0, 2π)
+        angle_range: [0.0, 1.0]
+        # Number of flare circles
+        num_flare_circles_range: [6, 10]
+        # Sun characteristics
+        src_radius: 400
+        src_color: [255, 255, 255]
+        method: overlay   # overlay | physics_based
       random_shadow:
-        enable: true
-        p: 0.3
+        enable: true         # set true to use
+        p: 0.2
+        # region to draw shadows in (relative coords in [0,1]: x_min,y_min,x_max,y_max)
+        shadow_roi: [0.0, 0.5, 1.0, 1.0]
+        # number of shadow polygons (inclusive range)
+        num_shadows_limit: [1, 2]
+        # polygon complexity (edges). >= 3 recommended
+        shadow_dimension: 5
+        # darkness (0..1); higher = darker shadows
+        shadow_intensity_range: [0.5, 0.5]
       random_fog:
         enable: true
         p: 0.2
+        # fog density in [0,1]: higher => denser fog
+        fog_coef_range: [0.30, 0.60]
+        # per-circle alpha in [0,1]: higher => more opaque fog
+        alpha_coef: 0.08
       random_rain:
         enable: true
         p: 0.2
+        # wind / slant in degrees (lo, hi)
+        slant_range: [-10.0, 10.0]
+        # geometry & appearance
+        drop_length: null           # null -> auto (height // 8)
+        drop_width: 1               # >= 1 px
+        drop_color: [200, 200, 200] # RGB 0..255
+        # optics
+        blur_value: 7               # kernel size; odd, >=1
+        brightness_coefficient: 0.7 # (0, 1]
+        # presets: drizzle | heavy | torrential | default
+        rain_type: default
       random_snow:
         enable: true
         p: 0.2
+        # threshold range in (0,1) — higher => more pixels affected
+        snow_point_range: [0.10, 0.30]
+        # brighten amount (>0). 2.0–3.0 is typical
+        brightness_coeff: 2.5
+        # visual style: faster but simpler vs. more realistic
+        method: texture   # bleach | texture
     # ── M) Spectrogram Augmentation (only if your data are spectrograms) ─────────
     spectrogram:
       mode:
@@ -410,6 +541,10 @@ train:
         enable: false
         p: 0.3
         replace: false
+      # Applies masking strips to an image, either horizontally (X axis) or vertically (Y axis),
+      # simulating occlusions. This transform is useful for training models to recognize images
+      # with varied visibility conditions. It's particularly effective for spectrogram images,
+      # allowing spectral and frequency masking to improve model robustness.
       xy_masking:
         enable: false     # set to true only if you really want this
         p: 1.0
@@ -426,10 +561,16 @@ train:
         enable: false
         p: 0.2
         replace: false
+      # Adapts the style of the input image to match the style of a reference image
+      # by manipulating their frequency components in the Fourier domain. This is
+      # particularly useful for unsupervised domain adaptation (UDA).
       fda:
         enable: false        # A.FDA if available
         p: 1.0
         beta_limit: [0.01, 0.05]
+      # This transform modifies the pixel intensities of the input image so that its histogram
+      # matches the histogram of a provided reference image. This process is applied independently
+      # to each channel of the image if it is multi-channel.
       histogram_matching:
         enable: false        # A.HistogramMatching
         p: 1.0
@@ -451,6 +592,13 @@ train:
       enable: false
       p: 0.5
       alpha: 0.4
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: true
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
 
 # ─── validation (only resize/pad) ────────────────────────────────────
 val:
@@ -486,6 +634,13 @@ val:
 
   batch:
     enable: false           # no batch mixing on validation
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: false
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
 
 # ─── test (no augment) ───────────────────────────────────────────────
 test:

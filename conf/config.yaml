@@ -34,8 +34,8 @@ tasks: # TODO: make the other tasks bool key/values
     mask_refine: false
   
   train:
-    vis_augment: true
-    train_pipeline: false
+    vis_augment: false
+    train_pipeline: true
 
   inference:
     - inference
