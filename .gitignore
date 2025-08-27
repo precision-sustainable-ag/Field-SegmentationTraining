@@ -10,7 +10,7 @@ trained_models
 species_dataset
 # logging
 logging
-
+notebooks/
 # extra scripts
 src/utils/maybe_needed/
 
