@@ -86,17 +86,14 @@ def run_train_pipeline(cfg: DictConfig) -> None:
     # === 4) Loggers ===
     loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger] if is_rank_zero_worker(cfg) else []
 
-    # Optional visual sanity checks before training
-    if getattr(cfg.train, "vis_augment", False) and train_loader.dataset.use_augment:
+    # Optional: visualize dataloader batches
+    if getattr(cfg.train, "dataloader_visualizer", False) and cfg.train.dataloader_visualizer.enabled and is_launcher(cfg):
+        vis_dataloader_batch(cfg, logger_cfgs=cfg.train.logger)
         vis_augmentation_batch(
             train_loader,
             cfg.train.logger,
             num_samples=cfg.augment.augmentation_visualizer.num_samples,
         )
-
-    # Optional: visualize dataloader batches
-    if getattr(cfg.train, "dataloader_visualizer", False) and is_launcher(cfg):
-        vis_dataloader_batch(cfg, logger_cfgs=cfg.train.logger)
 
     # === 5) Callbacks ===
     checkpoint_path = Path(HydraConfig.get().runtime.output_dir) / "checkpoints"
