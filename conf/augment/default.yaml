@@ -558,7 +558,7 @@ train:
     domain_adaptation:
       mode:
         type: one_of
-        enable: false
+        enable: false # Not implemented
         p: 0.2
         replace: false
       # # Fourier Domain Adaptation: Adapts the style of the input image to match the style of a reference image
@@ -572,7 +572,7 @@ train:
       # matches the histogram of a provided reference image. This process is applied independently
       # to each channel of the image if it is multi-channel.
       histogram_matching: # Fails with errors
-        enable: false        # A.HistogramMatching
+        enable: false # Not implemented        # A.HistogramMatching
         p: 1.0
 
   # ─── batch-level mixing ops ─────────────────────────────────────

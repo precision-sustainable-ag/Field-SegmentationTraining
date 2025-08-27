@@ -88,12 +88,7 @@ def run_train_pipeline(cfg: DictConfig) -> None:
 
     # Optional: visualize dataloader batches
     if getattr(cfg.train, "dataloader_visualizer", False) and cfg.train.dataloader_visualizer.enabled and is_launcher(cfg):
-        vis_dataloader_batch(cfg, logger_cfgs=cfg.train.logger)
-        vis_augmentation_batch(
-            train_loader,
-            cfg.train.logger,
-            num_samples=cfg.augment.augmentation_visualizer.num_samples,
-        )
+        vis_dataloader_batch(cfg, logger_cfgs=cfg.train.logger)      
 
     # === 5) Callbacks ===
     checkpoint_path = Path(HydraConfig.get().runtime.output_dir) / "checkpoints"
