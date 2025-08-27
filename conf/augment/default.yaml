@@ -492,7 +492,7 @@ train:
         # Sun characteristics
         src_radius: 400
         src_color: [255, 255, 255]
-        method: overlay   # overlay | physics_based
+        method: physics_based   # overlay | physics_based
       random_shadow:
         enable: true         # set true to use
         p: 0.2
@@ -515,7 +515,7 @@ train:
         enable: true
         p: 0.2
         # wind / slant in degrees (lo, hi)
-        slant_range: [-10.0, 10.0]
+        slant_range: [-15, 15]
         # geometry & appearance
         drop_length: null           # null -> auto (height // 8)
         drop_width: 1               # >= 1 px
@@ -548,10 +548,10 @@ train:
       xy_masking:
         enable: false     # set to true only if you really want this
         p: 1.0
-        num_masks_x: 2
-        num_masks_y: 0
-        mask_x_length: [0.10, 0.20]   # pick sensible fractions or ints per docs
-        mask_y_length: [0.00, 0.00]
+        num_masks_x: [1, 3]
+        num_masks_y: [1, 3]
+        mask_x_length: [10, 100]   # pick sensible fractions or ints per docs
+        mask_y_length: [30, 100]
         fill: 0
         fill_mask: 0
     # ── N) Domain Adaptation (requires reference images) ─────────────────────────
@@ -561,17 +561,17 @@ train:
         enable: false
         p: 0.2
         replace: false
-      # Adapts the style of the input image to match the style of a reference image
+      # # Fourier Domain Adaptation: Adapts the style of the input image to match the style of a reference image
       # by manipulating their frequency components in the Fourier domain. This is
       # particularly useful for unsupervised domain adaptation (UDA).
-      fda:
+      fda: # TODO: needs reference image, does NOT work
         enable: false        # A.FDA if available
         p: 1.0
         beta_limit: [0.01, 0.05]
       # This transform modifies the pixel intensities of the input image so that its histogram
       # matches the histogram of a provided reference image. This process is applied independently
       # to each channel of the image if it is multi-channel.
-      histogram_matching:
+      histogram_matching: # Fails with errors
         enable: false        # A.HistogramMatching
         p: 1.0
 
