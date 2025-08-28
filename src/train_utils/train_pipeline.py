@@ -84,7 +84,7 @@ def run_train_pipeline(cfg: DictConfig) -> None:
     model = LitSegmentation(cfg)
 
     # === 4) Loggers ===
-    loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger] if is_rank_zero_worker(cfg) else []
+    loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
 
     # Optional: visualize dataloader batches
     if getattr(cfg.train, "dataloader_visualizer", False) and cfg.train.dataloader_visualizer.enabled and is_launcher(cfg):
