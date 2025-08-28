@@ -81,6 +81,8 @@ class FiftyOneMaskInspector:
         """
         Save the updated DataFrame back to the project_temp_db CSV.
         """
+        # Organize csv by column alphabetically
+        self.df = self.df.reindex(sorted(self.df.columns), axis=1)
         self.df.to_csv(self.temp_csv, index=False)
         log.info(f"Wrote updates to temp CSV: {self.temp_csv}")
 
