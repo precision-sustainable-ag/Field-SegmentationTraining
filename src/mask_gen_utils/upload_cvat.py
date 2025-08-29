@@ -152,15 +152,15 @@ class UploadToCVAT:
         samples: List[fo.Sample] = []
 
         for idx, row in self.df.iterrows():
+            # Skip rows without detections results
+            if not pd.isna(row.get("detection_note")) and row.get("detection_note").lower() == "no detection":
+                log.warning(f"Row {idx} has no detections; skipping")
+                continue
+
             # Skip rows already uploaded or finished unless you want to re-upload
             status = (row.get("mask_status") or "").strip().lower()
             if status in {"cvat_uploaded", "relabelled"}:
                 log.warning(f"Skipping row {idx} with status '{status}'")
-                continue
-
-            # Skip rows without detections results
-            if row.get("detection_note") and row.get("detection_note").lower() == "no detection":
-                log.warning(f"Row {idx} has no detections; skipping")
                 continue
 
             t = self._row_has_target_tag(row)
