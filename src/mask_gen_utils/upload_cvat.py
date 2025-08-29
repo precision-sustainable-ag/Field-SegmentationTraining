@@ -159,7 +159,7 @@ class UploadToCVAT:
                 continue
 
             # Skip rows without detections results
-            if row.get("detection_note").lower() == "no detection":
+            if row.get("detection_note") and row.get("detection_note").lower() == "no detection":
                 log.warning(f"Row {idx} has no detections; skipping")
                 continue
 
