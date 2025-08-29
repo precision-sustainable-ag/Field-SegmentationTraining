@@ -158,6 +158,11 @@ class UploadToCVAT:
                 log.warning(f"Skipping row {idx} with status '{status}'")
                 continue
 
+            # Skip rows without detections results
+            if row.get("detection_note").lower() == "no detection":
+                log.warning(f"Row {idx} has no detections; skipping")
+                continue
+
             t = self._row_has_target_tag(row)
             if t is None:
                 log.warning(f"Row {idx} has no target tag; skipping")
