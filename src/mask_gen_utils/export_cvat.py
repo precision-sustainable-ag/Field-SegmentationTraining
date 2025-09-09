@@ -143,9 +143,7 @@ class CVATRelabelProcessor:
     # ---------- IO ----------
     def load_df(self) -> pd.DataFrame:
         self.df = pd.read_csv(self.temp_csv_path)
-        log.info(f"Loaded temp DB: {self.temp_csv_path} with {len(self.df)} rows")
-        print(self.df)
-        
+        log.info(f"Loaded temp DB: {self.temp_csv_path} with {len(self.df)} rows")        
 
     def save_df(self) -> None:
         assert self.df is not None, "No DataFrame loaded to save."
