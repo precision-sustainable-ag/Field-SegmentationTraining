@@ -105,7 +105,7 @@ class CVATRelabelProcessor:
     COL_REFINE_PARAMS = "refine_params"
 
     STATUS_IGNORE = ["inspected", "good", "finalized", "unreviewed"]
-    STATUS_RELABELLED = "relabelled"
+    STATUS_RELABELED = "relabeled"
 
     BBOX_XYWH = "bbox_xywh"  # CVAT bbox format: [x, y, width, height]
 
@@ -251,7 +251,7 @@ class CVATRelabelProcessor:
         Returns a dict keyed by image absolute path with per-sample updates:
           {
             "/abs/path/to/image.jpg": {
-              "status": "relabelled" | original_status,
+              "status": "relabeled" | original_status,
               "mask_path": "/abs/path/to/saved/_mask.png" | "",
               "reviewer": "...",
               "timestamp": "..."
@@ -275,7 +275,7 @@ class CVATRelabelProcessor:
 
             changed = not _same_masks(refined_mask, relabeled_mask)
             if changed:
-                status = self.STATUS_RELABELLED
+                status = self.STATUS_RELABELED
                 reviewer = self.reviewer
                 timestamp = self.run_timestamp
                 mask_path = str(self._save_relabeled_mask_png(sample))
