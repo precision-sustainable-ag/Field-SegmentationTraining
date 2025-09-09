@@ -38,3 +38,9 @@ voxel_inspection_results_db: ${paths.voxel_inspection_results_dir}/${project.nam
 # model paths
 yolo_weed_detection_model: ${paths.data_dir}/field-tools/models/weed_detection/weights/best.pt
 unet_segmentation_model: ${paths.data_dir}/field-tools/models/unet/unet_segmentation.pth
+
+# DB paths
+longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/
+agir_field_db_dir: ${paths.longterm_storage}/field-tools/agir_field_db
+agir_field_db: ${paths.agir_field_db_dir}/test_agir_field.db
+agir_field_db_schema: ${paths.agir_field_db_dir}/schema.sql

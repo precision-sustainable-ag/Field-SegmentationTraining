@@ -3,11 +3,16 @@ data
 !src/train_utils/data
 projects/test_project
 
+# Ignore exploratory notebooks
+notebooks/
+
 # trained_models directory
 trained_models
 
+
 .keys
 species_dataset
+
 # logging
 logging
 notebooks/

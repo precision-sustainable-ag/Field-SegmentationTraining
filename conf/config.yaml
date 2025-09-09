@@ -20,7 +20,7 @@ project:
 
 mode: train                  # one of: mask_gen / preprocess / train / inference
 
-tasks: # TODO: make the other tasks bool key/values
+tasks:
   preprocess:
     pad_gridcrop_resize: false
     train_val_test_split: false
@@ -32,7 +32,8 @@ tasks: # TODO: make the other tasks bool key/values
     unet_segment_weeds: false
     mask_inspect: false
     mask_refine: false
-  
+    relabel_test: false
+
   train:
     vis_augment: false
     train_pipeline: false
