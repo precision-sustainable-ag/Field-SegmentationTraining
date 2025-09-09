@@ -143,9 +143,7 @@ class CVATRelabelProcessor:
     # ---------- IO ----------
     def load_df(self) -> pd.DataFrame:
         self.df = pd.read_csv(self.temp_csv_path)
-        log.info(f"Loaded temp DB: {self.temp_csv_path} with {len(self.df)} rows")
-        print(self.df)
-        
+        log.info(f"Loaded temp DB: {self.temp_csv_path} with {len(self.df)} rows")        
 
     def save_df(self) -> None:
         assert self.df is not None, "No DataFrame loaded to save."
@@ -253,7 +251,7 @@ class CVATRelabelProcessor:
         Returns a dict keyed by image absolute path with per-sample updates:
           {
             "/abs/path/to/image.jpg": {
-              "status": "relabelled" | original_status,
+              "status": "relabeled" | original_status,
               "mask_path": "/abs/path/to/saved/_mask.png" | "",
               "reviewer": "...",
               "timestamp": "..."
@@ -277,7 +275,7 @@ class CVATRelabelProcessor:
 
             changed = not _same_masks(refined_mask, relabeled_mask)
             if changed:
-                status = self.STATUS_RELABELLED
+                status = self.STATUS_RELABELED
                 reviewer = self.reviewer
                 timestamp = self.run_timestamp
                 mask_path = str(self._save_relabeled_mask_png(sample))
