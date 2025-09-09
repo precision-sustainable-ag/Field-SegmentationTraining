@@ -1,10 +1,7 @@
 # data directory
 data
-projects/test_project/train
-!projects/test_project/preprocess
-!src/data
-scripts/crop_images.py
-logging
+!src/train_utils/data
+projects/test_project
 
 # Ignore exploratory notebooks
 notebooks/
@@ -12,12 +9,13 @@ notebooks/
 # trained_models directory
 trained_models
 
-# keys
-.keys/
+
+.keys
+species_dataset
 
 # logging
 logging
-
+notebooks/
 # extra scripts
 src/utils/maybe_needed/
 

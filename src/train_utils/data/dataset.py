@@ -1,8 +1,9 @@
-# src/data/dataset.py
+# src/train_utils/data/dataset.py
 
 from pathlib import Path
 from typing import Tuple, Dict, Any
 
+import numpy as np
 from PIL import Image
 import torch
 from torch import Tensor
@@ -10,6 +11,16 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from omegaconf import OmegaConf, DictConfig
 import json
+
+from src.train_utils.data.dataset_utils import natural_base_key
+
+# ─── import your augment builders ─────────────────────────────────────────────
+from src.train_utils.data.augment import (
+    get_train_transforms,
+    get_val_transforms,
+    get_test_transforms,
+    get_noop_transform
+)
 
 class FieldDataset(Dataset):
     """
@@ -29,7 +40,7 @@ class FieldDataset(Dataset):
             mode (str): Dataset split to load: 'train', 'val', or 'test'.
         """
         # Keep references to the preprocess and augment config blocks
-        # self.cfg_pre = cfg.preprocess
+        self.cfg_pre = cfg.preprocess
         self.cfg_aug = cfg.augment
 
         # Determine image/mask directories based on mode
@@ -45,9 +56,9 @@ class FieldDataset(Dataset):
         else:
             raise ValueError(f"Unsupported mode: {mode!r}. Choose from 'train','val','test'.")
 
-        # List and sort all image and mask files
-        self.images = sorted(img_dir.glob("*"))
-        self.masks  = sorted(mask_dir.glob("*"))
+        # List and sort all image and mask files with the same natural key
+        self.images = sorted(img_dir.glob("*"), key=natural_base_key)
+        self.masks  = sorted(mask_dir.glob("*"), key=natural_base_key)
 
         # Sanity check: ensure equal number of images and masks
         if len(self.images) != len(self.masks):
@@ -55,6 +66,20 @@ class FieldDataset(Dataset):
                 f"Number of images ({len(self.images)}) "
                 f"and masks ({len(self.masks)}) do not match."
             )
+
+        # flexible check: mask filenames should start with the image stem
+        mismatches = []
+        for img_path, mask_path in zip(self.images, self.masks):
+            img_stem  = img_path.stem               # e.g. "ILA00959_0_0_0"
+            mask_stem = mask_path.stem              # e.g. "ILA00959_0_0_0_mask"
+            if not mask_stem.startswith(img_stem):
+                mismatches.append((img_path.name, mask_path.name))
+
+        if mismatches:
+            print("Found image/mask ordering mismatches (mask must start with image stem):")
+            for img_name, mask_name in mismatches[:5]:
+                print(f"  ✗ {img_name}  ⟷  {mask_name}")
+            raise RuntimeError(f"{len(mismatches)} pairs don’t even share the same stem prefix. Aborting.")
 
         # ─── Dataset‐wide normalization setup ──────────────────────────────────
         # Use the flag in cfg.train to decide whether to normalize
@@ -68,6 +93,22 @@ class FieldDataset(Dataset):
             self.normalize = transforms.Normalize(mean=stats["mean"], std=stats["std"])
         else:
             self.normalize = None
+        
+        # ─── build albumentations pipeline based on mode ───────────────────
+        # If augmentations are enabled in config, build the appropriate transforms
+        # Use the flag in cfg.train to decide whether to augment
+        self.use_augment = bool(getattr(cfg.train, "use_data_augmentation", False))
+        if self.use_augment:
+            if mode == "train":
+                self.transform = get_train_transforms(cfg)
+            elif mode == "val":
+                self.transform = get_val_transforms(cfg)
+            else:
+                self.transform = get_test_transforms(cfg)
+        
+        # no-op: return image & mask untouched
+        else:
+            self.transform = get_noop_transform()
 
     def __len__(self) -> int:
         """
@@ -92,9 +133,14 @@ class FieldDataset(Dataset):
         img = Image.open(self.images[idx]).convert("RGB")
         mask = Image.open(self.masks[idx]).convert("L")  # single channel mask
 
-        # Convert to tensors in [0,1]
-        img_tensor = transforms.ToTensor()(img)
-        mask_tensor = transforms.ToTensor()(mask)
+        # apply albumentations (numpy arrays in/out)
+        arr = self.transform(
+            image = np.array(img),
+            mask = np.array(mask)
+        )
+        img_tensor = arr["image"].float() / 255.0  # convert to float32
+        # mask is single channel, so we add a channel dimension and convert to float32
+        mask_tensor = arr["mask"].unsqueeze(0).float()
 
         # Apply dataset-wide normalization if enabled
         if self.normalize is not None:

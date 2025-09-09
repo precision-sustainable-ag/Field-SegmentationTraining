@@ -1,140 +1,79 @@
 # src/train.py
 
+import os
 import sys
-from typing import List
 from pathlib import Path
+from typing import Callable, Dict
 
-# Add project root to sys.path so that `src` becomes importable
+# Make `src` importable when running this file directly
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import hydra
-import hydra.utils
-from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
+from hydra.core.hydra_config import HydraConfig
 
-from src.utils.gpu_utils import select_available_gpus
-from src.utils.seed import set_seed, seed_worker
-from src.models.lit_segmentation import LitSegmentation
-from src.data.dataset import FieldDataset
-from src.utils.augmentation_logger import log_augmentation_batch
+# --- Task implementations live in train_utils ---
+from src.train_utils.augmentation_visualizer import run_viz_augments
+from src.train_utils.train_pipeline import run_train_pipeline
+from src.train_utils.gpu_utils import is_launcher, is_rank_zero_worker, select_available_gpus
 
-import torch
-from torch.utils.data import DataLoader
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
-from pytorch_lightning.loggers import Logger
-
+def _build_task_registry() -> Dict[str, Callable[[DictConfig], None]]:
+    """
+    Map simple task names to callables that accept only (cfg).
+    """
+    return {
+        "viz_augments": run_viz_augments,   # standalone augment preview
+        "train":        run_train_pipeline, # full Lightning training pipeline
+    }
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def train(cfg: DictConfig) -> None:
     """
-    Entry point for training a segmentation model using PyTorch Lightning.
+    Entrypoint with a tiny task registry.
 
-    This function:
-    - Instantiates datasets from predefined train/val folders.
-    - Builds dataloaders.
-    - Constructs the segmentation model.
-    - Initializes logging and callbacks.
-    - Runs training with the Lightning Trainer.
+    Configure in your YAML:
+      train:
+        vis_augment: true        # run augmentation preview first (optional)
+        train_pipeline: true     # run the training pipeline (optional)
 
-    Args:
-        cfg (DictConfig): Hydra configuration object.
+    You can also toggle these from the CLI, e.g.:
+      python -m src.train train.vis_augment=true train.train_pipeline=false
     """
-    # === 0. Seed === 
-    # Set seed before anything else
-    set_seed(cfg.train.seed)
+    # Discover where outputs will go (Hydra 1.3 sets/run dir already)
+    out_dir = Path(HydraConfig.get().runtime.output_dir)
 
-    # === 1. Datasets ===
-    train_ds = FieldDataset(cfg, mode="train")
-    val_ds = FieldDataset(cfg, mode="val")
+    # # If running in the launcher, print the output directory
+    # if is_launcher(cfg) or not getattr(cfg.train, "use_multi_gpu", False):
+    #     print(f"Hydra output dir: {out_dir}")
 
-    # === 2. DataLoaders ===
-    generator = torch.Generator()
-    generator.manual_seed(cfg.train.seed)
+    # If you want to auto-pick GPUs, do it ONCE in the launcher and freeze the env
+    if getattr(cfg.train, "use_multi_gpu", False) and getattr(cfg.train, "num_gpus", 1) > 1 and is_launcher(cfg):
+        picked = select_available_gpus(max_gpus=min(cfg.train.num_gpus, 8),
+                                       exclude_ids=getattr(cfg.train, "exclude_gpu_ids", [0]),
+                                       verbose=True)
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, picked))
 
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=cfg.train.batch_size,
-        shuffle=True,
-        num_workers=cfg.train.num_workers,
-        pin_memory=cfg.train.pin_memory,
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
+    tasks = _build_task_registry()
+    ran_any = False
 
-    val_loader = DataLoader(
-        val_ds,
-        batch_size=cfg.train.batch_size,
-        shuffle=False,
-        num_workers=cfg.train.num_workers,
-        pin_memory=cfg.train.pin_memory,
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
+    # 1) Optional: visualize augments as a lightweight, standalone step
+    # Run ONCE in launcher (no DDP children yet)
+    if bool(cfg.tasks.train.get("vis_augment", False)) and is_launcher(cfg):
+        print("[task] viz_augments")
+        tasks["viz_augments"](cfg)
+        ran_any = True
 
-    # === 3. Model ===
-    model = LitSegmentation(cfg)
+    # 2) Optional: run the full training pipeline
+    # Let Lightning spawn children; avoid duplicate prints here.
+    if bool(cfg.tasks.train.get("train_pipeline", False)):
+        # Optional: print tag only in the rank-0 worker (won't print in launcher now)
+        if is_rank_zero_worker(cfg):
+            print("[task] train")
+        tasks["train"](cfg)
+        ran_any = True
 
-    # === 4. Loggers ===
-    # Dynamically instantiate all configured loggers
-    loggers: List[Logger] = [hydra.utils.instantiate(lcfg) for lcfg in cfg.train.logger]
-    log_augmentation_batch(train_loader, cfg.train.logger, num_samples=cfg.augment.augmentation_logger.num_samples)
-
-    # === 5. Callbacks ===
-    checkpoint_cb = ModelCheckpoint(
-        monitor=cfg.train.checkpoint.monitor,
-        mode=cfg.train.checkpoint.mode,
-        save_top_k=cfg.train.checkpoint.save_top_k,
-        save_last=cfg.train.checkpoint.save_last,
-    )
-    earlystop_cb = EarlyStopping(
-        monitor=cfg.train.early_stop.monitor,
-        mode=cfg.train.early_stop.mode,
-        patience=cfg.train.early_stop.patience,
-    )
-
-    # === 6. Trainer ===
-    if cfg.train.use_multi_gpu:
-        gpu_ids = select_available_gpus(max_gpus=min(cfg.train.num_gpus, 3), exclude_ids=[0])
-        devices = gpu_ids
-    else:
-        devices = 1
-
-    trainer = Trainer(
-        accelerator=cfg.train.trainer.accelerator,
-        devices=devices,
-        precision=cfg.train.trainer.precision,
-        max_epochs=cfg.train.max_epochs,
-        deterministic=cfg.train.trainer.deterministic,
-        logger=loggers,
-        callbacks=[checkpoint_cb, earlystop_cb],
-        default_root_dir=str(Path(cfg.paths.project_train_dir))
-    )
-
-
-    # === 7. Train ===
-    trainer.fit(model, train_loader, val_loader)
-    if trainer.is_global_zero:
-        print("Training complete.")
-
-    # === 8. Save best model weights as .pth ===
-    best_ckpt_path = checkpoint_cb.best_model_path
-    if best_ckpt_path:
-        best_ckpt = torch.load(best_ckpt_path, map_location="cpu", weights_only=False)
-        model_weights = best_ckpt["state_dict"]
-
-        # Name "best" for consistency across other future tasks
-        ckpt_filename = Path(best_ckpt_path).stem + ".pth"
-
-        # Create model export path
-        export_path = Path(HydraConfig.get().runtime.output_dir) / "model"
-        export_path.mkdir(parents=True, exist_ok=True)
-        torch.save(model_weights, export_path / ckpt_filename)
-        if trainer.is_global_zero:
-            print(f"Best model weights saved to: {export_path / ckpt_filename}")
-    else:
-        if trainer.is_global_zero:
-            print("No best checkpoint found. Skipping .pth export.")
+    if not ran_any and (is_launcher(cfg) or is_rank_zero_worker(cfg)):
+        print("Nothing to do: both train.vis_augment and train.train_pipeline are False.")
 
 
 if __name__ == "__main__":

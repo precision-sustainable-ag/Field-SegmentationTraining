@@ -73,6 +73,20 @@ def _process_one(
     #    Break images > threshold×target into overlapping tiles of size (target_h, target_w).
     if cfg.grid_crop.enabled and ((w >= threshold*target_w) or (h >= threshold*target_h)):
 
+        # compute scale & new size just like in branch 3
+        scale    = min(target_w / w, target_h / h)
+        new_w    = int(w * scale)
+        new_h    = int(h * scale)
+        img_res  = img.resize((new_w, new_h), resample=img_interp)
+        mask_res = mask.resize((new_w, new_h), resample=mask_interp)
+        full_img = Image.new(img.mode,  (target_w, target_h), color=pad_fill)
+        full_mask= Image.new(mask.mode, (target_w, target_h), color=pad_fill)
+        full_img.paste(img_res,  ((target_w - new_w)//2, (target_h - new_h)//2))
+        full_mask.paste(mask_res,((target_w - new_w)//2, (target_h - new_h)//2))
+        # save that resized “full” image & mask
+        full_img.save(out_images / img_path.name)
+        full_mask.save(out_masks   / mask_path.name)
+
         # compute starts so last tile aligns at edge
         x_starts = list(range(0, max(w - target_w + 1, 1), stride))
         y_starts = list(range(0, max(h - target_h + 1, 1), stride))

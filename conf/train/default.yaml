@@ -6,7 +6,12 @@ max_epochs: 3
 num_workers: 16
 pin_memory: true
 seed: 42
-use_data_normalization: true
+use_data_normalization: false
+use_data_augmentation: true
+
+dataloader_visualizer:
+  enabled: true
+  num_samples: 4
 
 # Optimizer:
 optimizer:
