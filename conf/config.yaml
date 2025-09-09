@@ -19,7 +19,19 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: test # or field
 
-mode: train                  # one of: mask_gen / preprocess / train / inference
+mode: preprocess                  # one of: mask_gen / preprocess / train / inference
+
+tasks: # TODO: make the other tasks bool key/values
+  create_project:
+    create_project: false
+  mask_gen:
+    sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
+    detect: false
+    segment: false
+    inspect: false
+    refine: false
+    upload_cvat: false
+    export_cvat: false
 
 tasks:
   preprocess:
@@ -46,8 +58,8 @@ tasks:
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
   run:
-    # base of all outputs
-    dir: ${paths.project_mode_dir}/version_${now:%Y%m%d_%H%M%S}
+    # base of all outputs for train mode
+    dir: ${paths.project_dir}/${mode}
   sweep:
     dir: ${paths.project_mode_dir}/multirun
 
