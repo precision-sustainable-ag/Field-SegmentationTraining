@@ -332,7 +332,7 @@ class FiftyOneMaskInspector:
             initial_tag = str(initial_tag).lower() if pd.notna(initial_tag) else None
 
             if "good" in tags_set:
-                final_tag, status = "good", "finalized"
+                final_tag, status = "finalized", "finalized"
             elif "bad" in tags_set:
                 final_tag, status = "bad", "reviewed"
             elif "other" in tags_set:
