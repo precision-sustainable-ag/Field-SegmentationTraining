@@ -105,7 +105,7 @@ class CVATRelabelProcessor:
     COL_REFINE_PARAMS = "refine_params"
 
     STATUS_IGNORE = ["inspected", "good", "finalized", "unreviewed"]
-    STATUS_RELABELLED = "relabelled"
+    STATUS_RELABELED = "relabeled"
 
     BBOX_XYWH = "bbox_xywh"  # CVAT bbox format: [x, y, width, height]
 
@@ -188,7 +188,9 @@ class CVATRelabelProcessor:
             s = fo.Sample(filepath=str(img_p))
             initial_tag = row.get(self.COL_INIT_ISSUE_TAG)
             s["initial_tag"] = "" if pd.isna(initial_tag) else initial_tag
-            s["final_tag"] = (row.get(self.COL_FINAL_ISSUE_TAG) or "")
+            final_tag = row.get(self.COL_FINAL_ISSUE_TAG)
+            s["final_tag"] = "" if pd.isna(final_tag) else final_tag
+            print(f"\n\n\n\ns['final_tag']: {s['final_tag']}")
             s["tags"] = [t.strip().lower() for t in str(row.get(self.COL_TAGS) or "").split(",") if t.strip()]
             s["status"] = status
             reviewer = row.get(self.COL_REVIEWER)
