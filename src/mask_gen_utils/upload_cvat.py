@@ -175,14 +175,14 @@ class UploadToCVAT:
 
             # Build sample
             s = fo.Sample(filepath=str(paths["image"]))
-            s["initial_tag"] = (row.get("initial_mask_issue_tag") or "")  # keep raw
-            s["final_tag"] = (row.get("final_mask_issue_tag") or "")
+            s["initial_tag"] = str(row.get("initial_mask_issue_tag") or "")  # keep raw
+            s["final_tag"] = str(row.get("final_mask_issue_tag") or "")
             s["tags"] = self._split_tags(row.get("tags"))
 
             # carry reviewer/timestamp/refine_params forward
             s["status"] = status or ""
-            s["reviewer"] = (row.get("mask_reviewer") or self.reviewer)
-            s["timestamp"] = (row.get("mask_timestamp") or self.timestamp)
+            s["reviewer"] = str(row.get("mask_reviewer") or self.reviewer)
+            s["timestamp"] = str(row.get("mask_timestamp") or self.timestamp)
             rp = row.get("refine_params")
             s["refine_params"] = rp if (rp and isinstance(rp, str)) else "{}"
 
