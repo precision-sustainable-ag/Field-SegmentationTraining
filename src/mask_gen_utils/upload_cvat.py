@@ -25,7 +25,7 @@ NEEDED_COLS = [
     "initial_mask_issue_tag",          # e.g., "missing_red"
     "final_mask_issue_tag",            # optional override/after-inspect tag
     "tags",                            # comma separated
-    "mask_status",                     # unreviewed|refined|cvat_uploaded|relabelled|...
+    "mask_status",                     # unreviewed|refined|cvat_uploaded|relabeled|...
     "mask_reviewer",
     "mask_timestamp",
     "refine_params",                   # json string
@@ -159,7 +159,7 @@ class UploadToCVAT:
 
             # Skip rows already uploaded or finished unless you want to re-upload
             status = (row.get("mask_status") or "").strip().lower()
-            if status in {"cvat_uploaded", "relabelled"}:
+            if status in {"cvat_uploaded", "relabeled"}:
                 log.warning(f"Skipping row {idx} with status '{status}'")
                 continue
 
