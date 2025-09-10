@@ -194,7 +194,7 @@ class FiftyOneMaskInspector:
         df = self.df
 
         # By default: anything not final-reviewed
-        mask = (df["mask_status"].isna()) | (df["mask_status"].isin(["unreviewed", "inspected", "refined", "relabelled"]))
+        mask = (df["mask_status"].isna()) | (df["mask_status"].isin(["unreviewed", "inspected", "refined", "relabeled"]))
         if self.only_tags:
             # Example semantics:
             #   only_tags: ["unreviewed"] or ["good","bad"] etc.
