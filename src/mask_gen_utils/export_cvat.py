@@ -49,7 +49,7 @@ def _combine_detection_masks_to_full_mask(
     Combine instance masks from detections into a full-resolution mask aligned to mask_shape_field.
     If detections or mask shape are missing, return the existing mask of mask_shape_field.
     """
-    if detections_field not in sample or mask_shape_field not in sample:
+    if detections_field not in sample or mask_shape_field not in sample or sample[detections_field] is None:
         return sample[mask_shape_field].mask
 
     relabeled_dets = sample[detections_field]["detections"]
@@ -104,7 +104,7 @@ class CVATRelabelProcessor:
     COL_FINAL_ISSUE_TAG = "final_mask_issue_tag"
     COL_REFINE_PARAMS = "refine_params"
 
-    STATUS_IGNORE = ["inspected", "good", "finalized", "unreviewed"]
+    STATUS_IGNORE = ["inspected", "good", "finalized", "unreviewed", "bad"]
     STATUS_RELABELED = "relabeled"
 
     BBOX_XYWH = "bbox_xywh"  # CVAT bbox format: [x, y, width, height]
@@ -113,7 +113,6 @@ class CVATRelabelProcessor:
         self.cfg = cfg
         self.repo_root = Path(cfg.paths.base_dir).resolve()
         self.temp_csv_path = Path(cfg.paths.project_temp_db).resolve()
-        self.output_relabeled_dir = Path(cfg.paths.relabeled_masks_dir).resolve()
 
         # Review/meta
         self.reviewer = os.getenv("USER") or "unknown"
@@ -134,11 +133,8 @@ class CVATRelabelProcessor:
         self.dataset: Optional[fo.Dataset] = None
 
         # Prepare output directories
-        self.output_full_masks_dir = Path(cfg.paths.project_maskgen_dir) / "final_fullsized_masks"
-        self.output_full_masks_dir.mkdir(parents=True, exist_ok=True)
-
-        self.output_cutout_images_dir = Path(cfg.paths.project_maskgen_dir) / "relabeled_cutouts"
-        self.output_cutout_images_dir.mkdir(parents=True, exist_ok=True)
+        self.output_relabeled_dir = Path(cfg.paths.relabeled_dir).resolve()
+        self.output_relabeled_dir.mkdir(parents=True, exist_ok=True)
 
     # ---------- IO ----------
     def load_df(self) -> pd.DataFrame:
@@ -427,7 +423,7 @@ class CVATRelabelProcessor:
 
             # Save
             base_name = Path(row.get(self.COL_TEMP_INITIAL_IMG, Path(rel_cutout_path).stem)).stem
-            out_path = self.output_full_masks_dir / f"{base_name}_mask.png"
+            out_path = self.output_relabeled_dir / f"{base_name}_mask.png"
             cv2.imwrite(str(out_path), canvas)
 
             # Update CSV with repo-relative path if possible
@@ -493,7 +489,7 @@ class CVATRelabelProcessor:
 
             # Save PNG with transparency
             base_stem = Path(cutout_img_path).stem
-            out_path = self.output_cutout_images_dir / f"{base_stem}.png"
+            out_path = self.output_relabeled_dir / f"{base_stem}.png"
             if not cv2.imwrite(str(out_path), masked_bgr):
                 log.warning(f"[row {idx}] Failed to write masked cutout image: {out_path}")
                 continue

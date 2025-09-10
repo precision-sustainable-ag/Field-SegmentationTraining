@@ -19,12 +19,16 @@ log = logging.getLogger(__name__)
 
 # Columns we’ll ensure exist in the temp CSV
 REFINE_COLS = [
+    "temp_refined_cutout_path",
     "temp_refined_cutout_mask_path",
+    "temp_refined_full_mask_path",
     "refine_params",              # JSON string of the config used for this refine op
     "mask_status",                # keep in sync with inspect.py
     "mask_reviewer",
     "mask_timestamp",
 ]
+
+COL_TEMP_INITIAL_CUTOUT_IMG = "temp_initial_cutout_path"
 
 class RefineMask:
     """
@@ -39,8 +43,8 @@ class RefineMask:
         self.repo_root = Path(cfg.paths.base_dir).resolve()
         self.maskgen_dir = Path(cfg.paths.project_maskgen_dir).resolve()
         self.cutout_dir = self.maskgen_dir / "cutouts"
-        self.refined_mask_dir = self.maskgen_dir / "refined_masks"
-        self.refined_mask_dir.mkdir(parents=True, exist_ok=True)
+        self.refined_dir = Path(cfg.paths.refined_dir).resolve()
+        self.refined_dir.mkdir(parents=True, exist_ok=True)
 
         # Input/Output “temp db”
         self.temp_csv = Path(cfg.paths.project_temp_db)
@@ -160,13 +164,13 @@ class RefineMask:
         params = OmegaConf.to_container(proc_cfg, resolve=True)
         return refined, params
 
-    def _save_refined(self, refined_mask: np.ndarray, src_mask_path: Path) -> Path:
+    def _save_refined_cutout_mask(self, refined_mask: np.ndarray, src_mask_path: Path) -> Path:
         """
         Save refined mask alongside project refined_masks dir.
         We mirror the cutout mask's filename into refined_masks/.
         """
         name = src_mask_path.name  # e.g., <stem>_0_mask.png
-        out_path = (self.refined_mask_dir / name).resolve()
+        out_path = (self.refined_dir / name).resolve()
 
         # Normalize to 0/255 uint8 before saving
         m = refined_mask
@@ -177,6 +181,61 @@ class RefineMask:
 
         cv2.imwrite(str(out_path), m)
         return out_path
+
+    def _save_fullsized_mask(self, row: pd.Series, cutout_mask_path: np.ndarray) -> np.ndarray:
+        """
+        Create a full-sized mask (same size as original image) from the cutout mask.
+        The cutout_path is used to determine the position of the cutout within the full image.
+        """
+        initial_full_mask_path = row.get("temp_initial_mask_path", None)
+        initial_mask = cv2.imread(str(initial_full_mask_path), cv2.IMREAD_GRAYSCALE)
+        full_image_shape = initial_mask.shape
+
+        refined_cutout_mask = cv2.imread(str(cutout_mask_path), cv2.IMREAD_GRAYSCALE)
+        if refined_cutout_mask is None:
+            raise FileNotFoundError(f"Could not read cutout mask for full-sized mask creation: {cutout_mask_path}")
+        
+        bbox_val = row.get("bbox_xywh", None)
+        if isinstance(bbox_val, str):
+            bbox_xywh = json.loads(bbox_val) if bbox_val.strip().startswith("[") else [float(v) for v in bbox_val.split(",")]
+        elif isinstance(bbox_val, (list, tuple, np.ndarray, pd.Series)):
+            bbox_xywh = list(bbox_val)
+        x, y, w, h = bbox_xywh[0], bbox_xywh[1], bbox_xywh[2], bbox_xywh[3]
+
+        full_mask = np.zeros(full_image_shape, dtype=np.uint8)
+        full_mask[y:y+h, x:x+w] = (refined_cutout_mask > 0).astype(np.uint8) * 255.
+
+        # Save PNG with transparency
+        cutout_path = str(cutout_mask_path).replace("_mask.png", ".png")
+        base_stem = Path(cutout_path).stem
+        # Remove the leading _0 from the stem if present
+        if base_stem.endswith("_0"):
+            base_stem = base_stem[:-2]
+        out_path = self.refined_dir / f"{base_stem}_mask.png"
+        cv2.imwrite(str(out_path), full_mask)
+        return out_path
+
+    def _save_refined_cutout(self, out_path: Path, row: pd.Series) -> Path:
+        """
+        Create a new masked cutout image using the relabeled cutout mask.
+        Saves as RGBA PNG with transparency from the mask.
+        """        
+        initial_cropout_path = row.get(COL_TEMP_INITIAL_CUTOUT_IMG, None)
+        cutout_bgr = cv2.imread(str(initial_cropout_path), cv2.IMREAD_COLOR)
+        mask_gray = cv2.imread(str(out_path), cv2.IMREAD_GRAYSCALE)
+        # Ensure mask is binary 0/255 uint8
+        mask_bin = (mask_gray > 0).astype(np.uint8)
+        # Expand to 3 channels and apply
+        mask_3c = np.repeat(mask_bin[:, :, None], 3, axis=2)
+        masked_bgr = cutout_bgr * mask_3c  # background → black
+
+        # Save PNG with transparency
+        base_stem = Path(initial_cropout_path).stem
+        out_path = self.refined_dir / f"{base_stem}.png"
+
+        cv2.imwrite(str(out_path), masked_bgr)
+        return out_path
+
 
     # ---------------- Public run ----------------
 
@@ -203,16 +262,25 @@ class RefineMask:
 
             try:
                 refined_mask, params = self._run_processor(tag_key, image_bgr, mask_gray)
-                out_path = self._save_refined(refined_mask, paths["mask"])
+                refined_cutout_mask_path = self._save_refined_cutout_mask(refined_mask, paths["mask"])
+                refined_cutout_path = self._save_refined_cutout(refined_cutout_mask_path, row)
+                refined_full_mask_path = self._save_fullsized_mask(row, refined_cutout_mask_path)   
+
 
                 # Prefer repo-relative path when possible
                 try:
-                    rel = out_path.relative_to(self.repo_root)
+                    rel_cut_mask = refined_cutout_mask_path.relative_to(self.repo_root)
+                    rel_cut = refined_cutout_path.relative_to(self.repo_root)
+                    rel_full_mask = refined_full_mask_path.relative_to(self.repo_root)
                 except ValueError:
-                    rel = out_path
+                    rel_cut_mask = refined_cutout_mask_path
+                    rel_cut = refined_cutout_path
+                    rel_full_mask = refined_full_mask_path
 
                 # Update row
-                self.df.at[idx, "temp_refined_cutout_mask_path"] = str(rel)
+                self.df.at[idx, "temp_refined_cutout_mask_path"] = str(rel_cut_mask)
+                self.df.at[idx, "temp_refined_cutout_path"] = str(rel_cut)
+                self.df.at[idx, "temp_refined_full_mask_path"] = str(rel_full_mask)
                 self.df.at[idx, "refine_params"] = json.dumps(params)
                 self.df.at[idx, "mask_status"] = "refined"
                 self.df.at[idx, "mask_reviewer"] = self.reviewer
@@ -220,7 +288,7 @@ class RefineMask:
                 updated += 1
 
             except Exception as e:
-                log.warning(f"Refine error on row {idx} ({tag_key}): {e}")
+                log.exception(f"Refine error on row {idx} ({tag_key}): {e}")
                 skipped += 1
 
         log.info(f"Refine complete — updated: {updated}, skipped: {skipped}, missing: {missing}")
