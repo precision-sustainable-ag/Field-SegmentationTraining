@@ -1,13 +1,13 @@
 inspect:
   dataset_name: testing_inspect_maskgen
   port: 5050
-  only_include_tags:
-    - missing_white
+  only_tags:
+    # - missing_white
 
 
 refine:
-  only_include_tags:
-    - missing_white
+  only_tags:
+    # - missing_white
   
   filter_db_by_final_voxel_tags: # filters the voxel database by specific final voxel tags 
     - good
