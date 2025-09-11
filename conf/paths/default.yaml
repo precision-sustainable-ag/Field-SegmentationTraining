@@ -30,8 +30,8 @@ project_temp_db: ${paths.project_dir}/temp_db.csv
 
 # paths for mask_gen mode:
 mask_gen_cutout_dir: ${paths.project_maskgen_dir}/cutouts
-refined_masks_dir: ${paths.project_maskgen_dir}/refined_masks
-relabeled_masks_dir: ${paths.project_maskgen_dir}/relabeled_masks
+refined_dir: ${paths.project_maskgen_dir}/refined
+relabeled_dir: ${paths.project_maskgen_dir}/relabeled
 
 # longterm storage paths
 longterm_storage: /mnt/research-projects/r/raatwell/longterm_images3/

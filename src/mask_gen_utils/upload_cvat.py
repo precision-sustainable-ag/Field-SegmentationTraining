@@ -25,7 +25,7 @@ NEEDED_COLS = [
     "initial_mask_issue_tag",          # e.g., "missing_red"
     "final_mask_issue_tag",            # optional override/after-inspect tag
     "tags",                            # comma separated
-    "mask_status",                     # unreviewed|refined|cvat_uploaded|relabelled|...
+    "mask_status",                     # unreviewed|refined|cvat_uploaded|relabeled|...
     "mask_reviewer",
     "mask_timestamp",
     "refine_params",                   # json string
@@ -39,9 +39,7 @@ class UploadToCVAT:
     def __init__(self, cfg: DictConfig) -> None:
         self.cfg = cfg
         self.repo_root = Path(cfg.paths.base_dir).resolve()
-        self.maskgen_dir = Path(cfg.paths.project_maskgen_dir).resolve()
-        self.cutout_dir = self.maskgen_dir / "cutouts"
-        self.refined_mask_dir = self.maskgen_dir / "refined_masks"
+        self.cutout_dir = Path(cfg.paths.mask_gen_cutout_dir).resolve()
 
         self.temp_csv = Path(cfg.paths.project_temp_db)
         if not self.temp_csv.exists():
@@ -159,7 +157,7 @@ class UploadToCVAT:
 
             # Skip rows already uploaded or finished unless you want to re-upload
             status = (row.get("mask_status") or "").strip().lower()
-            if status in {"cvat_uploaded", "relabelled"}:
+            if status in {"cvat_uploaded", "relabeled"}:
                 log.warning(f"Skipping row {idx} with status '{status}'")
                 continue
 
