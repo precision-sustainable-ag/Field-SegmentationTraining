@@ -10,10 +10,52 @@ class MissingWhite:
 
     def __init__(self, missing_white_cfg: DictConfig):
         self.luminance_thresh = missing_white_cfg.luminance_thresh
-        self.white_opening_size = missing_white_cfg.opening_kernel_size
-        self.white_closing_size = missing_white_cfg.closing_kernel_size
-        self.white_erosion_size = missing_white_cfg.erosion_kernel_size
+        self.prune = missing_white_cfg.prune.enabled
     
+    def prune_isolated_speckles_fast(self, mask, area_large=10000, radius=300, min_area_keep=30):
+        # 0/255 -> 0/1
+        m = (mask > 0).astype(np.uint8)
+
+        # Connected components (O(N))
+        num, labels, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+
+        # Large comps mask
+        large = np.zeros_like(m, dtype=np.uint8)
+        large_ids = [i for i in range(1, num) if stats[i, cv2.CC_STAT_AREA] >= area_large]
+        for i in large_ids:
+            large[labels == i] = 1
+
+        if large.sum() == 0:
+            # No big blobs: just area-filter tiny specks
+            keep = np.zeros_like(m)
+            for i in range(1, num):
+                if stats[i, cv2.CC_STAT_AREA] >= min_area_keep:
+                    keep[labels == i] = 1
+            return (keep * 255).astype(np.uint8)
+
+        # distanceTransform measures distance from non-zero to nearest zero.
+        # We want distance to LARGE; so set LARGE=0, others=1.
+        inv_large = (1 - large).astype(np.uint8)  # large->0, other->1
+        dist = cv2.distanceTransform(inv_large, cv2.DIST_L2, 3)
+        near_zone = (dist <= float(radius)).astype(np.uint8)
+
+        # Which labels intersect the near zone?
+        labels_near = np.unique(labels[near_zone > 0])
+        labels_near = set(int(x) for x in labels_near if x != 0)
+
+        # Build kept mask
+        keep = np.zeros_like(m)
+        # Keep all large comps
+        for i in large_ids:
+            keep[labels == i] = 1
+        # Keep small comps only if they intersect near_zone and pass min area
+        for i in range(1, num):
+            if i not in large_ids and stats[i, cv2.CC_STAT_AREA] >= min_area_keep and i in labels_near:
+                keep[labels == i] = 1
+
+        return (keep * 255).astype(np.uint8)
+
+
     def process(self, image: np.ndarray, cropout_mask: np.ndarray) -> np.ndarray:
         """
         Generate a binary mask for detecting white-colored regions using luminance.
@@ -24,28 +66,32 @@ class MissingWhite:
         Returns:
             np.ndarray: Binary mask with white regions as 255.
         """
-        # Separate the channels from RGB image
-        R = image[:, :, 0].astype(np.float32)
-        G = image[:, :, 1].astype(np.float32)
-        B = image[:, :, 2].astype(np.float32)
+        r = image[:, :, 0].astype(np.float32)
+        g = image[:, :, 1].astype(np.float32)
+        b = image[:, :, 2].astype(np.float32)
+
+        # Normalize the channels
+        r_norm, g_norm, b_norm = r / 255.0, g / 255.0, b / 255.0
+
+        # Linearize the RGB values to convert the default gamma-corrected RGB values to linear RGB values.
+        r_lin = np.where(r_norm < 0.04045, r_norm / 12.92, ((r_norm + 0.055) / 1.055) ** 2.4)
+        g_lin = np.where(g_norm < 0.04045, g_norm / 12.92, ((g_norm + 0.055) / 1.055) ** 2.4)
+        b_lin = np.where(b_norm < 0.04045, b_norm / 12.92, ((b_norm + 0.055) / 1.055) ** 2.4)
 
         # Calculate luminance index
-        luminance = 0.2126 * R + 0.7152 * G + 0.0722 * B
+        luminance = 0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin
 
         # Apply luminance threshold
         if self.luminance_thresh > 0:
             luminance_mask = np.where(luminance > self.luminance_thresh, 255, 0).astype(np.uint8)
 
         # Morphological cleaning
-        morphcleaned_refined_white_mask = MorphCleanedMask.morph_cleaned_mask(
-            luminance_mask, 
-            self.white_opening_size, 
-            self.white_closing_size, 
-            self.white_erosion_size
-            ) 
+        if self.prune:
+            pruned_luminance_mask = self.prune_isolated_speckles_fast(luminance_mask, area_large=15000, radius=250, min_area_keep=40)
+            luminance_mask = pruned_luminance_mask
         
         # Combine with cropout_mask
-        combined_refined_mask = cv2.bitwise_or(cropout_mask, morphcleaned_refined_white_mask) # Combine the original mask with the refined mask
+        combined_refined_mask = cv2.bitwise_or(cropout_mask, luminance_mask) # Combine the original mask with the refined mask
         combined_refined_mask_binary = np.where(combined_refined_mask > 0, 255, 0).astype(np.uint8) # Convert to binary mask
         
         return combined_refined_mask_binary

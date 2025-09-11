@@ -1,21 +1,12 @@
-"""
-Weed Detection with YOLO
-==========================
-
-This script detects weeds in images using a trained YOLO model. It processes all .jpg images in the
-'developed-images' folder and saves detection metadata (bounding box and confidence) as JSON files
-in the 'cutouts' directory.
-"""
-
 import json
 import logging
+import pandas as pd
 from pathlib import Path
 from ultralytics import YOLO
 from omegaconf import DictConfig
 from typing import Optional, Dict
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
 class WeedDetector:
@@ -94,44 +85,66 @@ class ProcessDetections:
             cfg (DictConfig): Hydra/OmegaConf configuration with required paths.
                 Required keys: cfg.paths.project_maskgen_dir, cfg.paths.yolo_weed_detection_model
         """
+        self.repo_root = Path(cfg.paths.base_dir)
         self.mask_gen_dir = Path(cfg.paths.project_maskgen_dir)
+        self.input_csv = Path(cfg.paths.project_temp_db)
         self.weed_detector = WeedDetector(Path(cfg.paths.yolo_weed_detection_model))
-        self.detection_save_dir = self.mask_gen_dir / "cutouts"
-        self.detection_save_dir.mkdir(exist_ok=True)
 
-    def process_image(self, image_path: Path) -> None:
+        self.results = []
+
+    def _resolve_image_path(self, row: pd.Series) -> Optional[Path]:
         """
-        Processes a single image by performing weed detection and saving metadata.
-
-        Saves results to a JSON file named after the image stem in the `cutouts` directory.
-
-        Args:
-            image_path (Path): Path to the image to be processed.
+        Prefer 'local_developed_image_path' if present; otherwise fall back to mask_gen_dir/developed-images/<stem>.jpg
         """
-        log.info(f"Processing image: {image_path.name}")
-        detection_results = self.weed_detector.detect_weeds(image_path)
+        # 1) local_developed_image_path
+        local_rel = row.get("local_developed_image_path")
+        if isinstance(local_rel, str) and local_rel.strip():
+            # Handle paths that are already absolute or repo-relative
+            p = Path(local_rel)
+            if not p.is_absolute():
+                p = (self.repo_root / p).resolve()
+            if p.exists():
+                return p
 
-        detection_json_path = self.detection_save_dir / f"{image_path.stem}_0.json"
-        with open(detection_json_path, "w") as f:
-            json.dump(detection_results, f, indent=4)
+        # 2) derived by stem + extension in the project dir
+        stem = row.get("stem") or Path(str(row.get("image_id", ""))).stem
+        ext = (row.get("extension") or "jpg").lower()
+        candidate = (self.mask_gen_dir / "developed-images" / f"{stem}.{ext}").resolve()
+        return candidate if candidate.exists() else None
 
-        log.info(f"Saved detection results to: {detection_json_path}")
+    def process_temp_db(self) -> None:
+        log.info(f"Loading CSV: {self.input_csv}")
+        df = pd.read_csv(self.input_csv)
+        df["bbox_xywh"] = df["bbox_xywh"].astype("object")
 
-    def process_dir(self) -> None:
-        """
-        Processes all JPG images in the 'developed-images' folder of the root directory.
-        
-        Applies weed detection and stores output metadata in JSON format under 'cutouts/'.
-        """
-        image_dir = self.mask_gen_dir / "developed-images"
-        image_paths = sorted(image_dir.glob("*.jpg"))
-        log.info(f"Found {len(image_paths)} images in {image_dir}. Starting detection...")
+        # Ensure columns exist
+        for col in ("bbox_xywh", "det_pred_conf", "detection_note"):
+            if col not in df.columns:
+                df[col] = pd.NA
 
-        for image_path in image_paths:
-            self.weed_detector.missing_detection_notes = []
-            self.process_image(image_path)
+        updated, missing_files = 0, 0
+        for idx, row in df.iterrows():
+            img_path = self._resolve_image_path(row)
+            if img_path is None:
+                df.loc[idx, "detection_note"] = "Image not found"
+                missing_files += 1
+                continue
 
-        log.info("Completed processing all images.")
+            det = self.weed_detector.detect_weeds(img_path)
+            if det is None:
+                df.loc[idx, ["bbox_xywh", "det_pred_conf", "detection_note"]] = [pd.NA, pd.NA, "No detection"]
+                continue
+
+            # Store bbox as JSON string to be CSV-safe and easy to parse later
+            df.loc[idx, "bbox_xywh"] = json.dumps(det["bbox"])
+            df.loc[idx, "det_pred_conf"] = det["det_pred_conf"]
+            df.loc[idx, "detection_note"] = pd.NA
+            updated += 1
+
+        log.info(f"Detections updated: {updated}; Missing images: {missing_files}")
+        df.to_csv(self.input_csv, index=False)
+        log.info(f"Saved updated CSV to: {self.input_csv}")
+
 
 def main(cfg: DictConfig) -> None:
     """
@@ -141,6 +154,5 @@ def main(cfg: DictConfig) -> None:
         cfg (DictConfig): Configuration object containing model path and image directories.
     """
     log.info("Starting weed detection process...")
-    detector = ProcessDetections(cfg)
-    detector.process_dir()
+    ProcessDetections(cfg).process_temp_db()
     log.info("Weed detection process completed.")

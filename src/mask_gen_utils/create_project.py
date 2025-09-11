@@ -1,11 +1,11 @@
 import logging
-from pathlib import Path
-import pandas as pd
-import sqlite3
 import shutil
-
-from omegaconf import DictConfig
+import sqlite3
+from pathlib import Path
 from typing import Optional
+
+import pandas as pd
+from omegaconf import DictConfig
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ class CreateProject:
         self.local_developed_images_dir = self.mask_gen_dir / "developed-images"
         self.local_developed_images_dir.mkdir(parents=True, exist_ok=True)
         self.lts_source_dir = Path(cfg.paths.longterm_storage)
+        self.project_temp_db = Path(cfg.paths.project_temp_db)
 
     def copy_from_lts_to_local(self, sample_df: pd.DataFrame) -> pd.DataFrame:
         """ Copy images from the long-term storage to the local project directory.
@@ -47,9 +48,8 @@ class CreateProject:
         Args:
             sampled_df (pd.DataFrame): DataFrame containing the sampled images.
         """
-        temp_db_path = Path(self.mask_gen_dir) / "temp_db.csv"
-        sampled_df.to_csv(temp_db_path, index=False)
-        log.info(f"Temporary database saved at {temp_db_path}")
+        sampled_df.to_csv(self.project_temp_db, index=False)
+        log.info(f"Temporary database saved at {self.project_temp_db}")
 
 class FilterImagesBySpecies:
     """
@@ -66,8 +66,8 @@ class FilterImagesBySpecies:
         """ Load the database and filter images based on extension and preprocessing status."""
         log.info(f"Loading the agir field db...")
         df = pd.read_sql_query("SELECT * FROM field_data", self.conn)
-        df['extension'] = df['extension'].str.lower()
-        filtered_df = df[(df['extension'] == 'jpg') & (df['is_preprocessed'])]
+        filtered_df = df[(df['extension'].str.lower() == '.jpg') & (df['is_preprocessed'])& (df['mask_status'] != "finalized")]
+        log.info(f"Filtered {len(filtered_df)} images with '.jpg' extension and preprocessed status.")
         # Filter out first two images in the sample which are without mat or with color checker
         filtered_df = filtered_df[~filtered_df['image_index'].isin([0, 1])]
         return filtered_df
@@ -120,3 +120,32 @@ class FilterImagesBySpecies:
             self.close()
         # Filter the DataFrame
         return self.sample_by_n_species(df)
+
+def main(cfg: DictConfig) -> None:
+    """ Main entry point for creating a new project """
+    log.info(f"Creating a project at {cfg.paths.project_dir}")
+    
+    # Filter images by species and get a DataFrame of sampled images from db
+    try:
+        g = FilterImagesBySpecies(cfg)
+        sampled_species = g.get_sampled_images()
+    except Exception as e:
+        log.exception(f"Error filtering images by species: {e}")
+        return
+    
+    # Create the project directory structure and copy images
+    try:
+        create_project = CreateProject(cfg)
+        sampled_df = create_project.copy_from_lts_to_local(sampled_species)
+    except Exception as e:
+        log.exception(f"Error creating project: {e}")
+        return
+    
+    # Save a temporary database in the project directory
+    try:
+        create_project.save_temp_db(sampled_df)
+    except Exception as e:
+        log.exception(f"Error saving temporary database: {e}")
+        return
+    
+    log.info("Project creation complete.")
