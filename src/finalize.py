@@ -4,13 +4,14 @@ from omegaconf import DictConfig
 
 # Import the task functions
 # TODO: move these into a subdirectory src/mask_gen when incorporating into larger pipeline
-from src.finalize_lts_utils.finalize_lts import main as finalize_lts
-
+# from src.finalize_lts_utils.finalize_lts import main as finalize_lts
+from src.finalize_lts_utils.final_inspection import main as final_inspection
 log = logging.getLogger(__name__)
 
 # Define a registry of tasks
 TASK_REGISTRY = {
-    "finalize_lts": finalize_lts,
+    # "finalize_lts": finalize_lts,
+    "final_inspection": final_inspection,
     # Add more tasks here as needed
 }
 
