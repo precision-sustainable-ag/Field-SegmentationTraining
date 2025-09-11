@@ -118,6 +118,8 @@ class FilterImagesBySpecies:
             df = self._load_db()
         finally:
             self.close()
+        # Exclude final-approved masks
+        df = df[df['mask_status'] != "final-approved"]
         # Filter the DataFrame
         return self.sample_by_n_species(df)
 

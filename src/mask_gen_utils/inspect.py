@@ -26,11 +26,20 @@ INSPECT_COLS = [
     "initial_mask_issue_tag",
     "final_mask_issue_tag",
     "tags",
-    "mask_status",        # unreviewed | inspected | reviewed
+    "mask_status",        # unreviewed | inspected | reviewed | cvat_uploaded | relabeled
     "mask_reviewer",
     "mask_timestamp",
     ]
-
+INSPECT_TAGS = [
+    "unreviewed",
+    "inspected",   # looked at but not finalized
+    "reviewed",    # looked at and marked good/bad/other
+    "cvat_uploaded", # uploaded to CVAT for relabeling
+    "relabeled",   # relabeled in CVAT and downloaded
+    "finalized",   # marked good
+    "bad",         # marked bad
+    "other",       # marked other 
+]
 class FiftyOneMaskInspector:
     """
     Mask inspection tied to the project temp CSV (same artifact used by create_project/detect/segment).
@@ -194,7 +203,7 @@ class FiftyOneMaskInspector:
         df = self.df
 
         # By default: anything not final-reviewed
-        mask = (df["mask_status"].isna()) | (df["mask_status"].isin(["unreviewed", "inspected", "refined", "relabeled"]))
+        mask = (df["mask_status"].isna()) | (df["mask_status"].isin(INSPECT_TAGS))
         if self.only_tags:
             # Example semantics:
             #   only_tags: ["unreviewed"] or ["good","bad"] etc.

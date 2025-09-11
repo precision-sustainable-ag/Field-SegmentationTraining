@@ -44,8 +44,8 @@ yolo_weed_detection_model: ${paths.longterm_storage}/field-tools/models/yolo_wee
 unet_segmentation_model: ${paths.longterm_storage}/field-tools/models/unet_segmentation_model/unet_seg_model_nav_20250611/weights/unet_segmentation.pth
 
 # DB paths
-agir_field_db_dir: ${paths.longterm_storage}/field-tools/agir_field_db
-agir_field_db: ${paths.agir_field_db_dir}/agir_field.db
+table_name: field_data
+primary_key_field: image_id
 
 # Keys
 keys_path: ${paths.base_dir}/.keys/default.yaml

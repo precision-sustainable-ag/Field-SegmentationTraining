@@ -43,7 +43,7 @@ tasks:
     train_pipeline: false
 
   finalize:
-    finalize_lts: false
+    final_inspection: false
 
   inference:
     - inference

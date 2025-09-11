@@ -15,13 +15,13 @@ refine:
   # Morphological operations and HSV color ranges for mask generation.
   missing_red:
     exr_thresh: 60
-    saturation_thresh: 20
+    saturation_thresh: 80
     opening_kernel_size: 0
     closing_kernel_size: 0
     erosion_kernel_size: 0
     
   missing_white: 
-    luminance_thresh: 0.3 # range [0, 1]
+    luminance_thresh: 0.4 # range [0, 1]
     prune: # Remove small/isolated blobs that are not within `radius` pixels of a large component.
       enabled: true
       area_large: 10000
@@ -54,4 +54,14 @@ relabel:
 
 export_cvat:
   task_ids:
-    - 295  # CVAT task ID for exporting annotations
+final_inspection:
+  port: 6060
+  dataset_name: "maskgen-final-inspect"
+  remove_source: false # if true, removes source (cutout and mask) files after moving to LTS
+  only_tags:
+    # - missing_white
+  canonical_final_tag_mapping: # ensures user defined tags are mapped to canonical tags (canonical: user defined)
+    final-approved: good        # any tag containing "approve" -> final-ok
+    final-reject: bad    # any tag containing "reject" -> final-reject
+    final-needsfix: fix # any tag containing "needsfix" -> final-needsfix
+    final-defer: defer       # any tag containing "defer" -> final-defer
