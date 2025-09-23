@@ -1,3 +1,4 @@
+# conf/inference/default.yaml
 # Inference + evaluation settings. 
 # src/inference.py should load the trained model, run predictions, threshold,
 # save predicted masks, then compute IoU vs gold masks if available.
