@@ -22,6 +22,9 @@ val_masks_dir: ${paths.preprocess_split_dir}/val/masks
 test_images_dir: ${paths.preprocess_split_dir}/test/images
 test_masks_dir: ${paths.preprocess_split_dir}/test/masks
 
+# Inference related paths
+
+
 # hardcoded paths for each mode
 project_train_dir: ${paths.project_dir}/train  
 project_maskgen_dir: ${paths.project_dir}/mask_gen

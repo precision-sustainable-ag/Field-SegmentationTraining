@@ -1,21 +1,38 @@
 # conf/inference/default.yaml
-# Inference + evaluation settings. 
-# src/inference.py should load the trained model, run predictions, threshold,
-# save predicted masks, then compute IoU vs gold masks if available.
+# Inference-wide knobs. You can override from CLI as usual.
 
-batch_size: 8
-device: "cuda"
+input_dir: ${paths.test_images_dir}         # where to read images from (defaults to test set)
+mask_gt_dir: ${paths.test_masks_dir}       # optional (for metrics); can be null/None
+output_root: ${paths.project_inference_dir}
+preview_max_side: 1200                     # resize triptych preview longest side (keeps aspect)
+save:
+  triptych: true
+  overlay: true
+  raw_mask: true
+overlay:
+  alpha: 0.60
+  color: [0, 255, 0]                       # green
 
-# Test‐time augmentation (TTA):
-tta:
-  enabled: false
-  horizontal_flip: true
-  vertical_flip: false
+# ROI detection (YOLO). If disabled, segment full image.
+roi:
+  enable: true
+  # weights: ${paths.yolo_weed_detection_model}
+  weights: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/weed_detection/weights/best.pt
+  conf: 0.25
+  iou: 0.45
+  pick: "best"                             # "best" (highest conf) or "largest"
 
-threshold: 0.5
-save_masks: true
-save_overlay: false    # if true, also save image+mask overlay under inference_results_dir/overlays
-
-# If you have a “test” folder, compute IoU vs ground truth automatically:
-evaluate:
-  enabled: true
+# Segmentation & pre/post
+seg:
+  # weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
+  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/unet/unet_segmentation.pth
+  threshold: 0.5
+  pad_to_divisor: 32
+  tile:
+    enable: false
+    tile_size: 2048
+    overlap: 256
+# Optional dataset-wide normalization at inference (usually you want this if used in training)
+normalization:
+  enable: ${train.use_data_normalization}
+  stats_path: ${paths.project_datastats_dir}/rgb_mean_std.json  # mean/std from preprocess

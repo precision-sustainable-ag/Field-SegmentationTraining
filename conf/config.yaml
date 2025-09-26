@@ -20,7 +20,7 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: test # or field
 
-mode: preprocess                  # one of: mask_gen / preprocess / train / inference
+mode: inference                  # one of: mask_gen / preprocess / train / inference
 
 tasks:
   preprocess:
@@ -46,7 +46,8 @@ tasks:
     finalize_lts: false
 
   inference:
-    - inference
+    - local: true
+    - lts: false
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
