@@ -1,4 +1,4 @@
-# src/train_utils/gpu_utils.py
+# src/utils/gpu_utils.py
 
 import os
 import GPUtil

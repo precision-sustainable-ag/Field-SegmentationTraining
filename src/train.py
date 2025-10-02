@@ -15,7 +15,7 @@ from hydra.core.hydra_config import HydraConfig
 # --- Task implementations live in train_utils ---
 from src.train_utils.augmentation_visualizer import run_viz_augments
 from src.train_utils.train_pipeline import run_train_pipeline
-from src.train_utils.gpu_utils import is_launcher, is_rank_zero_worker, select_available_gpus
+from src.utils.gpu_utils import is_launcher, is_rank_zero_worker, select_available_gpus
 
 def _build_task_registry() -> Dict[str, Callable[[DictConfig], None]]:
     """

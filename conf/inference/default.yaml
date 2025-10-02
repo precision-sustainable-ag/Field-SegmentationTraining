@@ -25,7 +25,7 @@ roi:
 # Segmentation & pre/post
 seg:
   # weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
-  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/unet/unet_segmentation.pth
+  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/unet/unet_segmentation.pth # local best model
   threshold: 0.5
   pad_to_divisor: 32
   tile:
