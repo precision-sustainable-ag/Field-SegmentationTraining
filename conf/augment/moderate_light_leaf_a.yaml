@@ -1,0 +1,647 @@
+# conf/augment/default_grouped.yaml
+# All data‐augmentation transforms. Your datamodule should read these keys
+# and apply the appropriate torchvision / albumentations transforms.
+
+# ─── how many samples to visualize each epoch ─────────────────────────────
+augmentation_visualizer:
+  enable: true        # toggle on/off
+  num_samples: 4      # how many image+mask pairs to log
+
+  # ─── legend panel settings ─────────────────────────────────────────
+  legend:
+    # font size = max(min_font_size, height / font_divisor)
+    font_divisor: 40
+    min_font_size: 12
+
+# ─── train transformations ──────────────────────────────────────────
+train:
+  enable: true
+
+  # target size for all spatial ops (pad/crop/resize happens upstream)
+  img_size:
+    height: ${preprocess.pad_gridcrop_resize.size.height}
+    width:  ${preprocess.pad_gridcrop_resize.size.width}
+
+  # =========================
+  # SPATIAL TRANSFORM GROUPS
+  # =========================
+  spatial:
+    enable: true     # master switch for all spatial transforms
+
+    # ── A) Initial Resizing / Cropping (choose ONE strategy) ─────────
+    initial_resize_crop:
+      mode:
+        type: one_of      # one_of | some_of | all
+        enable: false
+        p: 1.0
+        n: 1              # used only if type == some_of
+        replace: false
+
+      random_crop:
+        enable: false
+        p: 1.0
+        height: ${augment.train.img_size.height} # these need to be changed
+        width:  ${augment.train.img_size.width} # these need to be changed
+
+        # Optional padding when crop > image (Albumentations pads first, then crops)
+        pad_if_needed: false          # ← set true if your dataset has small images
+
+        # If you enable pad_if_needed, these control how padding looks:
+        border_mode: constant         # constant | reflect | reflect101 | replicate | wrap
+        fill: 0                       # image padding value (int or [r,g,b])
+        fill_mask: 0                  # mask padding value (usually 0 for background)
+        pad_position: center          # center | top_left | top_right | bottom_left | bottom_right | random
+
+      # Alternative strategies if you ever want them (disabled by default):
+      # Option 1: SmallestMaxSize -> RandomCrop to your fixed train size
+      smallest_max_size_then_random_crop:
+        enable: false
+        p: 1.0
+
+        # Choose exactly one of these:
+        # max_size: scales so min(side) == max_size
+        # OR max_size_hw: scales to meet (height,width) constraints
+        max_size: ${augment.train.img_size.height}   # or a list, e.g. [256, 320, 384]
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+
+        # Interpolation settings (strings mapped to cv2 codes in augment.py)
+        interpolation: linear         # nearest | linear | cubic | area | lanczos4
+        mask_interpolation: nearest   # usually 'nearest' for masks
+        area_for_downscale: image     # null | image | image_mask
+
+        # Final crop to the training size (kept as-is)
+        final_height: ${augment.train.img_size.height}
+        final_width:  ${augment.train.img_size.width}
+
+      # Option 2: SmallestMaxSize only (no crop)
+      smallest_max_size:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+        interpolation: linear
+        mask_interpolation: nearest
+        area_for_downscale: image
+
+      # Option 3: LongestMaxSize -> PadIfNeeded (keeps aspect, then pads)
+      longest_max_size_then_pad_if_needed:
+        enable: false
+        p: 1.0
+
+        # Choose exactly one of these (like the docs):
+        #   - max_size: int or list[int] (sampled if list)
+        #   - max_size_hw: [height|null, width|null]
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+
+        # Interpolation settings (strings; mapped to cv2 in code)
+        interpolation: linear         # nearest | linear | cubic | area | lanczos4
+        mask_interpolation: nearest   # usually nearest for masks
+        area_for_downscale: image     # null | image | image_mask
+
+        # Final padding target (usually your train size)
+        pad_min_height: ${augment.train.img_size.height}
+        pad_min_width:  ${augment.train.img_size.width}
+        pad_border_mode: constant     # constant | reflect | reflect101 | replicate | wrap
+        # pad_fill: 0                 # (optional) image padding fill value
+        # pad_fill_mask: 0            # (optional) mask padding fill value
+        # pad_position: center        # (optional) center/top_left/.../random
+
+      # Option 4: LongestMaxSize only (no padding)
+      longest_max_size:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+        interpolation: linear
+        mask_interpolation: nearest
+        area_for_downscale: image
+
+    # ── B) Basic Geometric (usually “always include”) ────────────────
+    basic_geometric:
+      mode:
+        type: all         # horizontal/vertical/90° rotations in one block
+        enable: true
+        p: 1.0
+        replace: false
+      horizontal_flip:
+        enable: true
+        p: 0.5         # mirror left‐right
+      vertical_flip:
+        enable: true
+        p: 0.3         # mirror up‐down
+      random_rotate90:
+        enable: true
+        p: 0.5         # rotate by a multiple of 90°
+
+    # ── C) Affine / Perspective / Warps (choose ONE) ─────────────────
+    affine_perspective:
+      mode:
+        type: one_of
+        enable: false
+        p: 0.7
+        replace: false
+
+      # core rigid-ish geometry first
+      affine:
+        enable: false
+        p: 0.8
+        # ── geometric params ───────────────────────────────────────────
+        # scale can be: number | [lo, hi] | {x: [lo,hi], y: [lo,hi]}
+        scale: [0.9, 1.1]
+        # translate as fraction of W/H; can be: number | [lo,hi] | {x: [lo,hi], y: [lo,hi]} | null
+        translate_percent: [-0.10, 0.10]
+        # OR translate in pixels; same shapes as above. Use null to ignore.
+        translate_px: null
+        # rotate in degrees: number | [lo, hi]
+        rotate: [-15, 15]
+        # shear in degrees: number | [lo, hi] | {x: [lo,hi], y: [lo,hi]}
+        shear: [-10, 10]
+      perspective:
+        enable: false
+        p: 0.8
+        # how far to perturb the four corners (float or [lo, hi])
+        scale: [0.05, 0.10]
+        # output sizing behavior
+        keep_size: true          # keep original HxW after transform
+        fit_output: false        # if true, expand canvas to keep everything (then, if keep_size=true, resize back)
+      shift_scale_rotate:
+        enable: false           # prefer Affine; keep off to avoid warning
+        p: 0.5
+        shift_limit: [-0.0625, 0.0625]   # float or [lo, hi], ∈ [-1, 1]
+        scale_limit: [-0.1, 0.1]         # float or [lo, hi] (Albumentations adds +1 internally)
+        rotate_limit: [-30, 30]          # int or [lo, hi] in degrees
+      optical_distortion:
+        enable: false
+        p: 0.2
+        distort_limit: [-0.2, 0.2]
+      random_scale:
+        enable: false
+        p: 0.3
+        scale_limit: [0.8, 1.2]   # random zoom in/out
+
+      # ── put non‑linear warps at the END of this group ───────────────
+      grid_distortion:
+        enable: false
+        p: 0.2
+        num_steps: 5         # 	Number of grid cells on each side of the image. Higher values create more granular distortions. Must be at least 1. Default: 5.
+        distort_limit: [-0.3, 0.3]        # Higher values create stronger distortions. Should be in the range of -1 to 1. Default: (-0.3, 0.3).
+      elastic_transform:
+        enable: false
+        p: 0.2
+        alpha: 120        # Scaling factor for the random displacement fields. Higher values result in more pronounced distortions. Default: 1.0
+        sigma: 8          # Standard deviation of the Gaussian filter used to smooth the displacement fields. Higher values result in smoother, more global distortions. Default: 50.0
+      thin_plate_spline:
+        enable: false            # only if A.ThinPlateSpline exists in your version
+        p: 1.0
+        # how hard to bend (0.0 = none, 0.2–0.4 = moderate, 0.5+ = strong)
+        scale_range: [0.2, 0.4]
+        # grid resolution (>=2). 3–4 is a good start; higher = more local warps
+        num_control_points: 4
+
+    # ── D) Occlusion / Dropout (HIGHLY RECOMMENDED; choose ONE) ──────
+    dropout_occlusion:
+      mode:
+        type: one_of
+        enable: false
+        p: 1.0
+        replace: false
+      coarse_dropout:
+        enable: true
+        p: 1.0
+        # hole sizing in fraction of image side (typical ranges)
+        num_holes_range: [1, 8]       # Range (min, max) for the number of rectangular regions to drop out. Default: (1, 1)
+        hole_height_range: [0.1, 0.25]          # Range (min, max) for the height of dropout regions. If int, specifies absolute pixel values. If float, interpreted as a fraction of the image height. Default: (0.1, 0.2)
+        hole_width_range:  [0.1, 0.25]          # Range (min, max) for the width of dropout regions. If int, specifies absolute pixel values. If float, interpreted as a fraction of the image height. Default: (0.1, 0.2)
+        fill_value: 0
+      grid_dropout:
+        enable: false
+        p: 0.5
+        ratio: 0.5        # The ratio of the mask holes to the unit size (same for horizontal and vertical directions). Must be between 0 and 1. Default: 0.5.
+        unit_size_range: [12, 26]
+      erasing:
+        enable: true
+        p: 0.8
+        scale: [0.02, 0.33]   # proportion of image area to erase
+        ratio: [0.3, 3.3]     # aspect ratio (w/h) of the erased box
+
+    # ── E) Context Independence (use with caution for segmentation) ─────────────
+    context_independence:
+      mode:
+        type: one_of
+        enable: false
+        p: 0.2
+        replace: false
+      random_grid_shuffle:
+        enable: true
+        p: 1.0
+        grid: [3, 3]        # The number of grid cells to divide the image into (rows, cols)
+
+  # =========================
+  # PIXEL-LEVEL TRANSFORM GROUPS
+  # =========================
+  pixel:
+    enable: true     # master switch for all pixel‐level transforms
+
+    # ── F) Color Space Reduction (sparingly; choose ONE) ─────────────
+    color_space_reduction:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.15
+        replace: false
+      to_gray:
+        enable: true
+        p: 0.3
+      channel_dropout:
+        enable: true
+        p: 0.3
+        channel_drop_range: [1, 1]        # Range from which to choose the number of channels to drop. The actual number will be randomly selected from the inclusive range [min, max]. Default: (1, 1).
+
+    # ── G) Color Augmentations (choose ONE) ──────────────────────────
+    color_augmentations:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.9
+        replace: false
+      random_brightness_contrast:
+        enable: true
+        p: 0.8
+        # Factor range for changing brightness/contrast. If a single float value is provided, the range will be (-brightness_limit, brightness_limit).
+        # Values should typically be in the range [-1.0, 1.0], where 0 means no change, 1.0 means maximum brightness, and -1.0 means minimum brightness. Default: (-0.2, 0.2).
+        brightness_limit: 0.35 
+        contrast_limit: 0.35
+      # Randomly changes the brightness, contrast, saturation, and hue of an image. This transform is similar to torchvision's ColorJitter but with some differences due to the use of OpenCV instead of Pillow.
+      color_jitter:
+        enable: true
+        p: 0.8
+        brightness: 0.35
+        contrast: 0.35
+        saturation: 0.40
+        hue: 0.15
+      # This transform adjusts the HSV (Hue, Saturation, Value) channels of an input RGB image. It allows for independent control over each channel, providing a wide range of color and brightness modifications.
+      hue_saturation_value:
+        enable: true
+        p: 0.8
+        hue_shift_limit: 25
+        sat_shift_limit: 40
+        val_shift_limit: 30
+      random_gamma:
+        enable: true
+        p: 0.8
+        # If gamma_limit is a single float value, the range will be (1, gamma_limit). If it's a tuple of two floats, they will serve as the lower and upper bounds for gamma adjustment.
+        # Values are in terms of percentage change, e.g., (80, 120) means the gamma will be between 80% and 120% of the original. Default: (80, 120).
+        gamma_limit: [70, 130]
+      planckian_jitter:
+        enable: true       # A.PlanckianJitter if available
+        p: 0.3
+        # physics-based color temperature jitter
+        mode: blackbody     # blackbody | cied
+        temperature_limit: [3000, 9000]   # K (blackbody: 3000–15000, cied: 4000–15000)
+        sampling_method: uniform          # uniform | gaussian
+      # optionally include slight channel operations in this bucket:
+      rgb_shift:
+        enable: true
+        p: 0.4
+        # Range for shifting the channels. Options:
+        # - If tuple (min, max): Sample shift value from this range
+        # - If int: Sample shift value from (-r_shift_limit, r_shift_limit)
+        # - For uint8 images: Values represent absolute shifts in [0, 255]
+        # - For float images: Values represent relative shifts in [0, 1]
+        # Default: (-20, 20)
+        r_shift_limit: [-30, 30]
+        g_shift_limit: [-30, 30]
+        b_shift_limit: [-30, 30]
+      channel_shuffle:
+        enable: true
+        p: 0.3
+
+    # ── H) Blur (low probability; choose ONE) ────────────────────────
+    blur:
+      mode:
+        type: one_of
+        enable: false
+        p: 0.3
+        replace: false
+      gaussian_blur:
+        enable: true
+        p: 0.5
+        # Controls the range of the Gaussian kernel size.
+        # If a single int is provided, the kernel size will be randomly chosen
+        # between 0 and that value.
+        # If a tuple of two ints is provided, it defines the inclusive range
+        # of possible kernel sizes.
+        # Must be zero or odd and in range [0, inf). If set to 0 (default), the kernel size
+        # will be computed from sigma as `int(sigma * 3.5) * 2 + 1` to exactly match PIL's
+        # implementation.
+        # Default: 0
+        blur_limit: [3, 7]
+        # Range for the Gaussian kernel standard deviation (sigma). Must be more or equal than 0.
+        # If a single float is provided, sigma will be randomly chosen
+        # between 0 and that value.
+        # If a tuple of two floats is provided, it defines the inclusive range
+        # of possible sigma values.
+        # Default: (0.5, 3.0)
+        sigma_limit: [0.5, 3.0]
+      median_blur:
+        enable: true
+        p: 0.5
+        blur_limit: 5
+      motion_blur:
+        enable: true
+        p: 0.3
+        # kernel size (int or [lo, hi]); must be odd and ≥ 3
+        blur_limit: [3, 9]
+        # orientation and bias
+        angle_range: [0.0, 360.0]     # degrees
+        direction_range: [-1.0, 1.0]  # -1..1
+        # whether kernel may be off-center
+        allow_shifted: true
+      advanced_blur:
+        enable: true
+        p: 0.3
+        # kernel size (int or [lo, hi]); must be odd and ≥ 3
+        blur_limit: [3, 9]
+        # anisotropic spreads (float or [lo, hi])
+        sigma_x_limit: [0.2, 1.0]
+        sigma_y_limit: [0.2, 1.0]
+        # rotate the kernel (int or [lo, hi] in degrees)
+        rotate_limit: [-90, 90]
+        # generalized Gaussian shape (float or [lo, hi])
+        beta_limit: [0.5, 8.0]
+        # multiplicative kernel noise (float or [lo, hi])
+        noise_limit: [0.75, 1.25]
+      zoom_blur:
+        enable: true
+        p: 0.3
+        # zoom strength (> 1). Use a narrow range for subtle, wider for strong.
+        max_factor: [1.10, 1.30]
+        # step size (> 0). Smaller = smoother blur, larger = chunkier.
+        step_factor: [0.01, 0.03]
+
+    # ── I) Noise (low probability; choose ONE) ───────────────────────
+    noise:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.35
+        replace: false
+      gauss_noise:
+        enable: true
+        p: 0.5
+        # normalized to image max (uint8: 255, float32: 1.0)
+        std_range:  [0.08, 0.18]   # clamp to [0, 1]
+        mean_range: [0.0, 0.0]     # clamp to [-1, 1]
+
+        per_channel: true          # sample noise per-channel
+        noise_scale_factor: 1.0    # (0, 1]; <1 speeds up with coarser noise      
+      iso_noise:
+        enable: true
+        p: 0.6
+        # Range for changing color hue.
+        # Values should be in the range [0, 1], where 1 represents a full 360° hue rotation.
+        # Default: (0.01, 0.05)
+        color_shift: [0.01, 0.05]
+        # Range for the noise intensity.
+        # Higher values increase the strength of both color and luminance noise.
+        # Default: (0.1, 0.5)
+        intensity: [0.10, 0.55]
+      multiplicative_noise:
+        enable: true
+        p: 0.5
+        #   The range for the random multiplier.
+        #   Defines the range from which the multiplier is sampled.
+        #   Default: (0.9, 1.1)
+        multiplier: [0.88, 1.12]
+        # If True, use a different random multiplier for each channel.
+        # If False, use the same multiplier for all channels.
+        # Setting this to False is slightly faster.
+        # Default: False
+        per_channel: true
+      salt_and_pepper:
+        enable: false      # set true to use
+        p: 0.3
+        amount: [0.01, 0.06]        # fraction of pixels to flip (0..1)
+        salt_vs_pepper: [0.4, 0.6]  # fraction of “salt” among noisy pixels (0..1)
+
+    # ── J) Compression / Downscaling (very low prob; choose ONE) ────
+    compression_downscale:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.2
+        replace: false
+      image_compression:
+        enable: false
+        p: 0.5
+        # Range for the compression quality.
+        # The values should be in [1, 100] range, where:
+        # - 1 is the lowest quality (maximum compression)
+        # - 100 is the highest quality (minimum compression)
+        # Default: (99, 100)
+        quality_range: [20, 80]
+      downscale:
+        enable: true
+        p: 0.5
+        # Range for the downscaling factor.
+        # Should be two float values between 0 and 1, where the first value is less than or equal to the second.
+        # The actual downscaling factor will be randomly chosen from this range for each image.
+        # Lower values result in more aggressive downscaling.
+        # Default: (0.25, 0.25)
+        scale_range: [0.30, 0.55]
+
+    # ── K) Contrast Enhancement (optional; choose ONE) ───────────────
+    contrast_enhancement:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.25
+        replace: false
+      clahe:
+        enable: true
+        p: 1.0
+        # Controls the contrast enhancement limit.
+        # If a single float is provided, the range will be (1, clip_limit).
+        # If a tuple of two floats is provided, it defines the range for random selection.
+        # Higher values allow for more contrast enhancement, but may also increase noise.
+        # Default: (1, 4)
+        clip_limit: 2.0
+        # Defines the number of tiles in the row and column directions.
+        # Format is (rows, columns). Smaller tile sizes can lead to more localized enhancements,
+        # while larger sizes give results closer to global histogram equalization.
+        # Default: (8, 8)
+        tile_grid_size: [8, 8]
+    # ── L) Weather / Outdoor Effects (image-only) ────────────────────────────────
+    weather_effects:
+      mode:
+        type: some_of       # pick n of them per sample
+        enable: true
+        p: 1.0
+        n: 4
+        replace: false
+      random_sun_flare:
+        enable: true
+        p: 0.25
+        # Where the sun can appear (relative coords in [0,1]: x_min,y_min,x_max,y_max)
+        flare_roi: [0.0, 0.0, 1.0, 0.5]
+        # Direction in radians, expressed as [0,1] → [0, 2π)
+        angle_range: [0.0, 1.0]
+        # Number of flare circles
+        num_flare_circles_range: [6, 10]
+        # Sun characteristics
+        src_radius: 400
+        src_color: [255, 255, 255]
+        method: physics_based   # overlay | physics_based
+      random_shadow:
+        enable: true         # set true to use
+        p: 0.55
+        # region to draw shadows in (relative coords in [0,1]: x_min,y_min,x_max,y_max)
+        shadow_roi: [0.0, 0.5, 1.0, 1.0]
+        # number of shadow polygons (inclusive range)
+        num_shadows_limit: [1, 2]
+        # polygon complexity (edges). >= 3 recommended
+        shadow_dimension: 5
+        # darkness (0..1); higher = darker shadows
+        shadow_intensity_range: [0.45, 0.65]
+      random_fog:
+        enable: true
+        p: 0.2
+        # fog density in [0,1]: higher => denser fog
+        fog_coef_range: [0.25, 0.55]
+        # per-circle alpha in [0,1]: higher => more opaque fog
+        alpha_coef: 0.08
+      random_rain:
+        enable: true
+        p: 0.2
+        # wind / slant in degrees (lo, hi)
+        slant_range: [-15, 15]
+        # geometry & appearance
+        drop_length: null           # null -> auto (height // 8)
+        drop_width: 1               # >= 1 px
+        drop_color: [200, 200, 200] # RGB 0..255
+        # optics
+        blur_value: 7               # kernel size; odd, >=1
+        brightness_coefficient: 0.7 # (0, 1]
+        # presets: drizzle | heavy | torrential | default
+        rain_type: default
+      random_snow:
+        enable: true
+        p: 0.1
+        # threshold range in (0,1) — higher => more pixels affected
+        snow_point_range: [0.10, 0.30]
+        # brighten amount (>0). 2.0–3.0 is typical
+        brightness_coeff: 2.5
+        # visual style: faster but simpler vs. more realistic
+        method: texture   # bleach | texture
+    # ── M) Spectrogram Augmentation (only if your data are spectrograms) ─────────
+    spectrogram:
+      mode:
+        type: one_of
+        enable: false
+        p: 0.3
+        replace: false
+      # Applies masking strips to an image, either horizontally (X axis) or vertically (Y axis),
+      # simulating occlusions. This transform is useful for training models to recognize images
+      # with varied visibility conditions. It's particularly effective for spectrogram images,
+      # allowing spectral and frequency masking to improve model robustness.
+      xy_masking:
+        enable: false     # set to true only if you really want this
+        p: 1.0
+        num_masks_x: [1, 3]
+        num_masks_y: [1, 3]
+        mask_x_length: [10, 100]   # pick sensible fractions or ints per docs
+        mask_y_length: [30, 100]
+        fill: 0
+        fill_mask: 0
+    # ── N) Domain Adaptation (requires reference images) ─────────────────────────
+    domain_adaptation:
+      mode:
+        type: one_of
+        enable: false # Not implemented
+        p: 0.2
+        replace: false
+      # # Fourier Domain Adaptation: Adapts the style of the input image to match the style of a reference image
+      # by manipulating their frequency components in the Fourier domain. This is
+      # particularly useful for unsupervised domain adaptation (UDA).
+      fda: # TODO: needs reference image, does NOT work
+        enable: false        # A.FDA if available
+        p: 1.0
+        beta_limit: [0.01, 0.05]
+      # This transform modifies the pixel intensities of the input image so that its histogram
+      # matches the histogram of a provided reference image. This process is applied independently
+      # to each channel of the image if it is multi-channel.
+      histogram_matching: # Fails with errors
+        enable: false # Not implemented        # A.HistogramMatching
+        p: 1.0
+
+  # ─── batch-level mixing ops ─────────────────────────────────────
+  batch:
+    enable: true           # master switch for batch mixing ops
+
+    mosaic:
+      enable: true
+      p: 0.5               # probability per batch
+
+    cutmix:
+      enable: true
+      p: 0.5
+      alpha: 1.0           # Beta(alpha,alpha) hyperparameter
+
+    mixup:
+      enable: false
+      p: 0.5
+      alpha: 0.4
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: true
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
+
+# ─── validation (only resize/pad) ────────────────────────────────────
+val:
+  enable: true
+  img_size:
+    height: ${augment.train.img_size.height}
+    width:  ${augment.train.img_size.width}
+
+  spatial:
+    enable: true
+    initial_resize_crop:
+      mode:
+        type: one_of
+        enable: true
+        p: 1.0
+      random_crop:
+        enable: false
+    basic_geometric:
+      mode:
+        type: all
+        enable: false
+    affine_perspective:
+      mode:
+        type: one_of
+        enable: false
+    dropout_occlusion:
+      mode:
+        type: one_of
+        enable: false
+
+  pixel:
+    enable: false
+
+  batch:
+    enable: false           # no batch mixing on validation
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: false
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
+
+# ─── test (no augment) ───────────────────────────────────────────────
+test:
+  enable: false
