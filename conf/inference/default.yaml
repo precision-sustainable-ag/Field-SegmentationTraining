@@ -14,6 +14,7 @@ overlay:
   color: [0, 255, 0]                       # green
 
 # ROI detection (YOLO). If disabled, segment full image.
+# Unless the full crop is input to the inference pipeline (without tiling), this should be disabled.
 roi:
   enable: true
   # weights: ${paths.yolo_weed_detection_model}
@@ -29,9 +30,15 @@ seg:
   threshold: 0.5
   pad_to_divisor: 32
   tile:
-    enable: false
-    tile_size: 2048
-    overlap: 256
+    enable: True
+    tile_size: 512
+    overlap: 128
+    # how to merge overlaps
+    blend:
+      method: hann       # one of: hann | uniform | gaussian | max
+      on: prob           # prob (blend probabilities) or bin (blend binary)
+      sigma: 0.3         # only used for gaussian (relative to tile size)
+
 # Optional dataset-wide normalization at inference (usually you want this if used in training)
 normalization:
   enable: ${train.use_data_normalization}

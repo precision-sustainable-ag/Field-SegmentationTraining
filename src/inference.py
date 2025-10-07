@@ -144,6 +144,120 @@ def _predict_mask(model: torch.nn.Module, x: torch.Tensor, thr: float) -> np.nda
     mask = (prob > thr).float()
     return mask.squeeze(0).squeeze(0).detach().cpu().numpy().astype(np.uint8)
 
+def _hann2d(h, w):
+    wx = np.hanning(w)
+    wy = np.hanning(h)
+    w2d = np.outer(wy, wx)
+    w2d = w2d / (w2d.max() + 1e-8)
+    return w2d.astype(np.float32)
+
+def _gaussian2d(h, w, sigma_rel=0.3):
+    # sigma as a fraction of tile size (rough, but works well)
+    cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
+    yy, xx = np.mgrid[0:h, 0:w]
+    dy2 = (yy - cy) ** 2
+    dx2 = (xx - cx) ** 2
+    sigma_y = max(1.0, sigma_rel * h)
+    sigma_x = max(1.0, sigma_rel * w)
+    w2d = np.exp(-0.5 * (dy2 / (sigma_y ** 2) + dx2 / (sigma_x ** 2)))
+    w2d = w2d / (w2d.max() + 1e-8)
+    return w2d.astype(np.float32)
+
+def _tile_blend_window(h, w, method: str, sigma_rel: float) -> np.ndarray:
+    m = (method or "hann").lower()
+    if m == "hann":
+        return _hann2d(h, w)
+    if m == "gaussian":
+        return _gaussian2d(h, w, sigma_rel=sigma_rel)
+    if m == "uniform":
+        return np.ones((h, w), dtype=np.float32)
+    if m == "max":
+        # we won’t use a window in MAX mode
+        return np.ones((h, w), dtype=np.float32)
+    # fallback
+    return _hann2d(h, w)
+
+def _predict_mask_tiled_rgb(
+    model,
+    rgb: np.ndarray,      # ROI or full image, HxWx3 (uint8/RGB)
+    norm_cfg,
+    tile_size: int,
+    overlap: int,
+    divisor: Optional[int],
+    thr: float,
+    blend_method: str = "hann",    # hann | uniform | gaussian | max
+    blend_on: str = "prob",        # prob | bin
+    gaussian_sigma_rel: float = 0.3,
+) -> np.ndarray:
+    """
+    Slide-window inference with overlap and selectable blending.
+    Returns a binary mask (uint8) of the same HxW as rgb.
+    """
+    H, W = rgb.shape[:2]
+    step = max(1, tile_size - overlap)
+
+    # Accumulators
+    if blend_method.lower() == "max":
+        # keep running max (work on probs or bin depending on blend_on)
+        fused = np.zeros((H, W), dtype=np.float32)
+        use_max = True
+    else:
+        acc = np.zeros((H, W), dtype=np.float32)
+        wsum = np.zeros((H, W), dtype=np.float32)
+        use_max = False
+
+    y = 0
+    while y < H:
+        x = 0
+        y2 = min(y + tile_size, H)
+        y1 = max(0, y2 - tile_size)
+        th = y2 - y1
+
+        while x < W:
+            x2 = min(x + tile_size, W)
+            x1 = max(0, x2 - tile_size)
+            tw = x2 - x1
+
+            tile_rgb = rgb[y1:y2, x1:x2, :]
+            win = _tile_blend_window(th, tw, blend_method, gaussian_sigma_rel)
+
+            # to tensor [1,3,th,tw]
+            tile_x01 = _to_tensor01(tile_rgb)
+
+            # run model on this tile -> prob map
+            # (reuse your single path but return PROB, not bin)
+            # We'll compute prob here directly to avoid thresholding first:
+            tile_xpad, pads = _pad_to_divisor(tile_x01, divisor)
+            tile_xin = _normalize_if_configured(tile_xpad, norm_cfg)
+            with torch.no_grad():
+                logits = model(tile_xin.to(DEVICE))
+                probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
+            if divisor:
+                probs = _unpad(probs, pads)  # [th, tw]
+
+            # pick quantity to blend (prob or bin)
+            tile_q = probs if blend_on.lower() == "prob" else (probs >= thr).astype(np.float32)
+
+            if use_max:
+                # overwrite with max
+                fused[y1:y2, x1:x2] = np.maximum(fused[y1:y2, x1:x2], tile_q)
+            else:
+                acc[y1:y2, x1:x2] += tile_q * win
+                wsum[y1:y2, x1:x2] += win
+
+            x += step
+        y += step
+
+    if use_max:
+        out = fused
+    else:
+        wsum = np.clip(wsum, 1e-6, None)
+        out = acc / wsum
+
+    # final threshold -> binary
+    out_bin = (out >= thr).astype(np.uint8)
+    return out_bin
+
 
 # ----------------------------- main entry -----------------------------
 
@@ -247,18 +361,43 @@ def inference(cfg: DictConfig) -> None:
             x1, y1, x2, y2 = roi
 
         crop = rgb[y1:y2, x1:x2].copy()
-        x01 = _to_tensor01(crop)
-        x01, pads = _pad_to_divisor(x01, divisor)
-        x_in = _normalize_if_configured(x01, norm_cfg)
 
         # predict
-        mask_small = _predict_mask(model, x_in, thr=thr)
-        mask_unpad = _unpad(mask_small, pads) if divisor else mask_small
-        mask_resized = cv2.resize(mask_unpad, (crop.shape[1], crop.shape[0]), interpolation=cv2.INTER_NEAREST)
+        tile_cfg   = getattr(cfg.inference.seg, "tile", None)
+        use_tiling = bool(tile_cfg and getattr(tile_cfg, "enable", False))
+
+        if use_tiling:
+            tsize     = int(getattr(tile_cfg, "tile_size", 2048))
+            tover     = int(getattr(tile_cfg, "overlap", 256))
+            blend_cfg = getattr(tile_cfg, "blend", {})
+            b_method  = str(getattr(blend_cfg, "method", "hann"))
+            b_on      = str(getattr(blend_cfg, "on", "prob"))
+            b_sigma   = float(getattr(blend_cfg, "sigma", 0.3))
+
+            mask_crop = _predict_mask_tiled_rgb(
+                model,
+                crop,
+                norm_cfg=norm_cfg,
+                tile_size=tsize,
+                overlap=tover,
+                divisor=divisor,
+                thr=thr,
+                blend_method=b_method,
+                blend_on=b_on,
+                gaussian_sigma_rel=b_sigma,
+            )
+        else:
+            # original single-shot path
+            x01 = _to_tensor01(crop)
+            x01_pad, pads = _pad_to_divisor(x01, divisor)
+            x_in = _normalize_if_configured(x01_pad, norm_cfg)
+            mask_small = _predict_mask(model, x_in, thr=thr)
+            mask_unpad = _unpad(mask_small, pads) if divisor else mask_small
+            mask_crop  = cv2.resize(mask_unpad, (crop.shape[1], crop.shape[0]), interpolation=cv2.INTER_NEAREST)
 
         # paste back to full-res canvas
         full_mask = np.zeros((H, W), dtype=np.uint8)
-        full_mask[y1:y2, x1:x2] = mask_resized
+        full_mask[y1:y2, x1:x2] = mask_crop
 
         # visuals
         overlay = _overlay_rgb_mask(rgb, full_mask, color=color, alpha=alpha)
