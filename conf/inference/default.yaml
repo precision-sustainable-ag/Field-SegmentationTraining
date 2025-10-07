@@ -16,7 +16,7 @@ overlay:
 # ROI detection (YOLO). If disabled, segment full image.
 # Unless the full crop is input to the inference pipeline (without tiling), this should be disabled.
 roi:
-  enable: true
+  enable: false
   # weights: ${paths.yolo_weed_detection_model}
   weights: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/weed_detection/weights/best.pt
   conf: 0.25
@@ -26,13 +26,13 @@ roi:
 # Segmentation & pre/post
 seg:
   # weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
-  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/unet/unet_segmentation.pth # local best model
+  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/unet/epoch=39-step=6080-val_loss=0.00.pth # local best model
   threshold: 0.5
-  pad_to_divisor: 32
+  pad_to_divisor: 32                     # pad input so H,W divisible by this (for UNet or any other model with downsamplings)
   tile:
     enable: True
-    tile_size: 512
-    overlap: 128
+    tile_size: 2048
+    overlap: 256
     # how to merge overlaps
     blend:
       method: hann       # one of: hann | uniform | gaussian | max
