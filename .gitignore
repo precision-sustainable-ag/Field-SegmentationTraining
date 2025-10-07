@@ -16,7 +16,10 @@ species_dataset/
 # trained_models directory
 trained_models
 
+# Training scipts
+run.py
 
+# Keys and dataset info
 .keys
 species_dataset
 
