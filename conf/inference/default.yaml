@@ -36,3 +36,10 @@ seg:
 normalization:
   enable: ${train.use_data_normalization}
   stats_path: ${paths.project_datastats_dir}/rgb_mean_std.json  # mean/std from preprocess
+
+logger:
+  wandb:
+    enable: true
+    project: ${project.name}
+    entity: sbaghba
+    run_name: ""   # leave empty to use timestamp

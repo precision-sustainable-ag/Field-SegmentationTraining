@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
 
 import segmentation_models_pytorch as smp
@@ -154,12 +154,38 @@ def inference(cfg: DictConfig) -> None:
       - optional ROI detection (YOLO)
       - segmentation with SMP model from cfg.model
       - saves: raw masks, overlays, and triptych (RGB | mask | overlay)
-      - writes under Hydra run dir (same version folder as the rest)
+      - stores each run under a timestamped subfolder inside the Hydra run dir
+      - optionally logs previews to Weights & Biases
     """
-    run_dir = Path(HydraConfig.get().runtime.output_dir)
+    # Hydra job dir (shared with pipeline_log.yaml)
+    base_run_dir = Path(HydraConfig.get().runtime.output_dir)
+
+    # Versioned subdir per inference run
+    stamp = f"version_{cfg.job.job_now_date}_{cfg.job.job_now_time}"
+    run_dir = base_run_dir / stamp
     (run_dir / "masks").mkdir(parents=True, exist_ok=True)
     (run_dir / "overlays").mkdir(parents=True, exist_ok=True)
     (run_dir / "triptych").mkdir(parents=True, exist_ok=True)
+
+    # ---------------- W&B (optional) ----------------
+    wb_cfg = getattr(getattr(cfg, "inference", None), "logger", {}).get("wandb", {})
+    use_wandb = bool(wb_cfg.get("enable", False))
+    if use_wandb:
+        try:
+            import wandb
+            wandb.init(
+                project=wb_cfg.get("project", cfg.project.name),
+                entity=wb_cfg.get("entity", None),
+                name=wb_cfg.get("run_name", stamp),
+                dir=str(run_dir),  # files under the same versioned folder
+                config=OmegaConf.to_container(cfg, resolve=True),
+                save_code=False,
+                reinit=True,
+            )
+            log.info("[inference] W&B logging enabled.")
+        except Exception as e:
+            use_wandb = False
+            log.warning(f"[inference] W&B init failed: {e}")
 
     # ---------------- model ----------------
     model = _build_smp_from_cfg(cfg)
@@ -183,6 +209,10 @@ def inference(cfg: DictConfig) -> None:
     color    = tuple(int(c) for c in getattr(cfg.inference.overlay, "color", [0, 255, 0]))
     max_side = int(getattr(cfg.inference, "preview_max_side", 1200))
 
+    save_triptych = bool(getattr(getattr(cfg.inference, "save", {}), "triptych", True))
+    save_overlay  = bool(getattr(getattr(cfg.inference, "save", {}), "overlay",  True))
+    save_mask     = bool(getattr(getattr(cfg.inference, "save", {}), "raw_mask", True))
+
     # normalization (dataset-wide) if requested
     norm_cfg = getattr(cfg.inference, "normalization", None)
 
@@ -204,7 +234,8 @@ def inference(cfg: DictConfig) -> None:
         return
 
     # ---------------- loop ----------------
-    for ip in imgs:
+    wb_images = []  # collect a few previews for W&B
+    for i, ip in enumerate(imgs):
         rgb = _read_rgb(ip)
         H, W = rgb.shape[:2]
 
@@ -234,11 +265,44 @@ def inference(cfg: DictConfig) -> None:
         mask_u8 = (full_mask * 255).astype(np.uint8)
 
         stem = ip.stem
-        cv2.imwrite(str(run_dir / "masks" / f"{stem}.png"), mask_u8)
-        cv2.imwrite(str(run_dir / "overlays" / f"{stem}_overlay.png"),
-                    cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
-        _save_triptych(rgb, mask_u8, overlay, run_dir / "triptych" / f"{stem}_triptych.png", max_side=max_side)
+        if save_mask:
+            cv2.imwrite(str(run_dir / "masks" / f"{stem}.png"), mask_u8)
+        if save_overlay:
+            cv2.imwrite(
+                str(run_dir / "overlays" / f"{stem}_overlay.png"),
+                cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR),
+            )
+        if save_triptych:
+            _save_triptych(
+                rgb, mask_u8, overlay,
+                run_dir / "triptych" / f"{stem}_triptych.png",
+                max_side=max_side,
+            )
+
+        # --- per-image W&B logging (after files are saved) ---
+        if use_wandb:
+            try:
+                import wandb
+                to_log = {}
+                if save_mask:
+                    to_log["inference/mask"] = wandb.Image(str(run_dir / "masks" / f"{stem}.png"))
+                if save_overlay:
+                    to_log["inference/overlay"] = wandb.Image(str(run_dir / "overlays" / f"{stem}_overlay.png"))
+                if save_triptych:
+                    to_log["inference/triptych"] = wandb.Image(str(run_dir / "triptych" / f"{stem}_triptych.png"))
+                if to_log:
+                    wandb.log(to_log)
+            except Exception as e:
+                log.debug(f"W&B per-image log failed for {ip.name}: {e}")
 
         log.info(f"[inference] ✔ {ip.name}")
 
-    log.info("[inference] done.")
+    # Flush W&B previews
+    if use_wandb and wb_images:
+        try:
+            import wandb
+            wandb.log({"inference/overlays": wb_images})
+        except Exception as e:
+            log.debug(f"W&B log failed: {e}")
+
+    log.info(f"[inference] done. Saved to: {run_dir}")

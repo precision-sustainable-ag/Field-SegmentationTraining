@@ -1,3 +1,5 @@
+# conf/config.yaml
+
 # Top‐level Hydra configuration. Lists each config group in the "defaults:" section.
 # Order matters: later entries can override earlier keys.
 # Hydra defaults and settings. 
