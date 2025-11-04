@@ -38,6 +38,8 @@ seg:
       method: hann       # one of: hann | uniform | gaussian | max
       on: prob           # prob (blend probabilities) or bin (blend binary)
       sigma: 0.3         # only used for gaussian (relative to tile size)
+    amp:
+      enable: true       # use mixed precision (fp16) during inference
 
 # Optional dataset-wide normalization at inference (usually you want this if used in training)
 normalization:

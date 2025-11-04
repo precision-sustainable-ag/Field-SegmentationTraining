@@ -134,7 +134,7 @@ def _detect_roi_if_enabled(cfg, rgb: np.ndarray) -> Optional[Tuple[int,int,int,i
     return (int(x1), int(y1), int(x2), int(y2))
 
 def _predict_mask(model: torch.nn.Module, x: torch.Tensor, thr: float) -> np.ndarray:
-    with torch.no_grad():
+    with torch.inference_mode():
         logits = model(x.to(DEVICE))
         prob = torch.sigmoid(logits)
     mask = (prob > thr).float()
@@ -184,6 +184,7 @@ def _predict_mask_tiled_rgb(
     blend_method: str = "hann",    # hann | uniform | gaussian | max
     blend_on: str = "prob",        # prob | bin
     gaussian_sigma_rel: float = 0.3,
+    use_amp: bool = True,          # mixed precision
 ) -> np.ndarray:
     """
     Slide-window inference with overlap and selectable blending.
@@ -225,9 +226,14 @@ def _predict_mask_tiled_rgb(
             # We'll compute prob here directly to avoid thresholding first:
             tile_xpad, pads = _pad_to_divisor(tile_x01, divisor)
             tile_xin = _normalize_if_configured(tile_xpad, norm_cfg)
-            with torch.no_grad():
-                logits = model(tile_xin.to(DEVICE))
-                probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
+            with torch.inference_mode():
+                if use_amp and torch.cuda.is_available():
+                    with torch.amp.autocast(device_type="cuda"):
+                        logits = model(tile_xin.to(DEVICE))
+                        probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
+                else:
+                    logits = model(tile_xin.to(DEVICE))
+                    probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
             if divisor:
                 probs = _unpad(probs, pads) # [th, tw]
 
@@ -360,6 +366,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
             b_method  = str(getattr(blend_cfg, "method", "hann"))
             b_on      = str(getattr(blend_cfg, "on", "prob"))
             b_sigma   = float(getattr(blend_cfg, "sigma", 0.3))
+            b_amp     = bool(getattr(tile_cfg, "amp", {}).get("enable", True))
 
             mask_crop = _predict_mask_tiled_rgb(
                 model,
@@ -372,6 +379,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
                 blend_method=b_method,
                 blend_on=b_on,
                 gaussian_sigma_rel=b_sigma,
+                use_amp=b_amp,
             )
         else:
             x01 = _to_tensor01(crop)
