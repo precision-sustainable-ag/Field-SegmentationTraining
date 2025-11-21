@@ -13,16 +13,18 @@ from hydra.core.hydra_config import HydraConfig
 
 # --- Task implementations live in inference_utils ---
 from src.inference_utils.inference_pipeline import run_inference_pipeline
+from src.inference_utils.inference_lts import run_inference_lts
+
 
 
 def _build_task_registry() -> Dict[str, Callable[[DictConfig], None]]:
     """
     Map simple task names to callables that accept only (cfg).
-    Extend as needed: e.g. "lts": run_inference_to_lts
+    Extend as needed: e.g. "lts": run_inference_lts
     """
     return {
-        "local": run_inference_pipeline,   # your current local inference path
-        # "lts": run_inference_lts,        # (placeholder if you add one later)
+        "local": run_inference_pipeline,   # local inference path
+        "lts": run_inference_lts,        # lts inference path
     }
 
 

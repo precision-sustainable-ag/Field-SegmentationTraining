@@ -1,3 +1,4 @@
+# conf/paths/default.yaml
 # All filesystem paths, built from base_dir + project‐specific subfolders
 base_dir: ${hydra:runtime.cwd}                      # usually the repo root
 data_dir: ${paths.base_dir}/data

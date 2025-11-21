@@ -48,8 +48,8 @@ tasks:
     finalize_lts: false
 
   inference:
-    local: true
-    lts: false
+    local: false
+    lts: true
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
