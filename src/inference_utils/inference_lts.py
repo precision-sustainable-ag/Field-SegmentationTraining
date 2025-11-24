@@ -38,41 +38,123 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def _load_lts_rows(cfg: DictConfig) -> pd.DataFrame:
     """
-    Query LTS DB and return dataframe with image info.
-    You can modify the SQL WHERE clause to filter.
+    Load candidate LTS images for segmentation inference.
+
+    Applies the following filters:
+        • final_mask_path IS NULL            → not yet completed in relabel step
+        • developed_image_path IS NOT NULL  → image exists in LTS
+        • extension IN ('.jpg', '.JPG')     → exclude RAW (.ARW) files
+        • optional plant_type and/or common_name filters from config
+        • LIMIT from config (default: 50)
+
+    Additionally:
+        • Converts developed_image_path → absolute filesystem paths
+        • Removes rows whose file does not exist
+        • Deduplicates identical paths (e.g. ARW+JPG duplicates)
     """
 
+    # -------------------------------------------------------------------------
+    # 1. Validate DB
+    # -------------------------------------------------------------------------
     db_path = Path(cfg.paths.agir_field_db)
-    table = "field_data"
-
     assert db_path.exists(), f"LTS DB missing: {db_path}"
 
-    # EXAMPLE: Fetch images missing final masks (candidate for inference)
+    table = "field_data"
+
+    # -------------------------------------------------------------------------
+    # 2. Read filters from config
+    # -------------------------------------------------------------------------
+    lts_cfg = cfg.inference.lts
+    # -------------------------------------------------------------------------
+    # Handle "enable" flag:
+    # If enable=false → ignore config filters and use defaults.
+    # -------------------------------------------------------------------------
+    if not getattr(lts_cfg, "enable", True):
+        plant_type = None
+        common_names = None
+        limit = 50  # default fallback
+        log.info("[LTS] lts.enable=False → ignoring plant_type/common_name filters.")
+    else:
+        plant_type = getattr(lts_cfg, "plant_type", None)
+        common_names = getattr(lts_cfg, "common_name", None)
+        limit = int(getattr(lts_cfg, "limit", 50))
+
+    # Normalize common_names → list[str] or None
+    if isinstance(common_names, str):
+        common_names = [common_names]
+    elif common_names is not None and not isinstance(common_names, list):
+        raise ValueError("common_name must be a string or list of strings.")
+
+    # -------------------------------------------------------------------------
+    # 3. SQL WHERE builder
+    # -------------------------------------------------------------------------
+    where_clauses = [
+        "final_mask_path IS NULL",
+        "developed_image_path IS NOT NULL",
+        "extension IN ('.jpg', '.JPG')"    # match DB values with leading dot
+    ]
+    params: list = []
+
+    # plant_type filter (case-insensitive)
+    if plant_type:
+        where_clauses.append("LOWER(plant_type) = LOWER(?)")
+        params.append(plant_type)
+
+    # common_name filter (case-insensitive, IN list)
+    if common_names:
+        placeholders = ",".join("?" * len(common_names))
+        where_clauses.append(f"LOWER(common_name) IN ({placeholders})")
+        params.extend([c.lower() for c in common_names])
+
+    where_sql = " AND ".join(where_clauses)
+
     sql = f"""
-        SELECT image_id, developed_image_path
+        SELECT
+            image_id,
+            extension,
+            common_name,
+            plant_type,
+            developed_image_path,
+            final_mask_path
         FROM {table}
-        WHERE final_mask_path IS NULL
-          AND developed_image_path IS NOT NULL
-        LIMIT 50;
+        WHERE {where_sql}
+        LIMIT {limit};
     """
 
+    log.info(f"[LTS] SQL: {sql.strip()}  PARAMS={params}")
+
+    # -------------------------------------------------------------------------
+    # 4. Execute SQL
+    # -------------------------------------------------------------------------
     with sqlite3.connect(db_path) as con:
         con.execute("PRAGMA foreign_keys = ON;")
-        df = pd.read_sql_query(sql, con)
+        df = pd.read_sql_query(sql, con, params=params)
 
-    # Convert relative LTS paths to absolute NFS paths
+    # -------------------------------------------------------------------------
+    # 5. Convert developed_image_path → absolute filesystem paths
+    # -------------------------------------------------------------------------
     base_lts = Path(cfg.paths.longterm_storage)
-    df["abs_path"] = df["developed_image_path"].apply(
-        lambda p: str(base_lts / p) if isinstance(p, str) else None
+
+    def to_abs(p: str | None) -> str | None:
+        return str(base_lts / p) if isinstance(p, str) else None
+
+    df["abs_path"] = df["developed_image_path"].apply(to_abs)
+
+    # Keep only rows whose image exists
+    df = df[df["abs_path"].apply(lambda p: p is not None and Path(p).exists())]
+
+    # -------------------------------------------------------------------------
+    # 6. De-duplicate by absolute path
+    #    (prevents ARW+JPG dual entries → duplicate processing)
+    # -------------------------------------------------------------------------
+    df = df.drop_duplicates(subset=["abs_path"]).reset_index(drop=True)
+
+    log.info(
+        f"[LTS] Loaded {len(df)} candidate images from LTS DB "
+        f"(filters: {where_sql})"
     )
 
-    # Only keep images whose files actually exist
-    df = df[df["abs_path"].apply(lambda p: Path(p).exists())]
-
-    log.info(f"[LTS] Loaded {len(df)} candidate images from LTS DB")
-
     return df
-
 
 # ----------------------------------------------------------
 # Main LTS inference

@@ -31,8 +31,8 @@ seg:
   pad_to_divisor: 32                     # pad input so H,W divisible by this (for UNet or any other model with downsamplings)
   tile:
     enable: True
-    tile_size: 2048
-    overlap: 256
+    tile_size: 1024
+    overlap: 128
     # how to merge overlaps
     blend:
       method: hann       # one of: hann | uniform | gaussian | max
@@ -45,6 +45,16 @@ seg:
 normalization:
   enable: ${train.use_data_normalization}
   stats_path: ${paths.project_datastats_dir}/rgb_mean_std.json  # mean/std from preprocess
+
+lts:
+  enable: true
+  limit: 10          # max number of images to pull from DB
+  common_name: "barley"   # single string or list. e.g. ["barley", "vetch"]
+  plant_type: "COVERCROPS"   # e.g., "COVERCROPS", "WEEDS", "CASHCROP", or null
+  state: null          # e.g., "AL", "NC", etc.
+  species: null        # taxonomic_species_name
+  height_min: null
+  height_max: null
 
 logger:
   wandb:
