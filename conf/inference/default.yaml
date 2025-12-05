@@ -46,6 +46,7 @@ normalization:
   enable: ${train.use_data_normalization}
   stats_path: ${paths.project_datastats_dir}/rgb_mean_std.json  # mean/std from preprocess
 
+# Inference on LTS images from DB
 lts:
   enable: true
   limit: 10          # max number of images to pull from DB
@@ -56,6 +57,13 @@ lts:
   height_min: null
   height_max: null
 
+# GPU selection settings
+gpu:
+  enable: true          # turn auto-selection on/off
+  max_gpus: 2           # just two GPUs for inference
+  exclude_gpu_ids: [0]  # skip GPU 0 if it's busy with training/etc.
+
+# Logger settings
 logger:
   wandb:
     enable: true

@@ -1,5 +1,6 @@
 # src/inference.py
 
+import os
 import sys
 from pathlib import Path
 from typing import Callable, Dict
@@ -14,6 +15,7 @@ from hydra.core.hydra_config import HydraConfig
 # --- Task implementations live in inference_utils ---
 from src.inference_utils.inference_pipeline import run_inference_pipeline
 from src.inference_utils.inference_lts import run_inference_lts
+from src.utils.gpu_utils import select_available_gpus
 
 
 
@@ -40,6 +42,29 @@ def inference(cfg: DictConfig) -> None:
           lts: false
     """
     out_dir = Path(HydraConfig.get().runtime.output_dir)
+
+    gpu_cfg = getattr(getattr(cfg, "inference", None), "gpu", None)
+
+    if gpu_cfg is not None and bool(getattr(gpu_cfg, "enable", True)):
+        max_gpus = int(getattr(gpu_cfg, "max_gpus", 1))
+        exclude  = list(getattr(gpu_cfg, "exclude_gpu_ids", []))
+
+        try:
+            picked = select_available_gpus(
+                max_gpus=max_gpus,
+                exclude_ids=exclude,
+                verbose=True,
+            )
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, picked))
+            print(
+                f"[inference] Using physical GPUs {picked} → "
+                f"CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']}"
+            )
+        except Exception as e:
+            print(f"[inference] GPU auto-selection failed ({e}). Falling back to default device.")
+    else:
+        print("[inference] GPU auto-selection disabled or not configured; using default CUDA/CPU.")
+
 
     tasks = _build_task_registry()
     ran_any = False
