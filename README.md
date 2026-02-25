@@ -1,5 +1,7 @@
 # Field Segmentation
 
+![Field Segmentation Pipeline](assets/pipeline_diagram.png)
+
 Field Segmentation is a modular, configuration-driven deep learning pipeline for semantic segmentation of field imagery. The repository supports mask generation, preprocessing, training, inference, and evaluation within a unified and reproducible framework.
 
 The system is built using PyTorch Lightning, Hydra, and `segmentation_models_pytorch`, enabling scalable experimentation and clean configuration management.
@@ -96,7 +98,7 @@ python main.py mode=maskgen
     * Manual quality control overlays
 
 ### Preprocessing
-Performs resizing, normalization, cropping, mask remapping, and morphological adjustments.
+Performs resizing, normalization, cropping, mask remapping, train_val_test split and pad_gridcrop_resize.
 
 ```bash
 python main.py mode=preprocess
@@ -127,12 +129,10 @@ Runs model inference using a trained checkpoint.
 python main.py mode=inference inference.checkpoint_path=path/to/checkpoint.ckpt
 ```
 * **Supports:**
-    * Test-time augmentation
+    * Normalization
     * Threshold adjustment
     * Mask saving
     * Overlay saving
-    * Evaluation against ground truth
-    * CSV metric reporting
 * **Configuration:** `conf/inference/default.yaml`
 
 ## Model Architectures
@@ -208,6 +208,8 @@ Outputs include:
 
 Custom logging configuration is defined in: `conf/hydra/job_logging/custom.yaml`
 
+Extensive logging through weights and biases (W&B) is supported for training and inference pipelines.
+
 ## Reproducibility
 
 The repository supports reproducible experimentation through:
@@ -219,13 +221,6 @@ The repository supports reproducible experimentation through:
 ## Continuous Integration
 
 CI configuration is defined in: `.github/workflows/ci.yaml`
-
-Runs:
-* `pytest`
-* `flake8`
-* `black`
-* `isort`
-* Sanity checks for training and mask generation
 
 ## Example Training Command
 
