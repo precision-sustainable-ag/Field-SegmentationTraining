@@ -42,6 +42,7 @@ Hydra configuration groups:
 * `augment/` – Data augmentation configuration
 * `preprocess/` – Resizing, normalization, mask remapping
 * `maskgen/` – Mask generation and refinement settings
+* `llm/` – Large Language Model configuration
 * `inference/` – Inference and evaluation configuration
 * `evaluation/` – Metrics and visualization settings
 * `hydra/` – Logging and runtime behavior
@@ -55,8 +56,9 @@ Hydra configuration groups:
 * `train_utils/` – Training helpers and visualizers
 * `preprocess_utils/` – Dataset preparation utilities
 * `mask_gen_utils/` – Mask post-processing utilities
+* `llm_utils/` – LLM integration utilities
 
-Mode entrypoints: `train.py`, `maskgen.py`, `preprocess.py`, `inference.py`
+Mode entrypoints: `train.py`, `maskgen.py`, `preprocess.py`, `inference.py`, `llm.py`
 
 ## Installation
 
@@ -75,6 +77,28 @@ conda activate field_segmentation
 ```
 *Alternatively, install dependencies manually from `environment.yaml`.*
 
+# LLM Setup (Ollama)
+
+This project requires Ollama for local model inference. Follow these steps to install and run it without root/sudo access.
+
+---
+
+## 1. Manual User-Only Install
+
+Download and extract the Ollama bundle directly into your home directory:
+
+```bash
+# Create local directory structure
+mkdir -p ~/.local
+
+# Download and extract the full bundle (no sudo required)
+curl -L https://ollama.com/download/ollama-linux-amd64.tar.zst | tar --zstd -xvf - -C ~/.local
+
+# Add the binary to your PATH
+# (Add this line to your ~/.bashrc for a permanent fix)
+export PATH=$PATH:$HOME/.local/bin
+```
+
 ## Usage
 
 The project uses a single Hydra-based entry point:
@@ -83,7 +107,7 @@ The project uses a single Hydra-based entry point:
 python main.py mode=<mode>
 ```
 
-Available modes: `maskgen`, `preprocess`, `train`, `inference`.
+Available modes: `maskgen`, `preprocess`, `train`, `inference`, `llm`.
 
 ### Mask Generation
 Generates segmentation masks.
@@ -144,6 +168,31 @@ Currently supported:
 * DeepLabV3+
 
 Models are instantiated via Hydra and wrapped in a LightningModule defined in `src/models/lit_segmentation.py`.
+
+## LLM Integration (Ollama)
+
+Ollama operates as a client-server model. You must have the server running before executing the code.
+
+### Start the Server
+In a separate terminal or tmux session, run:
+
+```bash
+ollama serve
+```
+
+### Pull the Model
+Download the required weights:
+
+```bash
+ollama pull granite4
+```
+
+### Run the Pipeline
+Execute your script:
+
+```bash
+python main.py
+```
 
 ## Data Augmentation
 

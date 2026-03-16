@@ -12,6 +12,7 @@ from src.train import train
 from src.inference import inference
 from src.mask_gen import main as mask_gen
 from src.finalize import main as finalize
+from src.llm import main as llm_runner
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ TASK_REGISTRY = {
     "mask_gen": mask_gen,
     "inference": inference,
     "finalize": finalize,
+    "llm": llm_runner,
     # Add more tasks here as needed
 }
 

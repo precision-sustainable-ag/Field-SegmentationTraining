@@ -1,0 +1,13 @@
+# conf/llm/default.yaml
+
+model: "granite4" # Adjust to your specific Granite model tag pulled in Ollama (e.g., granite3.1-dense:8b)
+host: "http://localhost:11434"
+
+# Generation options passed directly to Ollama
+options:
+  ctx_size: 16384
+  temperature: 0.1     # Keep temperature low for factual table generation
+  top_p: 0.9
+
+# Where to save the generated markdown reports
+output_report_path: ${paths.llm_output_dir}/reports/llm_summary.md

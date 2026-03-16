@@ -27,13 +27,16 @@ field_segmentation/                    # ← top‐level repo
 │   ├── maskgen/                       # 5g. “maskgen” group: mask generation/refinement settings
 │   │   └── default.yaml               #     • classical.enabled/method/min_area/morph settings, sam.enabled/checkpoint/model_type/prompts_csv, refine_with_model.enabled/checkpoint/threshold, manual_qc.enabled/output_qc_dir/overlay_opacity, output_dir
 │   │
-│   ├── inference/                     # 5h. “inference” group: inference & evaluation settings
+│   ├── llm/                           # 5h. “llm” group: LLM settings for table generation
+│   │   └── default.yaml               #     • llm.model_name, llm.max_tokens, llm.temperature, etc.
+│   │
+│   ├── inference/                     # 5i. “inference” group: inference & evaluation settings
 │   │   └── default.yaml               #     • inference.checkpoint_path, batch_size, device, tta.enabled/horizontal_flip/vertical_flip, threshold, save_masks, save_overlay, evaluate.enabled/test_image_dir/test_mask_dir/report_csv
 │   │
-│   ├── evaluation/                    # 5i. “evaluation” group: evaluation and visualization settings
+│   ├── evaluation/                    # 5j. “evaluation” group: evaluation and visualization settings
 │   │   └── default.yaml               #     • metrics (IoU, Dice, accuracy), evaluation splits, thresholds, visualizations     
 │   │
-│   └── hydra/                         # 5j. Hydra overrides (job_logging, output dir, etc.)
+│   └── hydra/                         # 5k. Hydra overrides (job_logging, output dir, etc.)
 │       └── job_logging/
 │           └── custom.yaml            #     • Custom Python logging config (formatters, handlers, loggers)
 │
@@ -68,10 +71,12 @@ field_segmentation/                    # ← top‐level repo
 │   │
 │   ├── train_utils/                   # 6i. Training utilities (e.g. train_pipeline, augmentation_visualizer, dataloader_visualizer, etc.)
 │   │
-│   ├── preprocess.py                  # 6j. Secondary entry point for preprocessing mode (calls main())
-│   ├── maskgen.py                     # 6k. Secondary entry point for maskgen mode (calls main())
-│   ├── train.py                       # 6l. Secondary entry point for training mode (calls main())
-│   └── inference.py                   # 6m. Secondary entry point for inference mode (calls main())
+│   ├── llm_utils/                     # 6j. LLM integration utilities (e.g. prompt engineering, table generation, etc.)
+│   │
+│   ├── preprocess.py                  # 6k. Secondary entry point for preprocessing mode (calls main())
+│   ├── maskgen.py                     # 6l. Secondary entry point for maskgen mode (calls main())
+│   ├── train.py                       # 6m. Secondary entry point for training mode (calls main())
+│   └── inference.py                   # 6n. Secondary entry point for inference mode (calls main())
 │   │
 │   ├── scripts/                       # 7. Any standalone scripts for data processing, mask generation, evaluation, etc.
 │   │

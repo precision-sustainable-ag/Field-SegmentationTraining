@@ -14,6 +14,7 @@ defaults:
   - mask_gen: default
   - create_project: default
   - finalize: default          # finalization settings
+  - llm: default               # LLM settings 
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 
@@ -22,7 +23,7 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: test # or field
 
-mode: inference                  # one of: mask_gen / preprocess / train / inference
+mode: llm                  # one of: mask_gen / preprocess / train / inference / finalize / llm
 
 tasks:
   preprocess:
@@ -50,6 +51,10 @@ tasks:
   inference:
     local: false
     lts: true
+
+  llm:
+    tabulate_hparams: true
+    summarize_run: true
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
