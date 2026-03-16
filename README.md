@@ -77,13 +77,20 @@ conda activate field_segmentation
 ```
 *Alternatively, install dependencies manually from `environment.yaml`.*
 
-# LLM Setup (Ollama)
+### LLM Setup (Ollama)
 
 This project requires Ollama for local model inference. Follow these steps to install and run it without root/sudo access.
 
 ---
 
-## 1. Manual User-Only Install
+#### 1. System-Wide Install (Requires sudo)
+
+To install Ollama, run the following command:
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+#### 2. Manual User-Only Install
 
 Download and extract the Ollama bundle directly into your home directory:
 
@@ -159,7 +166,7 @@ python main.py mode=inference inference.checkpoint_path=path/to/checkpoint.ckpt
     * Overlay saving
 * **Configuration:** `conf/inference/default.yaml`
 
-## Model Architectures
+### Model Architectures
 
 Model configurations are located in: `conf/model/`
 
@@ -169,7 +176,7 @@ Currently supported:
 
 Models are instantiated via Hydra and wrapped in a LightningModule defined in `src/models/lit_segmentation.py`.
 
-## LLM Integration (Ollama)
+### LLM Integration (Ollama)
 
 Ollama operates as a client-server model. You must have the server running before executing the code.
 
@@ -194,7 +201,7 @@ Execute your script:
 python main.py
 ```
 
-## Data Augmentation
+### Data Augmentation
 
 Configured in: `conf/augment/default.yaml`
 
@@ -208,7 +215,7 @@ Includes:
 
 Augmentations are dynamically composed in `src/data/augmentation.py`.
 
-## Evaluation
+### Evaluation
 
 Configured in: `conf/evaluation/default.yaml`
 
@@ -240,7 +247,7 @@ This structure ensures that each project maintains its own:
 * Metadata
 * Outputs and reports
 
-## Logging and Outputs
+### Logging and Outputs
 
 Hydra automatically creates versioned output directories:
 
@@ -267,7 +274,7 @@ The repository supports reproducible experimentation through:
 * Deterministic training options
 * Versioned output directories
 
-## Continuous Integration
+### Continuous Integration
 
 CI configuration is defined in: `.github/workflows/ci.yaml`
 
