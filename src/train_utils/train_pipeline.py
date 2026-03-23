@@ -27,7 +27,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import Logger
 
 from src.utils.seed import set_seed, seed_worker
-from src.train_utils.gpu_utils import select_available_gpus, is_rank_zero_worker, is_launcher
+from src.utils.gpu_utils import select_available_gpus, is_rank_zero_worker, is_launcher
 from src.train_utils.models.lit_segmentation import LitSegmentation
 from src.train_utils.data.dataset import FieldDataset
 from src.train_utils.data.collate import get_batch_collate_fn

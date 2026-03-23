@@ -1,3 +1,5 @@
+# conf/config.yaml
+
 # Top‐level Hydra configuration. Lists each config group in the "defaults:" section.
 # Order matters: later entries can override earlier keys.
 # Hydra defaults and settings. 
@@ -10,6 +12,9 @@ defaults:
   - inference: default         # inference & evaluation settings
   - evaluation: default         # evaluation metrics and settings
   - mask_gen: default
+  - create_project: default
+  - finalize: default          # finalization settings
+  - llm: default               # LLM settings 
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 
@@ -18,7 +23,7 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: test # or field
 
-mode: train                  # one of: mask_gen / preprocess / train / inference
+mode: llm                  # one of: mask_gen / preprocess / train / inference / finalize / llm
 
 tasks:
   preprocess:
@@ -28,24 +33,34 @@ tasks:
 
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    detect_weeds: false
-    unet_segment_weeds: false
-    mask_inspect: false
-    mask_refine: false
-    relabel_test: false
+    create_project: false
+    detect: false
+    segment: false
+    inspect: false
+    refine: false
+    upload_cvat: false
+    export_cvat: false
 
   train:
     vis_augment: false
     train_pipeline: false
 
+  finalize:
+    finalize_lts: false
+
   inference:
-    - inference
+    local: false
+    lts: true
+
+  llm:
+    tabulate_hparams: true
+    summarize_run: true
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:
   run:
-    # base of all outputs
-    dir: ${paths.project_mode_dir}/version_${now:%Y%m%d_%H%M%S}
+    # base of all outputs for train mode
+    dir: ${paths.project_dir}/${mode}
   sweep:
     dir: ${paths.project_mode_dir}/multirun
 
