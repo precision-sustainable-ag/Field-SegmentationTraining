@@ -34,7 +34,7 @@ project_temp_db: ${paths.project_dir}/temp_db.csv
 
 # paths for mask_gen mode:
 mask_gen_cutout_dir: ${paths.project_maskgen_dir}/cutouts
-refined_dir: ${paths.project_maskgen_dir}/refined
+refined_masks_dir: ${paths.project_maskgen_dir}/refined_masks
 relabeled_dir: ${paths.project_maskgen_dir}/relabeled
 
 # longterm storage paths

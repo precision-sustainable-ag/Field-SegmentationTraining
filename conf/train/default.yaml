@@ -1,8 +1,9 @@
+# conf/train/default.yaml
 # Training hyperparameters & Lightning Trainer settings. 
 # “train.*” keys map to src/train.py (LightningModule + Trainer).
 
 batch_size: 8
-max_epochs: 3
+max_epochs: 50
 num_workers: 16
 pin_memory: true
 seed: 42
@@ -34,6 +35,28 @@ trainer:
   devices: null  # Will be dynamically set by GPU utility
   precision: 16-mixed
   deterministic: true
+
+losses:
+  bce:
+    enabled: true
+    weight: 0.5
+    loss:
+      _target_: torch.nn.BCEWithLogitsLoss
+  
+  dice:
+    enabled: true
+    weight: 0.5
+    loss:
+      _target_: segmentation_models_pytorch.losses.DiceLoss
+      mode: "binary"
+      from_logits: true
+      
+  focal:
+    enabled: false
+    weight: 1.0
+    loss:
+      _target_: segmentation_models_pytorch.losses.FocalLoss
+      mode: "binary"
 
 # Checkpoint callback:
 checkpoint:

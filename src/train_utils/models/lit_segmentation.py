@@ -51,7 +51,19 @@ class LitSegmentation(pl.LightningModule):
         self.model = smp.create_model(**model_kwargs)
 
         # === Loss ===
-        self.loss_fn = nn.BCEWithLogitsLoss()
+        # === Instantiating Multiple Losses ===
+        self.losses = nn.ModuleDict()
+        self.loss_weights = {}
+        
+        for loss_name, loss_cfg in cfg.train.losses.items():
+            # Check the enabled flag before instantiating
+            if loss_cfg.get("enabled", False):
+                self.losses[loss_name] = instantiate(loss_cfg.loss)
+                self.loss_weights[loss_name] = loss_cfg.weight
+                
+        # Optional: Add a safety check to ensure at least one loss is enabled
+        if len(self.losses) == 0:
+            raise ValueError("No loss functions are enabled in the configuration!")
 
         # === Metrics ===
         self.train_iou = IoU()
@@ -87,17 +99,28 @@ class LitSegmentation(pl.LightningModule):
         """
         imgs, masks = batch
         logits = self(imgs)
-        loss = self.loss_fn(logits, masks)
 
+        # Calculate weighted combined loss
+        total_loss = 0.0
+        # Ensure masks are floats for BCE and SMP losses
+        masks_float = masks.float() 
+        
+        for name, criterion in self.losses.items():
+            loss_val = criterion(logits, masks_float)
+            weight = self.loss_weights[name]
+            total_loss += weight * loss_val
+            
+            # Log individual loss components for WandB graphs
+            self.log(f"train/loss_{name}", loss_val, on_step=False, on_epoch=True)
         preds = (torch.sigmoid(logits) > 0.5).long()
         self.train_iou.update(preds, masks.long())
         self.train_dice.update(preds, masks.long())
 
-        self.log("train/loss", loss, on_step=False, on_epoch=True)
+        self.log("train/loss_total", total_loss, on_step=False, on_epoch=True)
         self.log("train/iou",   self.train_iou,   on_step=False, on_epoch=True)
         self.log("train/dice",  self.train_dice,  on_step=False, on_epoch=True)
 
-        return loss
+        return total_loss
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """
@@ -112,17 +135,29 @@ class LitSegmentation(pl.LightningModule):
         """
         imgs, masks = batch
         logits = self(imgs)
-        loss = self.loss_fn(logits, masks)
+
+        # Calculate weighted combined loss
+        total_loss = 0.0
+        # Ensure masks are floats for BCE and SMP losses
+        masks_float = masks.float() 
+        
+        for name, criterion in self.losses.items():
+            loss_val = criterion(logits, masks_float)
+            weight = self.loss_weights[name]
+            total_loss += weight * loss_val
+            
+            # Log individual loss components for WandB graphs
+            self.log(f"val/loss_{name}", loss_val, on_step=False, on_epoch=True)
 
         preds = (torch.sigmoid(logits) > 0.5).long()
         self.val_iou.update(preds, masks.long())
         self.val_dice.update(preds, masks.long())
 
-        self.log("val/loss", loss, on_step=False, on_epoch=True)
+        self.log("val/loss_total", total_loss, on_step=False, on_epoch=True)
         self.log("val/iou",  self.val_iou,  on_step=False, on_epoch=True)
         self.log("val/dice", self.val_dice, on_step=False, on_epoch=True)
 
-        return loss
+        return total_loss
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """

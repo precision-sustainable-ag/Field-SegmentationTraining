@@ -1,4 +1,4 @@
-# conf/augment/default_grouped.yaml
+# conf/augment/default.yaml
 # All data‐augmentation transforms. Your datamodule should read these keys
 # and apply the appropriate torchvision / albumentations transforms.
 

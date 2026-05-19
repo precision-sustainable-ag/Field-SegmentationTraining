@@ -1,3 +1,4 @@
+# conf/model/unet.yaml
 # segmentation_models.pytorch Unet config.
 # Any fields here can be overridden at CLI, e.g. model.encoder_name=resnet34
 
