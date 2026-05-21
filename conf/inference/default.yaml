@@ -1,7 +1,7 @@
 # conf/inference/default.yaml
 # Inference-wide knobs. You can override from CLI as usual.
 
-input_dir: ${paths.test_images_dir}         # where to read images from (defaults to test set)
+input_dir: ${paths.test_images_dir}        # where to read images from (defaults to test set)
 mask_gt_dir: ${paths.test_masks_dir}       # optional (for metrics); can be null/None
 output_root: ${paths.project_inference_dir}
 preview_max_side: 1200                     # resize triptych preview longest side (keeps aspect)
@@ -17,16 +17,14 @@ overlay:
 # Unless the full crop is input to the inference pipeline (without tiling), this should be disabled.
 roi:
   enable: false
-  # weights: ${paths.yolo_weed_detection_model}
-  weights: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/weed_detection/weights/best.pt
+  weights: ${paths.yolo_weed_detection_model}
   conf: 0.25
   iou: 0.45
   pick: "best"                             # "best" (highest conf) or "largest"
 
 # Segmentation & pre/post
 seg:
-  # weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
-  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/unet/epoch=39-step=6080-val_loss=0.00.pth # local best model
+  weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
   threshold: 0.5
   pad_to_divisor: 32                     # pad input so H,W divisible by this (for UNet or any other model with downsamplings)
   tile:
@@ -68,5 +66,5 @@ logger:
   wandb:
     enable: true
     project: ${project.name}
-    entity: sbaghba
+    entity: 
     run_name: ""   # leave empty to use timestamp

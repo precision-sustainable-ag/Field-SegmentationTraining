@@ -125,6 +125,7 @@ def run_train_pipeline(cfg: DictConfig) -> None:
         logger=loggers,
         callbacks=[checkpoint_cb, earlystop_cb],
         default_root_dir=str(Path(cfg.paths.project_train_dir)),
+        log_every_n_steps=cfg.train.trainer.get("log_every_n_steps", 50),
     )
 
     # === 8) Train ===

@@ -111,12 +111,12 @@ class LitSegmentation(pl.LightningModule):
             total_loss += weight * loss_val
             
             # Log individual loss components for WandB graphs
-            self.log(f"train/loss_{name}", loss_val, on_step=False, on_epoch=True)
+            self.log(f"train/loss_{name}", loss_val, on_step=False, on_epoch=True, sync_dist=True)
         preds = (torch.sigmoid(logits) > 0.5).long()
         self.train_iou.update(preds, masks.long())
         self.train_dice.update(preds, masks.long())
 
-        self.log("train/loss_total", total_loss, on_step=False, on_epoch=True)
+        self.log("train/loss_total", total_loss, on_step=False, on_epoch=True, sync_dist=True)
         self.log("train/iou",   self.train_iou,   on_step=False, on_epoch=True)
         self.log("train/dice",  self.train_dice,  on_step=False, on_epoch=True)
 
@@ -147,13 +147,13 @@ class LitSegmentation(pl.LightningModule):
             total_loss += weight * loss_val
             
             # Log individual loss components for WandB graphs
-            self.log(f"val/loss_{name}", loss_val, on_step=False, on_epoch=True)
+            self.log(f"val/loss_{name}", loss_val, on_step=False, on_epoch=True, sync_dist=True)
 
         preds = (torch.sigmoid(logits) > 0.5).long()
         self.val_iou.update(preds, masks.long())
         self.val_dice.update(preds, masks.long())
 
-        self.log("val/loss_total", total_loss, on_step=False, on_epoch=True)
+        self.log("val/loss_total", total_loss, on_step=False, on_epoch=True, sync_dist=True)
         self.log("val/iou",  self.val_iou,  on_step=False, on_epoch=True)
         self.log("val/dice", self.val_dice, on_step=False, on_epoch=True)
 
