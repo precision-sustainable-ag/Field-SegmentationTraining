@@ -645,3 +645,15 @@ val:
 # ─── test (no augment) ───────────────────────────────────────────────
 test:
   enable: false
+  img_size:
+    height: ${augment.train.img_size.height}
+    width:  ${augment.train.img_size.width}
+
+  spatial:
+    enable: false
+  
+  pixel:
+    enable: false
+  
+  batch:
+    enable: false

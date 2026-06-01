@@ -8,7 +8,6 @@ num_workers: 16
 pin_memory: true
 seed: 42
 use_data_normalization: false
-use_data_augmentation: true
 
 dataloader_visualizer:
   enabled: true
@@ -60,7 +59,7 @@ losses:
 
 # Checkpoint callback:
 checkpoint:
-  monitor: "val/iou"
+  monitor: "val/fg_iou"
   mode: "max"
   save_top_k: 1
   save_last: true
@@ -68,7 +67,7 @@ checkpoint:
 # EarlyStopping callback (optional):
 early_stop:
   enabled: true
-  monitor: "val/iou"
+  monitor: "val/fg_iou"
   mode: "max"
   patience: 10
 

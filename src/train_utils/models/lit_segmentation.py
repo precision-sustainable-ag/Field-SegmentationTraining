@@ -8,15 +8,15 @@ from hydra.utils import instantiate
 from typing import Any, Tuple, List, Dict
 
 import segmentation_models_pytorch as smp
-from torchmetrics.classification import BinaryJaccardIndex as IoU, BinaryF1Score as Dice
+from torchmetrics import MetricCollection
 
 class LitSegmentation(pl.LightningModule):
     """
     PyTorch Lightning module for semantic segmentation using segmentation_models.pytorch (SMP).
     
     Supports:
-    - Binary segmentation (BCEWithLogitsLoss)
-    - IoU and Dice metrics (batch-aggregated)
+    - Dynamic losses via Hydra config
+    - Dynamic metrics (IoU, Dice, Precision, Recall, AUROC, etc.) via Hydra config
     - Dynamic model selection via Hydra config
     """
 
@@ -65,11 +65,43 @@ class LitSegmentation(pl.LightningModule):
         if len(self.losses) == 0:
             raise ValueError("No loss functions are enabled in the configuration!")
 
-        # === Metrics ===
-        self.train_iou = IoU()
-        self.val_iou   = IoU()
-        self.train_dice = Dice()
-        self.val_dice   = Dice()
+        # === Dynamic Metrics Initialization ===
+        metrics_dict = {}
+        if hasattr(cfg, "evaluation") and hasattr(cfg.evaluation, "metrics"):
+            for metric_name, metric_cfg in cfg.evaluation.metrics.items():
+                if getattr(metric_cfg, "enabled", False):
+                    metrics_dict[metric_name] = instantiate(metric_cfg.metric)
+        else:
+            raise ValueError("No evaluation metrics found in configuration.")
+
+        # MetricCollection handles cross-GPU syncing automatically!
+        # We clone the collection for each phase to isolate their internal states.
+        base_metrics = MetricCollection(metrics_dict)
+        
+        # We assign these directly to the module so Lightning registers them
+        self.train_metrics = base_metrics.clone(prefix="train/")
+        self.val_metrics = base_metrics.clone(prefix="val/")
+        self.test_metrics = base_metrics.clone(prefix="test/")
+        
+        # Separate collections for threshold-independent metrics (AUROC, PR-AUC)
+        # because they require raw probabilities instead of binary predictions.
+        prob_metrics_dict = {}
+        bin_metrics_dict = {}
+        
+        for name, metric in metrics_dict.items():
+             if "AUROC" in str(type(metric)) or "AveragePrecision" in str(type(metric)):
+                 prob_metrics_dict[name] = metric
+             else:
+                 bin_metrics_dict[name] = metric
+                 
+        # Create discrete collections for Train, Val, and Test to avoid state collisions
+        self.train_prob_metrics = MetricCollection(prob_metrics_dict).clone(prefix="train/")
+        self.val_prob_metrics = MetricCollection(prob_metrics_dict).clone(prefix="val/")
+        self.test_prob_metrics = MetricCollection(prob_metrics_dict).clone(prefix="test/")
+        
+        self.train_bin_metrics = MetricCollection(bin_metrics_dict).clone(prefix="train/")
+        self.val_bin_metrics = MetricCollection(bin_metrics_dict).clone(prefix="val/")
+        self.test_bin_metrics = MetricCollection(bin_metrics_dict).clone(prefix="test/")
 
         # === Learning rate ===
         self.lr = cfg.train.optimizer.lr
@@ -112,13 +144,25 @@ class LitSegmentation(pl.LightningModule):
             
             # Log individual loss components for WandB graphs
             self.log(f"train/loss_{name}", loss_val, on_step=False, on_epoch=True, sync_dist=True)
-        preds = (torch.sigmoid(logits) > 0.5).long()
-        self.train_iou.update(preds, masks.long())
-        self.train_dice.update(preds, masks.long())
-
+        
         self.log("train/loss_total", total_loss, on_step=False, on_epoch=True, sync_dist=True)
-        self.log("train/iou",   self.train_iou,   on_step=False, on_epoch=True)
-        self.log("train/dice",  self.train_dice,  on_step=False, on_epoch=True)
+
+        # Calculate and log dynamic metrics
+        # 1. Get threshold from config (default to 0.5 if not found)
+        thr = getattr(self.cfg.evaluation.settings, "threshold", 0.5)
+        
+        # 2. Get probabilities and binary predictions
+        probs = torch.sigmoid(logits)
+        preds = (probs > thr).long()
+        masks_long = masks.long()
+        
+        # 3. Update and log collections
+        # Disabled to save memory
+        # prob_output = self.train_prob_metrics(probs, masks_long)
+        bin_output = self.train_bin_metrics(preds, masks_long)
+        # Logging these can be very expensive, especially with large metrics like AUROC that store internal state.
+        # self.log_dict(prob_output, on_step=False, on_epoch=True, sync_dist=True)
+        self.log_dict(bin_output, on_step=False, on_epoch=True, sync_dist=True)
 
         return total_loss
 
@@ -149,13 +193,56 @@ class LitSegmentation(pl.LightningModule):
             # Log individual loss components for WandB graphs
             self.log(f"val/loss_{name}", loss_val, on_step=False, on_epoch=True, sync_dist=True)
 
-        preds = (torch.sigmoid(logits) > 0.5).long()
-        self.val_iou.update(preds, masks.long())
-        self.val_dice.update(preds, masks.long())
-
         self.log("val/loss_total", total_loss, on_step=False, on_epoch=True, sync_dist=True)
-        self.log("val/iou",  self.val_iou,  on_step=False, on_epoch=True)
-        self.log("val/dice", self.val_dice, on_step=False, on_epoch=True)
+
+        # Calculate and log dynamic metrics
+        # 1. Get threshold from config (default to 0.5 if not found)
+        thr = getattr(self.cfg.evaluation.settings, "threshold", 0.5)
+        
+        # 2. Get probabilities and binary predictions
+        probs = torch.sigmoid(logits)
+        preds = (probs > thr).long()
+        masks_long = masks.long()
+        
+        # 3. Update and log collections
+        prob_output = self.val_prob_metrics(probs, masks_long)
+        bin_output = self.val_bin_metrics(preds, masks_long)
+        self.log_dict(prob_output, on_step=False, on_epoch=True, sync_dist=True)
+        self.log_dict(bin_output, on_step=False, on_epoch=True, sync_dist=True)
+
+        return total_loss
+
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
+        """
+        Runs exactly like validation_step, but logs to the 'test/' prefix.
+        Used at the very end of training on the held-out test set.
+        """
+        imgs, masks = batch
+        logits = self(imgs)
+
+        total_loss = 0.0
+        masks_float = masks.float() 
+        
+        for name, criterion in self.losses.items():
+            loss_val = criterion(logits, masks_float)
+            total_loss += self.loss_weights[name] * loss_val
+            self.log(f"test/loss_{name}", loss_val, on_step=False, on_epoch=True, sync_dist=True)
+
+        self.log("test/loss_total", total_loss, on_step=False, on_epoch=True, sync_dist=True)
+
+        # 1. Get threshold from config (default to 0.5 if not found)
+        thr = getattr(self.cfg.evaluation.settings, "threshold", 0.5)
+        
+        # 2. Get probabilities and binary predictions
+        probs = torch.sigmoid(logits)
+        preds = (probs > thr).long()
+        masks_long = masks.long()
+        
+        # 3. Update and log collections
+        prob_output = self.test_prob_metrics(probs, masks_long)
+        bin_output = self.test_bin_metrics(preds, masks_long)
+        self.log_dict(prob_output, on_step=False, on_epoch=True, sync_dist=True)
+        self.log_dict(bin_output, on_step=False, on_epoch=True, sync_dist=True)
 
         return total_loss
 

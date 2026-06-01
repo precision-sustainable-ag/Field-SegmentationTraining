@@ -95,9 +95,16 @@ class FieldDataset(Dataset):
             self.normalize = None
         
         # ─── build albumentations pipeline based on mode ───────────────────
-        # If augmentations are enabled in config, build the appropriate transforms
-        # Use the flag in cfg.train to decide whether to augment
-        self.use_augment = bool(getattr(cfg.train, "use_data_augmentation", False))
+        # Check the 'enable' flag directly inside the augment configuration block for the current mode.
+        if mode == "train":
+            self.use_augment = getattr(cfg.augment.train, "enable", False)
+        elif mode == "val":
+            self.use_augment = getattr(cfg.augment.val, "enable", False)
+        elif mode == "test":
+            self.use_augment = getattr(cfg.augment.test, "enable", False)
+        else:
+            self.use_augment = False
+
         if self.use_augment:
             if mode == "train":
                 self.transform = get_train_transforms(cfg)
@@ -105,8 +112,7 @@ class FieldDataset(Dataset):
                 self.transform = get_val_transforms(cfg)
             else:
                 self.transform = get_test_transforms(cfg)
-        
-        # no-op: return image & mask untouched
+        # no-op: return image & mask untouched (just converts to Tensor)
         else:
             self.transform = get_noop_transform()
 

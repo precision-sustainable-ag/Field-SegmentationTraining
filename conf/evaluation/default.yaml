@@ -1,11 +1,95 @@
 # conf/evaluation/default.yaml
-# Which metrics to compute
+
+settings:
+  task: "binary"                 # "binary" or "multiclass" ("multiclass" is not yet implemented in this codebase, but you can set up your own metrics if you want to experiment with it)
+  threshold: 0.5                 # Threshold for binary predictions
+  ignore_index: 0                # Index of the background (dirt)
+  class_names: ["dirt", "plant"]
+
 metrics:
-  - iou
-  - dice
-  - precision
-  - recall
-# Visualization settings
+  # ==========================================
+  # FOREGROUND METRICS (Ignores Background)
+  # ==========================================
+  
+  fg_iou:                        # Also known as Jaccard Index, measures overlap of predicted plant pixels with ground truth plant pixels
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryJaccardIndex
+      ignore_index: ${evaluation.settings.ignore_index}
+
+  fg_dice:                       # Also known as F1 Score, Very similar to IoU, but mathematically penalizes the model slightly less for single-pixel errors.
+                                 # Usually sits a few percentage points higher than IoU. 
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryF1Score
+      ignore_index: ${evaluation.settings.ignore_index}
+
+  precision:                      # Of all pixels predicted as plant, how many were actually plant? (Low precision = hallucinating plants in the dirt)
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryPrecision
+      ignore_index: ${evaluation.settings.ignore_index}
+
+  recall:                         # Of all actual plant pixels, how many did the model find? (Low recall = missing plants in the field)
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryRecall
+      ignore_index: ${evaluation.settings.ignore_index}
+
+  # ==========================================
+  # GLOBAL METRICS (Includes Background)
+  # ==========================================
+
+  mean_iou:
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryJaccardIndex
+      # No ignore_index here, so it averages plant + dirt performance
+
+  mean_dice:
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryF1Score
+
+  accuracy:                      # Of all pixels, how many were correctly classified as plant or dirt? (Can be misleadingly high if the model just learns to predict the dominant class)
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryAccuracy
+      # Good to log to show how it misleadingly sits at 95%+
+
+  # ==========================================
+  # THRESHOLD-INDEPENDENT (Requires Probabilities)
+  # Instead of testing the model at just the 0.5 threshold, these test the model at EVERY 
+  # possible threshold (0.1, 0.2... 0.9) to see its overall understanding of the data. 
+  # ==========================================
+  
+  auroc:                        # Area Under the Receiver Operating Characteristic curve. Measures how well the model separates plant vs dirt pixels across ALL thresholds. 1.0 is perfect, 0.5 is random guessing.
+                                # Very informative for imbalanced datasets, as it shows whether the model is truly learning to identify plants or just getting lucky at a specific threshold.
+                                # However, like Accuracy, it gets artificially inflated by the massive amount of dirt.
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryAUROC
+      ignore_index: ${evaluation.settings.ignore_index}
+      thresholds: 1000          # Evaluate at 1000 thresholds between 0 and 1 to get a smooth curve. More thresholds = more accurate AUC, but slower computation and more memory usage.
+
+  pr_auc:                       # Area under the Precision-Recall curve. The most rigorous metric for this pipeline. 
+                                # It measures the tradeoff between Precision and Recall across all thresholds, entirely 
+                                # ignoring the dirt pixels. If this score is high, the model is genuinely excellent.
+    enabled: true
+    metric:
+      _target_: torchmetrics.classification.BinaryAveragePrecision
+      ignore_index: ${evaluation.settings.ignore_index}
+      thresholds: 1000          # To evaluate across all thresholds instead of a fixed one, set this to null. This gives a more accurate AUC, but is much slower to compute and can cause memory issues if your dataset is very large.
+
+  # ==========================================
+  # RAW DIAGNOSTICS
+  # ==========================================
+  
+  # confusion_matrix:             # Shows raw counts of TP, FP, TN, FN. Not a summary metric, but very useful for debugging and understanding model behavior.
+  #   enabled: true
+  #   metric:
+  #     _target_: torchmetrics.classification.BinaryConfusionMatrix
+
 vis:
   overlay: true
   num_samples: 10

@@ -10,46 +10,68 @@ from omegaconf import DictConfig
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 import wandb
+import json
 
 from src.train_utils.data.dataset import FieldDataset
 from src.train_utils.data.collate import get_batch_collate_fn
+from torch.utils.data._utils.collate import default_collate
 
 def _get_run_dir() -> Path:
     if HydraConfig.initialized():
         return Path(HydraConfig.get().runtime.output_dir)
     return Path.cwd()
 
-# --- NEW: display conversion helpers -----------------------------------------
+# --- display conversion helpers -----------------------------------------
 
 def _detect_sample_norm_kind(cfg: DictConfig) -> Optional[str]:
-    """Return 'image' | 'image_per_channel' | None based on augment.train.normalization."""
+    """Return 'image' | 'image_per_channel' | 'dataset_wide' | None based on active norm."""
+    
+    # 1. Check if dataset-wide normalization is active
+    if getattr(cfg.train, "use_data_normalization", False):
+        return "dataset_wide"
+        
+    # 2. Check if sample-specific normalization was applied by Albumentations
     norm_cfg = getattr(cfg.augment.train, "normalization", None)
     if norm_cfg and norm_cfg.get("enable", False):
         kind = str(norm_cfg.get("kind", "")).lower()
         if kind in ("image", "image_per_channel"):
             return kind
+            
     return None
 
-def _to_display_batch(imgs: torch.Tensor, norm_kind: Optional[str]) -> torch.Tensor:
+def _to_display_batch(imgs: torch.Tensor, norm_kind: Optional[str], dataset_stats: Optional[Dict[str, list]] = None) -> torch.Tensor:
     """
     Convert a batch [B, C, H, W] to [0,1] for visualization.
+    - If dataset-wide normalization was applied, mathematically invert it using dataset_stats.
     - If sample-specific normalization was applied by Albumentations,
       do per-image min–max scaling for display.
     - Else, clamp.
     """
     x = imgs.detach()
-    if norm_kind in ("image", "image_per_channel"):
+    
+    if norm_kind == "dataset_wide" and dataset_stats is not None:
+        # 1. Mathematically invert Z-score normalization
+        # Reshape lists to [1, 3, 1, 1] to broadcast across the [B, 3, H, W] batch
+        mean = torch.tensor(dataset_stats["mean"], device=x.device).view(1, 3, 1, 1)
+        std = torch.tensor(dataset_stats["std"], device=x.device).view(1, 3, 1, 1)
+        
+        x_disp = (x * std) + mean
+        return x_disp.clamp(0.0, 1.0)
+        
+    elif norm_kind in ("image", "image_per_channel"):
+        # 2. Dynamic Albumentations: Fallback to global per-image min-max
         B = x.shape[0]
-        # global per-image min–max across channels for natural colors
         x_flat = x.view(B, -1)
         mins = x_flat.min(dim=1).values.view(B, 1, 1, 1)
         maxs = x_flat.max(dim=1).values.view(B, 1, 1, 1)
         denom = (maxs - mins).clamp_min(1e-6)
         x_disp = (x - mins) / denom
         return x_disp.clamp(0.0, 1.0)
+        
     else:
+        # 3. No normalization applied
         return x.clamp(0.0, 1.0)
 
 # -----------------------------------------------------------------------------
@@ -80,7 +102,12 @@ def vis_dataloader_batch(cfg: DictConfig, logger_cfgs: Optional[List] = None) ->
         print("[vis_dataloader] Dataset is empty; skipping.")
         return
 
-    collate = get_batch_collate_fn(cfg.augment.train.batch)
+    # Check the master switch before applying batch-level mixing
+    if getattr(cfg.augment.train, "enable", False):
+        collate = get_batch_collate_fn(cfg.augment.train.batch)
+    else:
+        # If train augmentations are false, DO NOT apply any mixing.
+        collate = default_collate
     loader = torch.utils.data.DataLoader(
         ds,
         batch_size=min(max(1, n_samples), len(ds)),
@@ -97,15 +124,28 @@ def vis_dataloader_batch(cfg: DictConfig, logger_cfgs: Optional[List] = None) ->
     out_dir = _get_run_dir() / "image_logs"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- NEW: decide how to display and message about it
+    # Detect normalization
     norm_kind = _detect_sample_norm_kind(cfg)
-    if norm_kind:
-        vis_msg = f"Note: sample-specific normalization ({norm_kind}) detected; min–max rescaled per image for visualization."
+    dataset_stats = None
+
+    if norm_kind == "dataset_wide":
+        # Read the stats file using your new config path
+        stats_path = Path(cfg.paths.project_datastats_dir) / "rgb_mean_std.json"
+        try:
+            with open(stats_path, "r") as f:
+                dataset_stats = json.load(f)
+            vis_msg = f"Note: dataset-wide normalization inverted using stats from {stats_path.name}."
+        except Exception as e:
+            print(f"[vis_dataloader] Warning: Could not read dataset stats: {e}")
+            vis_msg = "Note: images clamped (dataset stats failed to load)."
+            
+    elif norm_kind:
+        vis_msg = f"Note: sample-specific normalization ({norm_kind}) detected; min–max rescaled per image."
     else:
         vis_msg = "Note: images clamped for visualization."
 
-    # Images grid (convert to display range first)
-    images_disp = _to_display_batch(images, norm_kind)
+    # Images grid (convert to display range first using the new logic)
+    images_disp = _to_display_batch(images, norm_kind, dataset_stats)
     img_grid = torchvision.utils.make_grid(images_disp, nrow=nrow, padding=4)
     img_path = out_dir / "batch_visualization_image.png"
     plt.figure(figsize=(8, 8))

@@ -722,6 +722,17 @@ def get_train_transforms(cfg) -> A.ReplayCompose:
       - Replay enabled for introspection
     """
     t = cfg.augment.train
+    # Enforce the master switch!
+    if not getattr(t, "enable", True):
+        # If disabled, do absolutely no spatial or pixel modifications.
+        # Just convert to tensor. If the raw images are different sizes, 
+        # the DataLoader collate_fn will intentionally crash.
+        return A.ReplayCompose(
+            transforms=[
+                ToTensorV2()
+            ],
+            additional_targets={"mask": "mask"}
+        )
     H = int(t.img_size.height)
     W = int(t.img_size.width)
 
@@ -752,9 +763,9 @@ def get_val_transforms(cfg) -> A.Compose:
     in the val config. Always finishes with ToTensorV2().
     """
     t = cfg.augment.val
-    if not t.enable:
+    # Enforce the master switch
+    if not getattr(t, "enable", True):
         return A.Compose([ToTensorV2()], additional_targets={"mask": "mask"})
-
     H = int(t.img_size.height)
     W = int(t.img_size.width)
 
@@ -777,9 +788,30 @@ def get_val_transforms(cfg) -> A.Compose:
 
 def get_test_transforms(cfg) -> A.Compose:
     """
-    Test transforms: usually same as validation.
+    Test pipeline using the dedicated test config block.
     """
-    return get_val_transforms(cfg)
+    t = cfg.augment.test
+    # Enforce the master switch
+    if not getattr(t, "enable", True):
+        return A.Compose([ToTensorV2()], additional_targets={"mask": "mask"})
+    H = int(t.img_size.height)
+    W = int(t.img_size.width)
+
+    spatial_blocks = _build_spatial_block(t.spatial, H, W) if getattr(t, "spatial", None) else []
+    pixel_blocks   = _build_pixel_block(t.pixel) if getattr(t, "pixel", None) else []
+    final_norm = _build_final_normalization(getattr(t, "normalization", {}))
+
+    pipeline: List[A.BasicTransform] = []
+    pipeline.extend(spatial_blocks)
+    pipeline.extend(pixel_blocks)
+    pipeline.extend(final_norm)
+    pipeline.append(A.PadIfNeeded(min_height=H, min_width=W, p=1.0))
+    pipeline.append(ToTensorV2())
+
+    return A.Compose(
+        transforms=pipeline,
+        additional_targets={"mask": "mask"},
+    )
 
 
 def get_noop_transform() -> A.Compose:
