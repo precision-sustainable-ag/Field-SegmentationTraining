@@ -28,13 +28,11 @@ metrics:
     enabled: true
     metric:
       _target_: torchmetrics.classification.BinaryPrecision
-      ignore_index: ${evaluation.settings.ignore_index}
 
   recall:                         # Of all actual plant pixels, how many did the model find? (Low recall = missing plants in the field)
     enabled: true
     metric:
       _target_: torchmetrics.classification.BinaryRecall
-      ignore_index: ${evaluation.settings.ignore_index}
 
   # ==========================================
   # GLOBAL METRICS (Includes Background)
@@ -69,7 +67,6 @@ metrics:
     enabled: true
     metric:
       _target_: torchmetrics.classification.BinaryAUROC
-      ignore_index: ${evaluation.settings.ignore_index}
       thresholds: 1000          # Evaluate at 1000 thresholds between 0 and 1 to get a smooth curve. More thresholds = more accurate AUC, but slower computation and more memory usage.
 
   pr_auc:                       # Area under the Precision-Recall curve. The most rigorous metric for this pipeline. 
@@ -78,7 +75,6 @@ metrics:
     enabled: true
     metric:
       _target_: torchmetrics.classification.BinaryAveragePrecision
-      ignore_index: ${evaluation.settings.ignore_index}
       thresholds: 1000          # To evaluate across all thresholds instead of a fixed one, set this to null. This gives a more accurate AUC, but is much slower to compute and can cause memory issues if your dataset is very large.
 
   # ==========================================
