@@ -1,0 +1,72 @@
+# conf/inference/segformer.yaml
+# Inference-wide knobs. You can override from CLI as usual.
+
+input_dir: ${paths.test_images_dir}        # where to read images from (defaults to test set)
+mask_gt_dir: ${paths.test_masks_dir}       # optional (for metrics); can be null/None
+output_root: ${paths.project_inference_dir}
+preview_max_side: 1200                     # resize triptych preview longest side (keeps aspect)
+save:
+  triptych: true
+  overlay: true
+  raw_mask: true
+overlay:
+  alpha: 0.60
+  color: [0, 255, 0]                       # green
+
+# ROI detection (YOLO). If disabled, segment full image.
+# Unless the full crop is input to the inference pipeline (without tiling), this should be disabled.
+roi:
+  enable: false
+  # weights: ${paths.yolo_weed_detection_model}
+  weights: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/weed_detection/weights/best.pt
+  conf: 0.25
+  iou: 0.45
+  pick: "best"                             # "best" (highest conf) or "largest"
+
+# Segmentation & pre/post
+seg:
+  # weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
+  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/projects/NavSin/train/model/epoch=59-step=5520-val_loss=0.00.pth # local best model
+  threshold: 0.5
+  pad_to_divisor: 32                     # pad input so H,W divisible by this (for UNet or any other model with downsamplings)
+  tile:
+    enable: false
+    tile_size: 1024
+    overlap: 128
+    # how to merge overlaps
+    blend:
+      method: hann       # one of: hann | uniform | gaussian | max
+      on: prob           # prob (blend probabilities) or bin (blend binary)
+      sigma: 0.3         # only used for gaussian (relative to tile size)
+    amp:
+      enable: true       # use mixed precision (fp16) during inference
+
+# Optional dataset-wide normalization at inference (usually you want this if used in training)
+normalization:
+  enable: ${train.use_data_normalization}
+  stats_path: ${paths.project_datastats_dir}/rgb_mean_std.json  # mean/std from preprocess
+
+# Inference on LTS images from DB
+lts:
+  enable: false
+  limit: 10          # max number of images to pull from DB
+  common_name: "barley"   # single string or list. e.g. ["barley", "vetch"]
+  plant_type: "COVERCROPS"   # e.g., "COVERCROPS", "WEEDS", "CASHCROP", or null
+  state: null          # e.g., "AL", "NC", etc.
+  species: null        # taxonomic_species_name
+  height_min: null
+  height_max: null
+
+# GPU selection settings
+gpu:
+  enable: true          # turn auto-selection on/off
+  max_gpus: 1           # just two GPUs for inference
+  exclude_gpu_ids: [0]  # skip GPU 0 if it's busy with training/etc.
+
+# Logger settings
+logger:
+  wandb:
+    enable: true
+    project: ${project.name}
+    entity: sbaghba
+    run_name: ""   # leave empty to use timestamp

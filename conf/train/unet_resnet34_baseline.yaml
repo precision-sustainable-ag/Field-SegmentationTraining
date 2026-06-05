@@ -1,0 +1,83 @@
+# conf/train/unet_resnet34_baseline.yaml
+
+batch_size: 64
+max_epochs: 50
+num_workers: 16
+pin_memory: true
+seed: 42
+use_data_normalization: true
+
+dataloader_visualizer:
+  enabled: true
+  num_samples: 4
+
+# Optimizer:
+optimizer:
+  _target_: "torch.optim.AdamW"
+  lr: 5e-4
+  weight_decay: 1e-4                   # Increased slightly for better regularization
+
+# Scheduler:
+scheduler:
+  _target_: "torch.optim.lr_scheduler.CosineAnnealingLR"
+  T_max: 100                           # Matched to max_epochs
+  eta_min: 1e-6
+
+# Lightning Trainer arguments:
+use_multi_gpu: true
+num_gpus: 4
+
+trainer:
+  accelerator: "gpu"
+  devices: null
+  precision: 16-mixed
+  deterministic: true
+  log_every_n_steps: 1
+
+losses:
+  bce:
+    enabled: true
+    weight: 0.5
+    loss:
+      _target_: torch.nn.BCEWithLogitsLoss
+  
+  dice:
+    enabled: true
+    weight: 0.5
+    loss:
+      _target_: segmentation_models_pytorch.losses.DiceLoss
+      mode: "binary"
+      from_logits: true
+      
+  focal:
+    enabled: false
+    weight: 1.0
+    loss:
+      _target_: segmentation_models_pytorch.losses.FocalLoss
+      mode: "binary"
+
+# Checkpoint callback:
+checkpoint:
+  monitor: "val/fg_iou"
+  mode: "max"
+  save_top_k: 1
+  save_last: true
+
+# EarlyStopping callback (optional):
+early_stop:
+  enabled: true
+  monitor: "val/fg_iou"
+  mode: "max"
+  patience: 15                         # Increased slightly for longer epochs
+
+logger:
+  - _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ""
+    version: ""
+
+  - _target_: pytorch_lightning.loggers.WandbLogger
+    project: ${project.name}
+    entity:  sbaghba
+    log_model: true
+    save_dir: ${hydra:runtime.output_dir}

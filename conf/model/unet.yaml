@@ -5,7 +5,7 @@
 # UNet‐specific parameters:
 arch_name: "Unet"
 name: "unet"
-encoder_name: "mit_b3"          # e.g. resnet18, resnet34, resnet50, efficientnet-b0, etc.
+encoder_name: "resnet34"          # e.g. resnet18, resnet34, resnet50, efficientnet-b0, etc.
 encoder_weights: "imagenet"       # or "None"
 in_channels: 3
 classes: 1
