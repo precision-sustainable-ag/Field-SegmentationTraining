@@ -1,13 +1,11 @@
-# conf/train/default.yaml
-# Training hyperparameters & Lightning Trainer settings. 
-# “train.*” keys map to src/train.py (LightningModule + Trainer).
+# conf/train/unet_resnet34_baseline.yaml
 
-batch_size: 8
+batch_size: 64
 max_epochs: 50
 num_workers: 16
 pin_memory: true
 seed: 42
-use_data_normalization: false
+use_data_normalization: true
 
 dataloader_visualizer:
   enabled: true
@@ -16,24 +14,25 @@ dataloader_visualizer:
 # Optimizer:
 optimizer:
   _target_: "torch.optim.AdamW"
-  lr: 1e-4
-  weight_decay: 1e-5
+  lr: 5e-4
+  weight_decay: 1e-4                   # Increased slightly for better regularization
 
 # Scheduler:
 scheduler:
   _target_: "torch.optim.lr_scheduler.CosineAnnealingLR"
-  T_max: 50
+  T_max: 100                           # Matched to max_epochs
   eta_min: 1e-6
 
 # Lightning Trainer arguments:
 use_multi_gpu: true
-num_gpus: 2  # Set between 1 and 3
+num_gpus: 4
 
 trainer:
   accelerator: "gpu"
-  devices: null  # Will be dynamically set by GPU utility
+  devices: null
   precision: 16-mixed
   deterministic: true
+  log_every_n_steps: 1
 
 losses:
   bce:
@@ -69,16 +68,16 @@ early_stop:
   enabled: true
   monitor: "val/fg_iou"
   mode: "max"
-  patience: 10
+  patience: 15                         # Increased slightly for longer epochs
 
 logger:
   - _target_: pytorch_lightning.loggers.CSVLogger
-    save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
+    save_dir: ${hydra:runtime.output_dir}
     name: ""
     version: ""
 
   - _target_: pytorch_lightning.loggers.WandbLogger
     project: ${project.name}
-    entity:  # Optional: your WandB entity
+    entity:  sbaghba
     log_model: true
-    save_dir: ${hydra:runtime.output_dir} # ${paths.project_train_dir}
+    save_dir: ${hydra:runtime.output_dir}

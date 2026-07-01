@@ -1,0 +1,16 @@
+# conf/model/unet_resnet34_baseline.yaml
+# Pure U-Net baseline for binary plant/background segmentation
+
+arch_name: "Unet"
+name: "unet_resnet34_baseline"
+encoder_name: "resnet34"          # Swapped from mit_b3 to a standard CNN
+encoder_weights: "imagenet"       # Keep ImageNet pre-training
+in_channels: 3
+classes: 1                        # Binary: 1 = Plant, 0 = Background
+activation: "sigmoid"             # Outputs probabilities [0, 1] for the single class
+
+# Fine-tune the whole network
+encoder_freeze: false
+
+# Keep it vanilla for the baseline
+decoder_attention_type: null

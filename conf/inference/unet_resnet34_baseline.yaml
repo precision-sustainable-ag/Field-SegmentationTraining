@@ -1,4 +1,4 @@
-# conf/inference/default.yaml
+# conf/inference/unet_resnet34_baseline.yaml
 # Inference-wide knobs. You can override from CLI as usual.
 
 input_dir: ${paths.test_images_dir}        # where to read images from (defaults to test set)
@@ -17,18 +17,20 @@ overlay:
 # Unless the full crop is input to the inference pipeline (without tiling), this should be disabled.
 roi:
   enable: false
-  weights: ${paths.yolo_weed_detection_model}
+  # weights: ${paths.yolo_weed_detection_model}
+  weights: /home/sbaghba/envs/Field-SegmentationTraining/data/field-tools/models/weed_detection/weights/best.pt
   conf: 0.25
   iou: 0.45
   pick: "best"                             # "best" (highest conf) or "largest"
 
 # Segmentation & pre/post
 seg:
-  weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
+  # weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
+  weights_path: /home/sbaghba/envs/Field-SegmentationTraining/projects/NavSin/train/model/epoch=68-step=1380-val_loss=0.00.pth # local best model
   threshold: 0.5
   pad_to_divisor: 32                     # pad input so H,W divisible by this (for UNet or any other model with downsamplings)
   tile:
-    enable: True
+    enable: false
     tile_size: 1024
     overlap: 128
     # how to merge overlaps
@@ -46,7 +48,7 @@ normalization:
 
 # Inference on LTS images from DB
 lts:
-  enable: true
+  enable: false
   limit: 10          # max number of images to pull from DB
   common_name: "barley"   # single string or list. e.g. ["barley", "vetch"]
   plant_type: "COVERCROPS"   # e.g., "COVERCROPS", "WEEDS", "CASHCROP", or null
@@ -66,5 +68,5 @@ logger:
   wandb:
     enable: true
     project: ${project.name}
-    entity: 
+    entity: sbaghba
     run_name: ""   # leave empty to use timestamp

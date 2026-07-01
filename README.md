@@ -146,7 +146,7 @@ python main.py mode=train
 Override configuration inline:
 
 ```bash
-python main.py mode=train model=deeplabv3plus train.max_epochs=50 train.batch_size=16
+python main.py mode=train model=segformer train.max_epochs=50 train.batch_size=8
 ```
 * **Configuration groups:**
     * `conf/model/`
@@ -171,8 +171,9 @@ python main.py mode=inference inference.checkpoint_path=path/to/checkpoint.ckpt
 Model configurations are located in: `conf/model/`
 
 Currently supported:
-* UNet
-* DeepLabV3+
+* SegFormer (MiT-B0 to MiT-B5): Hierarchical Vision Transformer with a global receptive field and lightweight MLP decoder (State-of-the-art for contiguous agricultural features).
+* UNet: Standard CNN encoder-decoder.
+* DeepLabV3+: CNN with Atrous Spatial Pyramid Pooling (ASPP).
 
 Models are instantiated via Hydra and wrapped in a LightningModule defined in `src/models/lit_segmentation.py`.
 
@@ -219,12 +220,22 @@ Augmentations are dynamically composed in `src/data/augmentation.py`.
 
 Configured in: `conf/evaluation/default.yaml`
 
-Supported metrics:
-* Intersection over Union (IoU)
-* Dice coefficient
-* Accuracy
+Because agricultural field imagery is highly imbalanced (often >90% background dirt), the evaluation pipeline is split into strict categories using `TorchMetrics` to prevent artificial inflation of scores.
 
-Evaluation can generate visualizations and CSV reports.
+**1. Foreground Metrics (Strict Evaluation)**
+These metrics ignore the background class (`ignore_index: 0`) and strictly evaluate the model's ability to segment the plant canopy:
+* Foreground IoU (Jaccard Index): The primary metric for spatial overlap.
+* Foreground Dice (F1 Score): Slightly more forgiving on edge boundaries.
+* Precision & Recall: Tracks false positives (hallucinated weeds/plants) and false negatives (missed canopy).
+
+**2. Threshold-Independent Metrics (Rigorous Evaluation)**
+Evaluates the model's probabilistic understanding across all thresholds (0.0 to 1.0) instead of a fixed 0.5 threshold:
+* PR-AUC (Precision-Recall Area Under Curve): The definitive gold-standard metric for this pipeline. It plots Precision vs. Recall across all thresholds, entirely ignoring True Negatives (dirt).
+* AUROC: Receiver Operating Characteristic curve.
+
+**3. Global Metrics (Contextual)**
+* Mean IoU / Mean Dice
+* Accuracy (Monitored purely to demonstrate the baseline imbalance).
 
 ## Project Organization
 
@@ -283,8 +294,8 @@ CI configuration is defined in: `.github/workflows/ci.yaml`
 ```bash
 python main.py \
   mode=train \
-  model=unet \
-  train.max_epochs=100 \
+  model=segformer \
+  train.max_epochs=50 \
   train.batch_size=8 \
   augment.train.batch.mixup.enable=True
 ```

@@ -73,6 +73,22 @@ def run_train_pipeline(cfg: DictConfig) -> None:
         collate_fn=val_collate_fn,  # no batch mixing on val
     )
 
+    # === 2.5) Test DataLoader ===
+    # Check if testing is enabled in the global config
+    run_test = getattr(cfg, "test", {}).get("enabled", False)
+    if run_test:
+        test_ds = FieldDataset(cfg, mode="test")
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=cfg.train.batch_size,
+            shuffle=False,
+            num_workers=cfg.train.num_workers,
+            pin_memory=cfg.train.pin_memory,
+            worker_init_fn=seed_worker,
+            generator=generator,
+            collate_fn=get_batch_collate_fn(cfg.augment.test.batch) if hasattr(cfg.augment, "test") else None,
+        )
+
     # === 3) Model ===
     # Only matters on Ampere+ (A100, A30, etc.)
     if torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8:
@@ -123,14 +139,24 @@ def run_train_pipeline(cfg: DictConfig) -> None:
         max_epochs=cfg.train.max_epochs,
         deterministic=cfg.train.trainer.deterministic,
         logger=loggers,
+        sync_batchnorm=cfg.train.trainer.get("sync_batchnorm", False), # only needed for multi-GPU, but doesn't hurt on single GPU
+        accumulate_grad_batches=cfg.train.trainer.get("accumulate_grad_batches", 1), # gradient accumulation to simulate larger batch sizes (e.g. 2x accumulation with batch_size=8 simulates batch_size=16)
         callbacks=[checkpoint_cb, earlystop_cb],
         default_root_dir=str(Path(cfg.paths.project_train_dir)),
+        log_every_n_steps=cfg.train.trainer.get("log_every_n_steps", 50),
     )
 
     # === 8) Train ===
     trainer.fit(model, train_loader, val_loader)
     if trainer.is_global_zero:
         print("Training complete.")
+
+    # === 8.5) Run Test Evaluation ===
+    if run_test:
+        if trainer.is_global_zero:
+            print("Running evaluation on test set using best checkpoint...")
+        # trainer.test automatically loads the best model weights found during .fit()
+        trainer.test(model, dataloaders=test_loader, ckpt_path="best")
 
     # === 9) Export best weights as .pth ===
     best_ckpt_path = checkpoint_cb.best_model_path
