@@ -10,6 +10,7 @@ save:
   overlay: true
   raw_mask: true
   cutout: true
+  metadata: true     # save original detection bbox + tightened cutout bbox as JSON
 overlay:
   alpha: 0.60
   color: [0, 255, 0]                       # green
@@ -22,11 +23,17 @@ roi:
   conf: 0.25
   iou: 0.45
   pick: "best"                             # "best" (highest conf) or "largest"
+  detection_padding: 
+    enabled: false         # add padding to the detected ROI before segmentation (to ensure full plant is captured)
+    pad_px: 200            # pixels to pad on each side of the detected bounding box
 
 # Segmentation & pre/post
 seg:
   weights_path: ${paths.unet_segmentation_model}  # glob allowed; latest picked
-  threshold: 0.5
+  threshold: 0.75
+  clean_disconnected_mask:
+    enable: false
+    min_area_px: 500
   pad_to_divisor: 32                     # pad input so H,W divisible by this (for UNet or any other model with downsamplings)
   tile:
     enable: True

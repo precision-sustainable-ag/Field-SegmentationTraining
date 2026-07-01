@@ -177,7 +177,8 @@ def run_inference_lts(cfg: DictConfig) -> None:
     (run_dir / "masks").mkdir(parents=True, exist_ok=True)
     (run_dir / "overlays").mkdir(parents=True, exist_ok=True)
     (run_dir / "triptych").mkdir(parents=True, exist_ok=True)
-    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)   # ← NEW
+    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)
+    (run_dir / "metadata").mkdir(parents=True, exist_ok=True)
 
     # W&B (optional)
     wb_cfg = cfg.inference.logger.wandb if "logger" in cfg.inference and "wandb" in cfg.inference.logger else {}
@@ -218,6 +219,9 @@ def run_inference_lts(cfg: DictConfig) -> None:
     tile_cfg = getattr(cfg.inference.seg, "tile", None)
     norm_cfg = getattr(cfg.inference, "normalization", None)
     save_cutout = bool(getattr(getattr(cfg.inference, "save", {}), "cutout", False))
+    save_metadata = bool(getattr(getattr(cfg.inference, "save", {}), "metadata", False))
+    roi_cfg = getattr(cfg.inference, "roi", None)
+    seg_cfg = getattr(cfg.inference, "seg", None)
 
     # Load image list from LTS database
     df = _load_lts_rows(cfg)
@@ -235,12 +239,18 @@ def run_inference_lts(cfg: DictConfig) -> None:
 
         H, W = rgb.shape[:2]
 
-        roi = _detect_roi_if_enabled(cfg, rgb)
+        roi = _detect_roi_if_enabled(roi_cfg, rgb)
         if roi is None:
             # No ROI → use the full image
             x1, y1, x2, y2 = 0, 0, W, H
         else:
-            x1, y1, x2, y2 = roi                                    
+            x1, y1, x2, y2 = roi     
+        
+        pad_cfg = getattr(roi_cfg, "detection_padding", {}) if roi_cfg else {}
+        pad_px = int(getattr(pad_cfg, "pad_px", 0))
+        bbox_was_padded = bool(
+            roi is not None and getattr(pad_cfg, "enabled", False) and pad_px > 0
+        )                               
 
         crop = rgb[y1:y2, x1:x2].copy()
 
@@ -292,12 +302,22 @@ def run_inference_lts(cfg: DictConfig) -> None:
 
         # ── vegetation cutout ──────────────────────────────────────
         if save_cutout:
-            _save_vegetation_cutout(
+            cutout_meta = _save_vegetation_cutout(
+                seg_cfg=seg_cfg,
                 crop_rgb=crop,
                 mask_crop=mask_crop,
                 out_path=run_dir / "cutouts" / f"{stem}_cutout.png",
-                max_side=max_side,
+                crop_origin_xy=(x1, y1),
+                detection_bbox_xyxy=roi,
+                detection_bbox_padded=bbox_was_padded,
+                detection_pad_px=pad_px
             )
+            if save_metadata:
+                _save_metadata_json(
+                    run_dir / "metadata" / f"{stem}.json",
+                    image_name=img_path.name,
+                    meta=cutout_meta,
+                )
         # ───────────────────────────────────────────────────────────────
 
         # W&B per-image logging

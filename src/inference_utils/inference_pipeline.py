@@ -43,11 +43,10 @@ def _pad_to_divisor(x: torch.Tensor, divisor: Optional[int]) -> tuple[torch.Tens
     x_pad = F.pad(x, pad, mode="constant", value=0.0)
     return x_pad, (pad[2], pad[3], pad[0], pad[1])  # (top, bottom, left, right)
 
-def _unpad(arr: np.ndarray, pads: Tuple) -> np.ndarray:
-    """Remove padding added by _pad_to_divisor from a 2-D mask array."""
-    _, pad_w, _, pad_h = pads
-    H, W = arr.shape
-    return arr[: H - pad_h if pad_h else H, : W - pad_w if pad_w else W]
+def _unpad(np_img: np.ndarray, pads: Tuple[int,int,int,int]) -> np.ndarray:
+    t, b, l, r = pads
+    H, W = np_img.shape[:2]
+    return np_img[t:H - b if b > 0 else H, l:W - r if r > 0 else W]
 
 
 def _normalize_if_configured(x01: torch.Tensor, norm_cfg) -> torch.Tensor:
@@ -116,40 +115,137 @@ def _save_triptych(rgb: np.ndarray, mask_u8: np.ndarray, overlay: np.ndarray, ou
 
 
 # ─────────────────────────────────────────────────────────────
-# vegetation cutout helper
+# vegetation cutout helpers
 # ─────────────────────────────────────────────────────────────
 
+def _clean_disconnected_mask(bin_mask: np.ndarray, max_gap_px: float) -> np.ndarray:
+    kernel = np.ones((3, 3), np.uint8)
+    # Used only to decide connectivity/grouping — breaks 1-2px noise bridges
+    # without affecting which original pixels end up in the final mask.
+    label_src = cv2.morphologyEx(bin_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    num, labels, stats, _ = cv2.connectedComponentsWithStats(label_src, connectivity=4)
+    if num <= 2:
+        return bin_mask
+
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    largest_label = 1 + int(np.argmax(areas))
+    main_mask = (labels == largest_label).astype(np.uint8)
+    dist_to_main = cv2.distanceTransform(1 - main_mask, cv2.DIST_L2, 5)
+
+    # Re-label the ORIGINAL (unopened) mask so we don't lose real pixels
+    # that the opening removed, then decide per-original-component using
+    # distance from the (opened) main_mask.
+    num_o, labels_o, stats_o, _ = cv2.connectedComponentsWithStats(bin_mask, connectivity=4)
+    cleaned = np.zeros_like(bin_mask)
+    for label in range(1, num_o):
+        comp_pixels = (labels_o == label)
+        min_dist = dist_to_main[comp_pixels].min()
+        if min_dist <= max_gap_px:
+            cleaned[comp_pixels] = 1
+    return cleaned
+
+def _clean_speckle_mask(bin_mask: np.ndarray, min_area: int) -> np.ndarray:
+    """Drop isolated small blobs from a binary mask, always keeping the
+    largest connected component. Used to strip stray speckles that can
+    appear far from the plant when segmentation runs on the full frame
+    (i.e. no detection/ROI to constrain it).
+    """
+    num, labels, stats, _ = cv2.connectedComponentsWithStats(bin_mask, connectivity=8)
+    if num <= 2:  # background + at most one foreground component already
+        return bin_mask
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    largest_label = 1 + int(np.argmax(areas))
+    cleaned = np.zeros_like(bin_mask)
+    for label in range(1, num):
+        if label == largest_label or stats[label, cv2.CC_STAT_AREA] >= min_area:
+            cleaned[labels == label] = 1
+    return cleaned
+
+def _tight_bbox_from_mask(mask: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
+    """
+    Tight bounding box (x1, y1, x2, y2) — end-exclusive — around all non-zero
+    pixels of a crop-space binary mask. Returns None if mask has no foreground.
+    """
+    bin_mask = mask > 0
+    rows = np.any(bin_mask, axis=1)
+    cols = np.any(bin_mask, axis=0)
+    if not rows.any() or not cols.any():
+        return None
+    y_idx = np.where(rows)[0]
+    x_idx = np.where(cols)[0]
+    y1, y2 = int(y_idx[0]), int(y_idx[-1]) + 1
+    x1, x2 = int(x_idx[0]), int(x_idx[-1]) + 1
+    return x1, y1, x2, y2
+
+
+def _save_metadata_json(out_path: Path, image_name: str, meta: dict) -> None:
+    payload = {"image": image_name, **meta}
+    with open(out_path, "w") as f:
+        json.dump(payload, f, indent=2)
+
 def _save_vegetation_cutout(
+    seg_cfg: DictConfig,
     crop_rgb: np.ndarray,
     mask_crop: np.ndarray,
     out_path: Path,
-) -> None:
-    """Save a vegetation segment (cutout) on a pure-black background.
+    crop_origin_xy: Tuple[int, int],
+    detection_bbox_xyxy: Optional[Tuple[int, int, int, int]] = None,
+    detection_bbox_padded: bool = False,
+    detection_pad_px: int = 0,
+) -> dict:
+    bin_mask = (mask_crop > 0).astype(np.uint8)
 
-    The cutout is produced by applying the crop-space segmentation mask to
-    the detection crop.  Every pixel outside the mask is set to black
-    (0, 0, 0).  Output is always full-resolution — no downscaling.
+    speckles_removed = False
+    if getattr(seg_cfg.clean_disconnected_mask, "enable", False):
+        pad_gap_px = getattr(seg_cfg.clean_disconnected_mask, "pad_px", 500)
+        cleaned = _clean_disconnected_mask(bin_mask, max_gap_px=pad_gap_px)
+        speckles_removed = bool(np.any(cleaned != bin_mask))
+        bin_mask = cleaned
 
-    Args:
-        crop_rgb:  Detection crop in RGB uint8 [H, W, 3].
-        mask_crop: Binary mask aligned to ``crop_rgb``, values in {0, 1}
-                   (or {0, 255}).  Pixels where mask > 0 are kept; all
-                   others become black.
-        out_path:  Destination PNG file path.
-    """
-    # Normalise mask to strict binary {0, 1}
-    bin_mask = (mask_crop > 0).astype(np.uint8)                   # [H, W]
-    mask_3c  = np.repeat(bin_mask[:, :, np.newaxis], 3, axis=2)   # [H, W, 3]
-
-    # Apply mask — background pixels become pure black
+    mask_3c    = np.repeat(bin_mask[:, :, np.newaxis], 3, axis=2)
     cutout_rgb = crop_rgb * mask_3c
 
-    # Save as BGR PNG (OpenCV convention), full resolution
+    ox, oy = crop_origin_xy
+    crop_h, crop_w = crop_rgb.shape[:2]
+    current_bbox_full = detection_bbox_xyxy or (ox, oy, ox + crop_w, oy + crop_h)
+
+    final_bbox_full = current_bbox_full
+    changed = False
+
+    tight = _tight_bbox_from_mask(bin_mask)
+    if tight is not None:
+        tx1, ty1, tx2, ty2 = tight
+        if (tx1, ty1, tx2, ty2) != (0, 0, crop_w, crop_h):
+            cutout_rgb = cutout_rgb[ty1:ty2, tx1:tx2]
+            final_bbox_full = (ox + tx1, oy + ty1, ox + tx2, oy + ty2)
+            changed = True
+
     cv2.imwrite(str(out_path), cv2.cvtColor(cutout_rgb, cv2.COLOR_RGB2BGR))
 
+    # Padding is only a meaningful concept when a detection actually
+    # produced the crop — with no detection, "padded" is inapplicable
+    # rather than false, so keep it None to avoid implying a detection
+    # existed.
+    if detection_bbox_xyxy is None:
+        bbox_padded_field = None
+        pad_px_field = None
+    else:
+        bbox_padded_field = detection_bbox_padded
+        pad_px_field = detection_pad_px if detection_bbox_padded else 0
 
-def _detect_roi_if_enabled(cfg, rgb: np.ndarray) -> Optional[Tuple[int,int,int,int]]:
-    roi_cfg = getattr(cfg.inference, "roi", None)
+    return {
+        "detection_bbox_xyxy": list(current_bbox_full) if detection_bbox_xyxy else None,
+        "detection_bbox_padded": bbox_padded_field,   # ← None | True | False
+        "detection_pad_px": pad_px_field,              # ← None | int
+        "cutout_bbox_xyxy": list(final_bbox_full),
+        "cutout_bbox_changed": changed,
+        "speckles_removed": speckles_removed,
+    }
+
+
+def _detect_roi_if_enabled(roi_cfg, rgb: np.ndarray) -> Optional[Tuple[int,int,int,int]]:
+    
     if not roi_cfg or not getattr(roi_cfg, "enable", False):
         return None
     from ultralytics import YOLO
@@ -167,6 +263,15 @@ def _detect_roi_if_enabled(cfg, rgb: np.ndarray) -> Optional[Tuple[int,int,int,i
     else:
         idx = int(np.argmax(conf))
     x1, y1, x2, y2 = xyxy[idx]
+
+    pad_cfg = getattr(roi_cfg, "detection_padding", {})
+    detection_padding = bool(getattr(pad_cfg, "enabled", False))
+    pad_px = int(getattr(pad_cfg, "pad_px", 0))
+    if detection_padding:
+        x1 = max(0, x1 - pad_px)
+        y1 = max(0, y1 - pad_px)
+        x2 = min(rgb.shape[1], x2 + pad_px)
+        y2 = min(rgb.shape[0], y2 + pad_px)
     return (int(x1), int(y1), int(x2), int(y2))
 
 def _predict_mask(model: torch.nn.Module, x: torch.Tensor, thr: float) -> np.ndarray:
@@ -284,7 +389,8 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
     (run_dir / "masks").mkdir(parents=True, exist_ok=True)
     (run_dir / "overlays").mkdir(parents=True, exist_ok=True)
     (run_dir / "triptych").mkdir(parents=True, exist_ok=True)
-    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)   # ← NEW
+    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)
+    (run_dir / "metadata").mkdir(parents=True, exist_ok=True)
 
     # W&B (optional)
     wb_cfg = getattr(getattr(cfg, "inference", None), "logger", {}).get("wandb", {})
@@ -332,7 +438,10 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
     save_triptych = bool(getattr(save_cfg, "triptych", True))
     save_overlay  = bool(getattr(save_cfg, "overlay",  True))
     save_mask     = bool(getattr(save_cfg, "raw_mask", True))
-    save_cutout   = bool(getattr(save_cfg, "cutout",   False))  # ← NEW
+    save_cutout   = bool(getattr(save_cfg, "cutout",   False))
+    save_metadata = bool(getattr(save_cfg, "metadata", False))
+    roi_cfg = getattr(cfg.inference, "roi", None)
+    seg_cfg = getattr(cfg.inference, "seg", None)
 
     # normalization (dataset-wide) if requested
     norm_cfg = getattr(cfg.inference, "normalization", None)
@@ -359,12 +468,17 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
         rgb = _read_rgb(ip)
         H, W = rgb.shape[:2]
 
-        roi = _detect_roi_if_enabled(cfg, rgb)
+        roi = _detect_roi_if_enabled(roi_cfg, rgb)
         if roi is None:
             log.warning(f"[inference] no ROI detected for {ip.name}; segmenting full image.")
             x1, y1, x2, y2 = 0, 0, W, H
         else:
             x1, y1, x2, y2 = roi
+        pad_cfg = getattr(roi_cfg, "detection_padding", {}) if roi_cfg else {}
+        pad_px = int(getattr(pad_cfg, "pad_px", 0))
+        bbox_was_padded = bool(
+            roi is not None and getattr(pad_cfg, "enabled", False) and pad_px > 0
+        )
 
         crop = rgb[y1:y2, x1:x2].copy()
 
@@ -420,13 +534,24 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
             _save_triptych(rgb, mask_u8, overlay, run_dir / "triptych" / f"{stem}_triptych.png",
                            max_side=max_side)
 
-        # ── NEW: vegetation cutout ──────────────────────────────────────
+        # ── vegetation cutout ──────────────────────────────────────
         if save_cutout:
-            _save_vegetation_cutout(
+            cutout_meta = _save_vegetation_cutout(
+                seg_cfg=seg_cfg,
                 crop_rgb=crop,
                 mask_crop=mask_crop,
                 out_path=run_dir / "cutouts" / f"{stem}_cutout.png",
+                crop_origin_xy=(x1, y1),
+                detection_bbox_xyxy=roi,
+                detection_bbox_padded=bbox_was_padded,
+                detection_pad_px=pad_px
             )
+            if save_metadata:
+                _save_metadata_json(
+                    run_dir / "metadata" / f"{stem}.json",
+                    image_name=ip.name,
+                    meta=cutout_meta,
+                )
         # ───────────────────────────────────────────────────────────────
 
         # per-image W&B logging
