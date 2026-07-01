@@ -43,10 +43,12 @@ def _pad_to_divisor(x: torch.Tensor, divisor: Optional[int]) -> tuple[torch.Tens
     x_pad = F.pad(x, pad, mode="constant", value=0.0)
     return x_pad, (pad[2], pad[3], pad[0], pad[1])  # (top, bottom, left, right)
 
-def _unpad(np_img: np.ndarray, pads: Tuple[int,int,int,int]) -> np.ndarray:
-    t, b, l, r = pads
-    H, W = np_img.shape[:2]
-    return np_img[t:H - b if b > 0 else H, l:W - r if r > 0 else W]
+def _unpad(arr: np.ndarray, pads: Tuple) -> np.ndarray:
+    """Remove padding added by _pad_to_divisor from a 2-D mask array."""
+    _, pad_w, _, pad_h = pads
+    H, W = arr.shape
+    return arr[: H - pad_h if pad_h else H, : W - pad_w if pad_w else W]
+
 
 def _normalize_if_configured(x01: torch.Tensor, norm_cfg) -> torch.Tensor:
     """
@@ -112,6 +114,40 @@ def _save_triptych(rgb: np.ndarray, mask_u8: np.ndarray, overlay: np.ndarray, ou
     panel = np.concatenate([rgb_r, mask_r, overlay_r], axis=1)
     cv2.imwrite(str(out_path), cv2.cvtColor(panel, cv2.COLOR_RGB2BGR))
 
+
+# ─────────────────────────────────────────────────────────────
+# vegetation cutout helper
+# ─────────────────────────────────────────────────────────────
+
+def _save_vegetation_cutout(
+    crop_rgb: np.ndarray,
+    mask_crop: np.ndarray,
+    out_path: Path,
+) -> None:
+    """Save a vegetation segment (cutout) on a pure-black background.
+
+    The cutout is produced by applying the crop-space segmentation mask to
+    the detection crop.  Every pixel outside the mask is set to black
+    (0, 0, 0).  Output is always full-resolution — no downscaling.
+
+    Args:
+        crop_rgb:  Detection crop in RGB uint8 [H, W, 3].
+        mask_crop: Binary mask aligned to ``crop_rgb``, values in {0, 1}
+                   (or {0, 255}).  Pixels where mask > 0 are kept; all
+                   others become black.
+        out_path:  Destination PNG file path.
+    """
+    # Normalise mask to strict binary {0, 1}
+    bin_mask = (mask_crop > 0).astype(np.uint8)                   # [H, W]
+    mask_3c  = np.repeat(bin_mask[:, :, np.newaxis], 3, axis=2)   # [H, W, 3]
+
+    # Apply mask — background pixels become pure black
+    cutout_rgb = crop_rgb * mask_3c
+
+    # Save as BGR PNG (OpenCV convention), full resolution
+    cv2.imwrite(str(out_path), cv2.cvtColor(cutout_rgb, cv2.COLOR_RGB2BGR))
+
+
 def _detect_roi_if_enabled(cfg, rgb: np.ndarray) -> Optional[Tuple[int,int,int,int]]:
     roi_cfg = getattr(cfg.inference, "roi", None)
     if not roi_cfg or not getattr(roi_cfg, "enable", False):
@@ -150,109 +186,82 @@ def _hann2d(h, w):
     return w2d.astype(np.float32)
 
 def _gaussian2d(h, w, sigma_rel=0.3):
-    # sigma as a fraction of tile size (rough, but works well)
-    cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
-    yy, xx = np.mgrid[0:h, 0:w]
-    dy2 = (yy - cy) ** 2
-    dx2 = (xx - cx) ** 2
-    sigma_y = max(1.0, sigma_rel * h)
-    sigma_x = max(1.0, sigma_rel * w)
-    w2d = np.exp(-0.5 * (dy2 / (sigma_y ** 2) + dx2 / (sigma_x ** 2)))
-    w2d = w2d / (w2d.max() + 1e-8)
-    return w2d.astype(np.float32)
+    cy, cx = h / 2.0, w / 2.0
+    sigma_y = sigma_rel * h
+    sigma_x = sigma_rel * w
+    ys = np.arange(h)
+    xs = np.arange(w)
+    yy, xx = np.meshgrid(ys, xs, indexing="ij")
+    g = np.exp(-0.5 * (((yy - cy) / sigma_y) ** 2 + ((xx - cx) / sigma_x) ** 2))
+    g = g / (g.max() + 1e-8)
+    return g.astype(np.float32)
 
-def _tile_blend_window(h, w, method: str, sigma_rel: float) -> np.ndarray:
-    m = (method or "hann").lower()
-    if m == "hann":
-        return _hann2d(h, w)
-    if m == "gaussian":
-        return _gaussian2d(h, w, sigma_rel=sigma_rel)
-    if m == "uniform":
-        return np.ones((h, w), dtype=np.float32)
-    if m == "max":
-        return np.ones((h, w), dtype=np.float32)
-    return _hann2d(h, w)
 
 def _predict_mask_tiled_rgb(
-    model,
-    rgb: np.ndarray,      # ROI or full image, HxWx3 (uint8/RGB)
-    norm_cfg,
-    tile_size: int,
-    overlap: int,
-    divisor: Optional[int],
-    thr: float,
-    blend_method: str = "hann",    # hann | uniform | gaussian | max
-    blend_on: str = "prob",        # prob | bin
+    model: torch.nn.Module,
+    img_rgb: np.ndarray,
+    norm_cfg=None,
+    tile_size: int = 1024,
+    overlap: int = 128,
+    divisor: Optional[int] = 32,
+    thr: float = 0.5,
+    blend_method: str = "hann",
+    blend_on: str = "prob",
     gaussian_sigma_rel: float = 0.3,
-    use_amp: bool = True,          # mixed precision
+    use_amp: bool = True,
 ) -> np.ndarray:
-    """
-    Slide-window inference with overlap and selectable blending.
-    Returns a binary mask (uint8) of the same HxW as rgb.
-    """
-    H, W = rgb.shape[:2]
-    step = max(1, tile_size - overlap)
+    H, W = img_rgb.shape[:2]
+    step = tile_size - overlap
+    use_max = blend_method.lower() == "max"
 
-    # Accumulators
-    if blend_method.lower() == "max":
-        # keep running max (work on probs or bin depending on blend_on)
+    if use_max:
         fused = np.zeros((H, W), dtype=np.float32)
-        use_max = True
     else:
-        acc = np.zeros((H, W), dtype=np.float32)
+        acc  = np.zeros((H, W), dtype=np.float32)
         wsum = np.zeros((H, W), dtype=np.float32)
-        use_max = False
 
     y = 0
     while y < H:
         x = 0
-        y2 = min(y + tile_size, H)
-        y1 = max(0, y2 - tile_size)
-        th = y2 - y1
-
         while x < W:
-            x2 = min(x + tile_size, W)
-            x1 = max(0, x2 - tile_size)
-            tw = x2 - x1
+            y1c, y2c = y, min(y + tile_size, H)
+            x1c, x2c = x, min(x + tile_size, W)
+            tile = img_rgb[y1c:y2c, x1c:x2c]
+            th, tw = tile.shape[:2]
 
-            tile_rgb = rgb[y1:y2, x1:x2, :]
-            win = _tile_blend_window(th, tw, blend_method, gaussian_sigma_rel)
+            tile_t = _to_tensor01(tile)
+            tile_pad, pads = _pad_to_divisor(tile_t, divisor)
+            tile_norm = _normalize_if_configured(tile_pad, norm_cfg)
 
-            # to tensor [1,3,th,tw]
-            tile_x01 = _to_tensor01(tile_rgb)
-
-            # run model on this tile -> prob map
-            # (reuse your single path but return PROB, not bin)
-            # We'll compute prob here directly to avoid thresholding first:
-            tile_xpad, pads = _pad_to_divisor(tile_x01, divisor)
-            tile_xin = _normalize_if_configured(tile_xpad, norm_cfg)
             with torch.inference_mode():
-                if use_amp and torch.cuda.is_available():
+                if use_amp and DEVICE == "cuda":
                     with torch.amp.autocast(device_type="cuda"):
-                        logits = model(tile_xin.to(DEVICE))
+                        logits = model(tile_norm.to(DEVICE))
                         probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
                 else:
-                    logits = model(tile_xin.to(DEVICE))
+                    logits = model(tile_norm.to(DEVICE))
                     probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
             if divisor:
-                probs = _unpad(probs, pads) # [th, tw]
+                probs = _unpad(probs, pads)
 
-            # pick quantity to blend (prob or bin)
             tile_q = probs if blend_on.lower() == "prob" else (probs >= thr).astype(np.float32)
 
             if use_max:
-                fused[y1:y2, x1:x2] = np.maximum(fused[y1:y2, x1:x2], tile_q)
+                fused[y1c:y2c, x1c:x2c] = np.maximum(fused[y1c:y2c, x1c:x2c], tile_q)
             else:
-                acc[y1:y2, x1:x2] += tile_q * win
-                wsum[y1:y2, x1:x2] += win
+                if blend_method.lower() == "gaussian":
+                    win = _gaussian2d(th, tw, gaussian_sigma_rel)
+                else:
+                    win = _hann2d(th, tw)
+                win = cv2.resize(win, (tile_q.shape[1], tile_q.shape[0]), interpolation=cv2.INTER_LINEAR)
+                acc[y1c:y2c, x1c:x2c]  += tile_q * win
+                wsum[y1c:y2c, x1c:x2c] += win
 
             x += step
         y += step
 
     out = fused if use_max else (acc / np.clip(wsum, 1e-6, None))
-    # final threshold -> binary
-    out_bin = (out >= thr).astype(np.uint8)
-    return out_bin
+    return (out >= thr).astype(np.uint8)
 
 
 # ------------------------- pipeline -------------------------
@@ -263,7 +272,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
       - reads images (cfg.inference.input_dir or paths.test_images_dir/val_images_dir)
       - optional ROI detection (YOLO)
       - segmentation with SMP model from cfg.model
-      - saves: raw masks, overlays, and triptych (RGB | mask | overlay)
+      - saves: raw masks, overlays, triptych (RGB | mask | overlay), and vegetation cutouts
       - stores each run under a timestamped subfolder inside the Hydra run dir
       - optionally logs previews to Weights & Biases
     """
@@ -275,6 +284,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
     (run_dir / "masks").mkdir(parents=True, exist_ok=True)
     (run_dir / "overlays").mkdir(parents=True, exist_ok=True)
     (run_dir / "triptych").mkdir(parents=True, exist_ok=True)
+    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)   # ← NEW
 
     # W&B (optional)
     wb_cfg = getattr(getattr(cfg, "inference", None), "logger", {}).get("wandb", {})
@@ -318,9 +328,11 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
     color    = tuple(int(c) for c in getattr(cfg.inference.overlay, "color", [0, 255, 0]))
     max_side = int(getattr(cfg.inference, "preview_max_side", 1200))
 
-    save_triptych = bool(getattr(getattr(cfg.inference, "save", {}), "triptych", True))
-    save_overlay  = bool(getattr(getattr(cfg.inference, "save", {}), "overlay",  True))
-    save_mask     = bool(getattr(getattr(cfg.inference, "save", {}), "raw_mask", True))
+    save_cfg     = getattr(cfg.inference, "save", {})
+    save_triptych = bool(getattr(save_cfg, "triptych", True))
+    save_overlay  = bool(getattr(save_cfg, "overlay",  True))
+    save_mask     = bool(getattr(save_cfg, "raw_mask", True))
+    save_cutout   = bool(getattr(save_cfg, "cutout",   False))  # ← NEW
 
     # normalization (dataset-wide) if requested
     norm_cfg = getattr(cfg.inference, "normalization", None)
@@ -349,6 +361,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
 
         roi = _detect_roi_if_enabled(cfg, rgb)
         if roi is None:
+            log.warning(f"[inference] no ROI detected for {ip.name}; segmenting full image.")
             x1, y1, x2, y2 = 0, 0, W, H
         else:
             x1, y1, x2, y2 = roi
@@ -407,7 +420,16 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
             _save_triptych(rgb, mask_u8, overlay, run_dir / "triptych" / f"{stem}_triptych.png",
                            max_side=max_side)
 
-        # --- per-image W&B logging (after files are saved) ---
+        # ── NEW: vegetation cutout ──────────────────────────────────────
+        if save_cutout:
+            _save_vegetation_cutout(
+                crop_rgb=crop,
+                mask_crop=mask_crop,
+                out_path=run_dir / "cutouts" / f"{stem}_cutout.png",
+            )
+        # ───────────────────────────────────────────────────────────────
+
+        # per-image W&B logging
         if use_wandb:
             try:
                 import wandb
@@ -418,6 +440,10 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
                     to_log["inference/overlay"] = wandb.Image(str(run_dir / "overlays" / f"{stem}_overlay.png"))
                 if save_triptych:
                     to_log["inference/triptych"] = wandb.Image(str(run_dir / "triptych" / f"{stem}_triptych.png"))
+                if save_cutout:                                              # ← NEW
+                    to_log["inference/cutout"] = wandb.Image(               # ← NEW
+                        str(run_dir / "cutouts" / f"{stem}_cutout.png")     # ← NEW
+                    )                                                        # ← NEW
                 if to_log:
                     wandb.log(to_log)
             except Exception as e:

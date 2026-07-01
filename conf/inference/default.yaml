@@ -9,6 +9,7 @@ save:
   triptych: true
   overlay: true
   raw_mask: true
+  cutout: true
 overlay:
   alpha: 0.60
   color: [0, 255, 0]                       # green

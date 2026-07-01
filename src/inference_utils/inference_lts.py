@@ -17,6 +17,7 @@ from src.inference_utils.inference_pipeline import (
     _read_rgb,
     _overlay_rgb_mask,
     _save_triptych,
+    _save_vegetation_cutout,
     _to_tensor01,
     _pad_to_divisor,
     _unpad,
@@ -176,6 +177,7 @@ def run_inference_lts(cfg: DictConfig) -> None:
     (run_dir / "masks").mkdir(parents=True, exist_ok=True)
     (run_dir / "overlays").mkdir(parents=True, exist_ok=True)
     (run_dir / "triptych").mkdir(parents=True, exist_ok=True)
+    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)   # ← NEW
 
     # W&B (optional)
     wb_cfg = cfg.inference.logger.wandb if "logger" in cfg.inference and "wandb" in cfg.inference.logger else {}
@@ -215,6 +217,7 @@ def run_inference_lts(cfg: DictConfig) -> None:
     max_side = int(cfg.inference.preview_max_side)
     tile_cfg = getattr(cfg.inference.seg, "tile", None)
     norm_cfg = getattr(cfg.inference, "normalization", None)
+    save_cutout = bool(getattr(getattr(cfg.inference, "save", {}), "cutout", False))
 
     # Load image list from LTS database
     df = _load_lts_rows(cfg)
@@ -236,10 +239,10 @@ def run_inference_lts(cfg: DictConfig) -> None:
         if roi is None:
             # No ROI → use the full image
             x1, y1, x2, y2 = 0, 0, W, H
-            crop = rgb[y1:y2, x1:x2].copy()
         else:
-            crop = rgb.copy()
-            x1, y1 = 0, 0
+            x1, y1, x2, y2 = roi                                    
+
+        crop = rgb[y1:y2, x1:x2].copy()
 
         # Tiled vs Single-shot
         if tile_cfg and tile_cfg.enable:
@@ -287,6 +290,16 @@ def run_inference_lts(cfg: DictConfig) -> None:
                        run_dir / "triptych" / f"{stem}_triptych.png",
                        max_side=max_side)
 
+        # ── vegetation cutout ──────────────────────────────────────
+        if save_cutout:
+            _save_vegetation_cutout(
+                crop_rgb=crop,
+                mask_crop=mask_crop,
+                out_path=run_dir / "cutouts" / f"{stem}_cutout.png",
+                max_side=max_side,
+            )
+        # ───────────────────────────────────────────────────────────────
+
         # W&B per-image logging
         if use_wandb:
             try:
@@ -296,6 +309,11 @@ def run_inference_lts(cfg: DictConfig) -> None:
                     "inference_LTS/overlay": wandb.Image(str(run_dir / "overlays" / f"{stem}_overlay.png")),
                     "inference_LTS/triptych": wandb.Image(str(run_dir / "triptych" / f"{stem}_triptych.png")),
                 })
+                if save_cutout:                                               # ← NEW
+                    to_log["inference_LTS/cutout"] = wandb.Image(            # ← NEW
+                        str(run_dir / "cutouts" / f"{stem}_cutout.png")      # ← NEW
+                    )                                                         # ← NEW
+                wandb.log(to_log)
             except Exception as e:
                 log.debug(f"[LTS] W&B log failed: {e}")
 
