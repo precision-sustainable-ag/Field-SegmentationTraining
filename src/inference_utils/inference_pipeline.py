@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import glob, json, logging
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any, cast
 
 import cv2
 import numpy as np
@@ -145,22 +145,6 @@ def _clean_disconnected_mask(bin_mask: np.ndarray, max_gap_px: float) -> np.ndar
             cleaned[comp_pixels] = 1
     return cleaned
 
-def _clean_speckle_mask(bin_mask: np.ndarray, min_area: int) -> np.ndarray:
-    """Drop isolated small blobs from a binary mask, always keeping the
-    largest connected component. Used to strip stray speckles that can
-    appear far from the plant when segmentation runs on the full frame
-    (i.e. no detection/ROI to constrain it).
-    """
-    num, labels, stats, _ = cv2.connectedComponentsWithStats(bin_mask, connectivity=8)
-    if num <= 2:  # background + at most one foreground component already
-        return bin_mask
-    areas = stats[1:, cv2.CC_STAT_AREA]
-    largest_label = 1 + int(np.argmax(areas))
-    cleaned = np.zeros_like(bin_mask)
-    for label in range(1, num):
-        if label == largest_label or stats[label, cv2.CC_STAT_AREA] >= min_area:
-            cleaned[labels == label] = 1
-    return cleaned
 
 def _tight_bbox_from_mask(mask: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
     """
@@ -240,38 +224,83 @@ def _save_vegetation_cutout(
         "detection_pad_px": pad_px_field,              # ← None | int
         "cutout_bbox_xyxy": list(final_bbox_full),
         "cutout_bbox_changed": changed,
-        "speckles_removed": speckles_removed,
+        "mask_cleaned": speckles_removed,
     }
 
 
-def _detect_roi_if_enabled(roi_cfg, rgb: np.ndarray) -> Optional[Tuple[int,int,int,int]]:
-    
+def _detect_roi_if_enabled(
+    roi_cfg,
+    rgb: np.ndarray,
+    yolo_model: Any = None,
+) -> Optional[Tuple[int,int,int,int]]:
+    """Run YOLO-based ROI detection on a full RGB frame and return one box.
+
+    Returns ``(x1, y1, x2, y2)`` in integer pixel coords, or ``None`` when
+    ROI detection is disabled in config or yields no detections.
+
+    Args:
+        yolo_model: Pre-loaded YOLO instance. When provided the model is not
+            reloaded from disk, which is critical for per-image loop performance.
+    """
+    # Skip entirely when ROI detection is not configured or explicitly disabled.
     if not roi_cfg or not getattr(roi_cfg, "enable", False):
         return None
+
+    # Lazy import — only required when ROI detection is active.
     from ultralytics import YOLO
-    yolo = YOLO(roi_cfg.weights)
-    res = yolo.predict(rgb, verbose=False)
-    boxes = res[0].boxes
-    if boxes is None or boxes.xyxy is None or len(boxes.xyxy) == 0:
+
+    def _to_f32(obj: Any) -> np.ndarray:
+        """Normalise a torch.Tensor or np.ndarray to a float32 ndarray."""
+        if isinstance(obj, np.ndarray):
+            return obj.astype(np.float32, copy=False)
+        return cast(np.ndarray, obj.detach().cpu().numpy()).astype(np.float32, copy=False)
+
+    # Use the pre-loaded model when available; otherwise load from disk.
+    # Loading from disk on every call adds significant latency per image.
+    yolo = yolo_model if yolo_model is not None else YOLO(roi_cfg.weights)
+    # cast keeps Pyright happy; ultralytics returns a list of Results objects.
+    # predict() on a single image always returns exactly one Results item.
+    res = cast(list[Any], yolo.predict(rgb, verbose=False))
+
+    # Move the first result to CPU before accessing its tensors.
+    boxes = getattr(res[0].cpu(), "boxes", None)
+    if boxes is None:
         return None
-    xyxy = boxes.xyxy.cpu().numpy()
-    conf = boxes.conf.cpu().numpy() if boxes.conf is not None else np.ones(len(xyxy))
+
+    xyxy_obj = getattr(boxes, "xyxy", None)
+    if xyxy_obj is None:
+        return None
+
+    xyxy = _to_f32(xyxy_obj)
+    if xyxy.shape[0] == 0:
+        return None
+
+    # Build a confidence vector aligned with xyxy rows;
+    # fall back to uniform 1s when conf is unavailable.
+    conf_obj = getattr(boxes, "conf", None)
+    conf = np.ones((xyxy.shape[0],), dtype=np.float32) if conf_obj is None else _to_f32(conf_obj)
+
+    # Select the single box to use: largest area or highest confidence.
     pick = str(getattr(roi_cfg, "pick", "best"))
     if pick == "largest":
         areas = (xyxy[:, 2] - xyxy[:, 0]) * (xyxy[:, 3] - xyxy[:, 1])
         idx = int(np.argmax(areas))
     else:
         idx = int(np.argmax(conf))
-    x1, y1, x2, y2 = xyxy[idx]
 
+    # .tolist() gives a concrete Python list, avoiding Pyright's
+    # "Never is not iterable" false positive on ndarray row unpacking.
+    x1, y1, x2, y2 = map(float, xyxy[idx].tolist())
+
+    # Optionally expand the box by pad_px on every side, clamped to image bounds.
     pad_cfg = getattr(roi_cfg, "detection_padding", {})
-    detection_padding = bool(getattr(pad_cfg, "enabled", False))
     pad_px = int(getattr(pad_cfg, "pad_px", 0))
-    if detection_padding:
-        x1 = max(0, x1 - pad_px)
-        y1 = max(0, y1 - pad_px)
-        x2 = min(rgb.shape[1], x2 + pad_px)
-        y2 = min(rgb.shape[0], y2 + pad_px)
+    if bool(getattr(pad_cfg, "enabled", False)) and pad_px > 0:
+        x1 = max(0.0, x1 - pad_px)
+        y1 = max(0.0, y1 - pad_px)
+        x2 = min(float(rgb.shape[1]), x2 + pad_px)
+        y2 = min(float(rgb.shape[0]), y2 + pad_px)
+
     return (int(x1), int(y1), int(x2), int(y2))
 
 def _predict_mask(model: torch.nn.Module, x: torch.Tensor, thr: float) -> np.ndarray:
@@ -340,7 +369,7 @@ def _predict_mask_tiled_rgb(
 
             with torch.inference_mode():
                 if use_amp and DEVICE == "cuda":
-                    with torch.amp.autocast(device_type="cuda"):
+                    with torch.autocast(device_type="cuda"):
                         logits = model(tile_norm.to(DEVICE))
                         probs = torch.sigmoid(logits).squeeze(0).squeeze(0).detach().cpu().numpy()
                 else:
@@ -403,7 +432,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
                 entity=wb_cfg.get("entity", None),
                 name=wb_cfg.get("run_name", stamp),
                 dir=str(run_dir),
-                config=OmegaConf.to_container(cfg, resolve=True),
+                config=cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True)),
                 save_code=False,
                 reinit=True,
             )
@@ -443,6 +472,15 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
     roi_cfg = getattr(cfg.inference, "roi", None)
     seg_cfg = getattr(cfg.inference, "seg", None)
 
+
+    # Pre-load YOLO ROI model once — reused for every image in the loop.
+    # Loading the model inside the loop would reload weights from disk each iteration.
+    _roi_yolo = None
+    if roi_cfg and getattr(roi_cfg, "enable", False):
+        from ultralytics import YOLO as _YOLO
+        _roi_yolo = _YOLO(roi_cfg.weights)
+        log.info(f"[inference] ROI model loaded: {roi_cfg.weights}")
+
     # normalization (dataset-wide) if requested
     norm_cfg = getattr(cfg.inference, "normalization", None)
 
@@ -462,13 +500,13 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
     if not imgs:
         log.warning(f"[inference] no images found under: {img_root}")
         return
-
+    
     # main loop
     for ip in imgs:
         rgb = _read_rgb(ip)
         H, W = rgb.shape[:2]
 
-        roi = _detect_roi_if_enabled(roi_cfg, rgb)
+        roi = _detect_roi_if_enabled(roi_cfg, rgb, yolo_model=_roi_yolo)
         if roi is None:
             log.warning(f"[inference] no ROI detected for {ip.name}; segmenting full image.")
             x1, y1, x2, y2 = 0, 0, W, H
@@ -536,6 +574,7 @@ def run_inference_pipeline(cfg: DictConfig) -> None:
 
         # ── vegetation cutout ──────────────────────────────────────
         if save_cutout:
+            assert seg_cfg is not None, "seg config must be provided to save cutouts"
             cutout_meta = _save_vegetation_cutout(
                 seg_cfg=seg_cfg,
                 crop_rgb=crop,

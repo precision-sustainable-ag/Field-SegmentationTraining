@@ -9,7 +9,7 @@ import pandas as pd
 import cv2
 import numpy as np
 import torch
-
+from typing import Any, cast
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
@@ -18,6 +18,7 @@ from src.inference_utils.inference_pipeline import (
     _overlay_rgb_mask,
     _save_triptych,
     _save_vegetation_cutout,
+    _save_metadata_json,
     _to_tensor01,
     _pad_to_divisor,
     _unpad,
@@ -191,7 +192,7 @@ def run_inference_lts(cfg: DictConfig) -> None:
                 entity=wb_cfg.get("entity", None),
                 name=wb_cfg.get("run_name", stamp),
                 dir=str(run_dir),
-                config=OmegaConf.to_container(cfg, resolve=True),
+                config=cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True)),
                 save_code=False,
                 reinit=True,
             )
@@ -302,6 +303,7 @@ def run_inference_lts(cfg: DictConfig) -> None:
 
         # ── vegetation cutout ──────────────────────────────────────
         if save_cutout:
+            assert seg_cfg is not None, "seg config must be provided to save cutouts"
             cutout_meta = _save_vegetation_cutout(
                 seg_cfg=seg_cfg,
                 crop_rgb=crop,
@@ -324,15 +326,15 @@ def run_inference_lts(cfg: DictConfig) -> None:
         if use_wandb:
             try:
                 import wandb
-                wandb.log({
+                to_log = {
                     "inference_LTS/mask": wandb.Image(str(run_dir / "masks" / f"{stem}.png")),
                     "inference_LTS/overlay": wandb.Image(str(run_dir / "overlays" / f"{stem}_overlay.png")),
                     "inference_LTS/triptych": wandb.Image(str(run_dir / "triptych" / f"{stem}_triptych.png")),
-                })
-                if save_cutout:                                               # ← NEW
-                    to_log["inference_LTS/cutout"] = wandb.Image(            # ← NEW
-                        str(run_dir / "cutouts" / f"{stem}_cutout.png")      # ← NEW
-                    )                                                         # ← NEW
+                }
+                if save_cutout:
+                    to_log["inference_LTS/cutout"] = wandb.Image(
+                        str(run_dir / "cutouts" / f"{stem}_cutout.png")
+                    )
                 wandb.log(to_log)
             except Exception as e:
                 log.debug(f"[LTS] W&B log failed: {e}")
