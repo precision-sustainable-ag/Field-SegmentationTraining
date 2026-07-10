@@ -38,6 +38,7 @@ class LitSegmentation(pl.LightningModule):
             "encoder_weights": cfg.model.encoder_weights,
             "in_channels": cfg.model.in_channels,
             "classes": cfg.model.classes,
+            "activation": cfg.model.activation
         }
 
         # Add optional config values if they exist
