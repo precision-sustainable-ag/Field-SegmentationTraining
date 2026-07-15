@@ -9,7 +9,7 @@ if [[ "${_activation_host_string}" =~ (^|[[:space:]._-])ceres([[:space:]._-]|[0-
    [[ "${_activation_host_string}" =~ (^|[[:space:]._-])atlas([[:space:]._-]|[0-9]|$) ]]; then
 
     export FIELD_SEGMENTATION_PLATFORM="scinet"
-    export FIELD_SEGMENTATION_STORAGE_ROOT="/project/dash_agir/matthew.kutugata"
+    export FIELD_SEGMENTATION_STORAGE_ROOT="/project/dash_agir/${USER:?USER is not set}"
 
     export HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/.runtime_home"
 

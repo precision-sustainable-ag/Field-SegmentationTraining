@@ -2,30 +2,30 @@
 # ==============================================================================
 # setup.sh
 #
-# Creates a uv-managed Python environment with host-aware storage behavior.
+# Creates a uv-managed Python environment for this repository.
 #
-# SCINet hosts:
-#   - CERES
-#   - ATLAS
+# On CERES and ATLAS, caches, tools, temporary files, and runtime data are
+# stored under:
 #
-# On SCINet, large files, caches, Python installations, and environments are
-# redirected to:
+#   /project/dash_agir/$USER
 #
-#   /project/dash_agir/matthew.kutugata
+# On SUNNY and other servers, normal home-directory locations are used.
 #
-# On SUNNY and other regular servers, normal home-directory behavior is used,
-# and the virtual environment is created inside the repository.
+# The virtual environment is always created at:
+#
+#   <repository>/.field_segmentation
+#
+# PyTorch uses uv's automatic CUDA or CPU backend selection.
 #
 # Usage:
 #   bash setup.sh
-#   TORCH_CUDA=cu124 bash setup.sh
 #   PYTHON_VERSION=3.11 bash setup.sh
 #
-# Optional overrides:
+# Optional:
 #   FORCE_PLATFORM=scinet bash setup.sh
 #   FORCE_PLATFORM=regular bash setup.sh
 #   STORAGE_ROOT=/another/path bash setup.sh
-#   VENV_DIR=/another/path/env bash setup.sh
+#   VENV_DIR=/another/path/.field_segmentation bash setup.sh
 # ==============================================================================
 
 set -Eeuo pipefail
@@ -36,6 +36,7 @@ umask 002
 # ------------------------------------------------------------------------------
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCINET_USER="${USER:?USER environment variable is not set}"
 
 PYTHON_VERSION="${PYTHON_VERSION:-3.10}"
 TORCH_CUDA="${TORCH_CUDA:-auto}"
@@ -47,10 +48,10 @@ ORIGINAL_HOME="${HOME}"
 HOST_SHORT="$(hostname -s 2>/dev/null || hostname)"
 HOST_FULL="$(hostname -f 2>/dev/null || hostname)"
 
-# Optional override:
-#   auto    = detect from hostname
-#   scinet  = force SCINet behavior
-#   regular = force normal server behavior
+# Optional platform override: 
+# auto = detect CERES or ATLAS from the hostname 
+# scinet = force SCINet storage behavior 
+# regular = force normal server behavior 
 FORCE_PLATFORM="${FORCE_PLATFORM:-auto}"
 
 # ------------------------------------------------------------------------------
@@ -141,13 +142,16 @@ PLATFORM_MODE="$(detect_platform)"
 
 configure_storage() {
     if [[ "${PLATFORM_MODE}" == "scinet" ]]; then
-        STORAGE_ROOT="${STORAGE_ROOT:-/project/dash_agir/matthew.kutugata}"
+	# Keep large runtime data outside the user's limited SCINet home.
+	STORAGE_ROOT="${STORAGE_ROOT:-/project/dash_agir/${SCINET_USER}}"
         RUNTIME_HOME="${RUNTIME_HOME:-${STORAGE_ROOT}/.runtime_home}"
+        
+        # Keep the virtual environment with the repository on every host.
 	VENV_DIR="${VENV_DIR:-${REPO_DIR}/.field_segmentation}"
 
-        # Replace HOME during setup and activation so libraries that ignore XDG
-        # variables still stay out of the user's limited SCINet home directory.
-        export HOME="${RUNTIME_HOME}"
+	# Some libraries write directly under $HOME instead of respecting XDG 
+	# variables, so use a project-backed runtime home on SCINet.
+	export HOME="${RUNTIME_HOME}"
 
         export XDG_CACHE_HOME="${STORAGE_ROOT}/cache"
         export XDG_CONFIG_HOME="${STORAGE_ROOT}/config"
@@ -367,7 +371,9 @@ EOF
 # 8. CUDA detection
 # ------------------------------------------------------------------------------
 
-
+# uv automatically selects a compatible CUDA or CPU PyTorch build for the
+# current machine through --torch-backend=auto. Manual CUDA version parsing and
+# hard-coded PyTorch package indexes are intentionally not used.
 # ------------------------------------------------------------------------------
 # 9. Activation helper
 # ------------------------------------------------------------------------------
