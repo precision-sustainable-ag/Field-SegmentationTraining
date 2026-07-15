@@ -26,6 +26,9 @@ field_segmentation/
 ├── README.md
 ├── LICENSE
 ├── environment.yaml
+├── setup.sh
+├── requirements.txt
+├── uv.lock.txt
 ├── main.py
 ├── conf/
 ├── src/
@@ -62,14 +65,50 @@ Mode entrypoints: `train.py`, `maskgen.py`, `preprocess.py`, `inference.py`, `ll
 
 ## Installation
 
-Clone the Repository:
+### 1. Clone the Repository:
 
 ```bash
 git clone [https://github.com/](https://github.com/)<your-org>/field_segmentation.git
 cd field_segmentation
 ```
 
-Create the Environment using Conda:
+### 2. Configure and Run the Setup Script
+
+The project utilizes `uv` for blazingly fast, reproducible environment builds. The included `setup.sh` script will automatically check for `uv`, detect your system's CUDA version, anchor the correct PyTorch GPU wheel, and resolve all remaining dependencies.
+
+Run the script using the default configuration (Python 3.10 and auto-detected CUDA):
+
+```bash
+bash setup.sh
+```
+
+#### Advanced Configuration (Optional)
+You can override the default settings directly in your terminal without modifying the script:
+
+* **Test a newer Python version:**
+  ```bash
+  PYTHON_VERSION=3.11 bash setup.sh
+  ```
+* **Force a specific CUDA wheel version (e.g., cu124):**
+  ```bash
+  TORCH_CUDA=cu124 bash setup.sh
+  ```
+* **Specify a custom environment folder name:**
+  ```bash
+  VENV_DIR=custom_env bash setup.sh
+  ```
+
+### 3. Activate the Environment
+
+Once the script finishes successfully, activate the isolated virtual environment:
+
+```bash
+source .field_segmentation/bin/activate
+```
+
+*(Note: If you specified a custom environment name via `VENV_DIR`, replace `.field_segmentation` with your custom folder name).*
+
+### (deprecated) Alternatively, create the Environment using Conda:
 
 ```bash
 conda env create -f environment.yaml

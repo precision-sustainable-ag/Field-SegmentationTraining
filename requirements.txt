@@ -1,0 +1,30 @@
+# Core Data & Math
+numpy
+pandas
+
+# Vision & Plotting
+matplotlib
+pillow
+scikit-image
+albumentations
+opencv-python
+
+# Utilities
+tqdm
+pyyaml
+gputil
+
+# Config & Tracking
+hydra-core
+omegaconf
+wandb
+fiftyone
+
+# Segmentation & Metrics
+pytorch-lightning
+segmentation-models-pytorch
+torchmetrics
+
+# Optional / Future use
+ultralytics
+ollama
