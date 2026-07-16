@@ -2,103 +2,343 @@
 # ==============================================================================
 # setup.sh
 #
-# Bootstraps a blazingly fast, uv-managed Python environment for field segmentation.
-# This replaces the legacy Conda environment.yaml workflow.
+# Creates a uv-managed Python environment for this repository.
+#
+# On CERES and ATLAS, caches, tools, temporary files, and runtime data are
+# stored under:
+#
+#   /project/dash_agir/$USER
+#
+# On SUNNY and other servers, normal home-directory locations are used.
+#
+# The virtual environment is always created at:
+#
+#   <repository>/.field_segmentation
+#
+# PyTorch uses uv's automatic CUDA or CPU backend selection.
 #
 # Usage:
-#   bash setup.sh                        # Uses defaults (Python 3.10, auto CUDA)
-#   TORCH_CUDA=cu124 bash setup.sh       # Forces CUDA 12.4 PyTorch build
-#   VENV_DIR=field_env bash setup.sh     # Uses a custom environment folder name
+#   bash setup.sh
+#   PYTHON_VERSION=3.11 bash setup.sh
+#
+# Optional:
+#   FORCE_PLATFORM=scinet bash setup.sh
+#   FORCE_PLATFORM=regular bash setup.sh
+#   STORAGE_ROOT=/another/path bash setup.sh
+#   VENV_DIR=/another/path/.field_segmentation bash setup.sh
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
-# 1. Safety & Configuration
-# ------------------------------------------------------------------------------
-# Strict mode: The script will immediately crash if a command fails, an undefined 
-# variable is used, or a pipeline fails. This prevents broken environments.
 set -Eeuo pipefail
+umask 002
 
-# Default environment variables. The ${VAR:-default} syntax allows you to 
-# override these values in the terminal without editing this file.
+# ------------------------------------------------------------------------------
+# 1. General configuration
+# ------------------------------------------------------------------------------
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCINET_USER="${USER:?USER environment variable is not set}"
+
 PYTHON_VERSION="${PYTHON_VERSION:-3.10}"
-VENV_DIR="${VENV_DIR:-.field_segmentation}"
 TORCH_CUDA="${TORCH_CUDA:-auto}"
-REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements.txt}"
+
+REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-${REPO_DIR}/requirements.txt}"
+LOCK_FILE="${LOCK_FILE:-${REPO_DIR}/uv.lock.txt}"
+
+ORIGINAL_HOME="${HOME}"
+HOST_SHORT="$(hostname -s 2>/dev/null || hostname)"
+HOST_FULL="$(hostname -f 2>/dev/null || hostname)"
+
+# Optional platform override: 
+# auto = detect CERES or ATLAS from the hostname 
+# scinet = force SCINet storage behavior 
+# regular = force normal server behavior 
+FORCE_PLATFORM="${FORCE_PLATFORM:-auto}"
 
 # ------------------------------------------------------------------------------
-# 2. Helper Functions
+# 2. Logging and error handling
 # ------------------------------------------------------------------------------
 
-# Prints messages to the terminal with a standardized timestamp.
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# Prints an error message and forcefully exits the script.
 die() {
     echo "ERROR: $*" >&2
     exit 1
 }
 
-# This "trap" automatically catches any script failures and prints helpful 
-# troubleshooting tips before exiting.
 on_exit() {
     local exit_code=$?
-    if [[ "$exit_code" -ne 0 ]]; then
+
+    if [[ "${exit_code}" -ne 0 ]]; then
         echo
         echo "=================================================="
         echo "Setup failed with exit code ${exit_code}."
+        echo "Host: ${HOST_FULL}"
+        echo "Platform mode: ${PLATFORM_MODE:-unknown}"
+        echo
         echo "Common fixes:"
-        echo "  - Run this on a GPU node if nvidia-smi is unavailable."
-        echo "  - Force a specific build with: TORCH_CUDA=cu124 bash setup.sh"
+        echo "  - Check that the selected storage location is writable."
+        echo "  - Run on a GPU node if CUDA detection is required."
+        echo "  - Force CUDA with: TORCH_CUDA=cu124 bash setup.sh"
+        echo "  - Override detection with FORCE_PLATFORM=scinet or regular."
         echo "=================================================="
     fi
 }
+
 trap on_exit EXIT
 
-# Checks if a necessary terminal command (like curl) is available.
 require_command() {
-    command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+    command -v "$1" >/dev/null 2>&1 ||
+        die "Required command not found: $1"
 }
 
 # ------------------------------------------------------------------------------
-# 3. Environment Setup Functions
+# 3. Platform detection
 # ------------------------------------------------------------------------------
 
-# Checks for 'uv' (the ultra-fast Python package manager). If missing, it 
-# downloads and installs it directly from the creators.
+detect_platform() {
+    case "${FORCE_PLATFORM,,}" in
+        scinet)
+            echo "scinet"
+            return
+            ;;
+        regular)
+            echo "regular"
+            return
+            ;;
+        auto)
+            ;;
+        *)
+            die \
+                "Invalid FORCE_PLATFORM='${FORCE_PLATFORM}'. " \
+                "Use auto, scinet, or regular."
+            ;;
+    esac
+
+    local host_string
+    host_string="${HOST_SHORT,,} ${HOST_FULL,,}"
+
+    # Match common CERES and ATLAS naming forms, including compute nodes such as:
+    #   ceres
+    #   ceres.scinet.usda.gov
+    #   ceres19-compute-0-1
+    #   atlas
+    #   atlas-login
+    #   atlas123
+    if [[ "${host_string}" =~ (^|[[:space:]._-])ceres([[:space:]._-]|[0-9]|$) ]] ||
+       [[ "${host_string}" =~ (^|[[:space:]._-])atlas([[:space:]._-]|[0-9]|$) ]]; then
+        echo "scinet"
+    else
+        echo "regular"
+    fi
+}
+
+PLATFORM_MODE="$(detect_platform)"
+
+# ------------------------------------------------------------------------------
+# 4. Host-specific storage configuration
+# ------------------------------------------------------------------------------
+
+configure_storage() {
+    if [[ "${PLATFORM_MODE}" == "scinet" ]]; then
+	# Keep large runtime data outside the user's limited SCINet home.
+	STORAGE_ROOT="${STORAGE_ROOT:-/project/dash_agir/${SCINET_USER}}"
+        RUNTIME_HOME="${RUNTIME_HOME:-${STORAGE_ROOT}/.runtime_home}"
+        
+        # Keep the virtual environment with the repository on every host.
+	VENV_DIR="${VENV_DIR:-${REPO_DIR}/.field_segmentation}"
+
+	# Some libraries write directly under $HOME instead of respecting XDG 
+	# variables, so use a project-backed runtime home on SCINet.
+	export HOME="${RUNTIME_HOME}"
+
+        export XDG_CACHE_HOME="${STORAGE_ROOT}/cache"
+        export XDG_CONFIG_HOME="${STORAGE_ROOT}/config"
+        export XDG_DATA_HOME="${STORAGE_ROOT}/data"
+        export XDG_STATE_HOME="${STORAGE_ROOT}/state"
+
+        export TMPDIR="${STORAGE_ROOT}/tmp"
+        export TEMP="${TMPDIR}"
+        export TMP="${TMPDIR}"
+
+        export UV_INSTALL_DIR="${STORAGE_ROOT}/bin"
+        export UV_CACHE_DIR="${STORAGE_ROOT}/cache/uv"
+        export UV_PYTHON_INSTALL_DIR="${STORAGE_ROOT}/python"
+        export UV_TOOL_DIR="${STORAGE_ROOT}/uv-tools"
+        export UV_TOOL_BIN_DIR="${STORAGE_ROOT}/bin"
+
+        export PIP_CACHE_DIR="${STORAGE_ROOT}/cache/pip"
+        export PYTHONPYCACHEPREFIX="${STORAGE_ROOT}/cache/python/pycache"
+        export MPLCONFIGDIR="${STORAGE_ROOT}/config/matplotlib"
+        export WANDB_DIR="${STORAGE_ROOT}/wandb"
+        export WANDB_CACHE_DIR="${STORAGE_ROOT}/cache/wandb"
+        export TORCH_HOME="${STORAGE_ROOT}/cache/torch"
+        export HF_HOME="${STORAGE_ROOT}/cache/huggingface"
+        export HUGGINGFACE_HUB_CACHE="${HF_HOME}/hub"
+        export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
+        export NUMBA_CACHE_DIR="${STORAGE_ROOT}/cache/numba"
+        export YOLO_CONFIG_DIR="${STORAGE_ROOT}/config/ultralytics"
+
+        export PATH="${STORAGE_ROOT}/bin:${PATH}"
+    else
+        # SUNNY and other regular servers use normal home-directory behavior.
+        STORAGE_ROOT="${STORAGE_ROOT:-${ORIGINAL_HOME}}"
+        RUNTIME_HOME="${ORIGINAL_HOME}"
+        VENV_DIR="${VENV_DIR:-${REPO_DIR}/.field_segmentation}"
+
+        export HOME="${ORIGINAL_HOME}"
+
+        # Do not override normal XDG, temp, or package cache locations here.
+        # uv will use the user's standard ~/.cache, ~/.local, and related paths.
+
+        UV_INSTALL_DIR="${UV_INSTALL_DIR:-${HOME}/.local/bin}"
+        export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
+    fi
+}
+
+configure_storage
+
+# ------------------------------------------------------------------------------
+# 5. Directory creation and validation
+# ------------------------------------------------------------------------------
+
+prepare_storage() {
+    if [[ "${PLATFORM_MODE}" == "scinet" ]]; then
+        [[ -d "/project/dash_agir" ]] ||
+            die \
+                "Detected SCINet, but /project/dash_agir does not exist. " \
+                "Host detection may be incorrect."
+
+        mkdir -p \
+            "${RUNTIME_HOME}" \
+            "${XDG_CACHE_HOME}" \
+            "${XDG_CONFIG_HOME}" \
+            "${XDG_DATA_HOME}" \
+            "${XDG_STATE_HOME}" \
+            "${TMPDIR}" \
+            "${UV_INSTALL_DIR}" \
+            "${UV_CACHE_DIR}" \
+            "${UV_PYTHON_INSTALL_DIR}" \
+            "${UV_TOOL_DIR}" \
+            "${PIP_CACHE_DIR}" \
+            "${PYTHONPYCACHEPREFIX}" \
+            "${MPLCONFIGDIR}" \
+            "${WANDB_DIR}" \
+            "${WANDB_CACHE_DIR}" \
+            "${TORCH_HOME}" \
+            "${HF_HOME}" \
+            "${HUGGINGFACE_HUB_CACHE}" \
+            "${TRANSFORMERS_CACHE}" \
+            "${NUMBA_CACHE_DIR}" \
+            "${YOLO_CONFIG_DIR}" \
+            "$(dirname "${VENV_DIR}")"
+    else
+        mkdir -p \
+            "${UV_INSTALL_DIR}" \
+            "$(dirname "${VENV_DIR}")"
+    fi
+
+    local test_directory
+    test_directory="$(dirname "${VENV_DIR}")"
+
+    [[ -w "${test_directory}" ]] ||
+        die "Environment parent directory is not writable: ${test_directory}"
+
+    local test_file="${test_directory}/.setup_write_test_$$"
+    touch "${test_file}" ||
+        die "Unable to write to: ${test_directory}"
+    rm -f "${test_file}"
+}
+
+print_configuration() {
+    log "Detected host configuration:"
+    echo "  Short hostname:      ${HOST_SHORT}"
+    echo "  Full hostname:       ${HOST_FULL}"
+    echo "  Platform mode:       ${PLATFORM_MODE}"
+    echo "  Original home:       ${ORIGINAL_HOME}"
+    echo "  Active HOME:         ${HOME}"
+    echo "  Storage root:        ${STORAGE_ROOT}"
+    echo "  Virtual environment: ${VENV_DIR}"
+
+    if [[ "${PLATFORM_MODE}" == "scinet" ]]; then
+        echo "  uv install dir:      ${UV_INSTALL_DIR}"
+        echo "  uv cache:            ${UV_CACHE_DIR}"
+        echo "  Python installs:     ${UV_PYTHON_INSTALL_DIR}"
+        echo "  Temporary files:     ${TMPDIR}"
+    else
+        echo "  Storage behavior:    normal user home directories"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# 6. uv installation
+# ------------------------------------------------------------------------------
+
 install_uv_if_missing() {
     if command -v uv >/dev/null 2>&1; then
-        log "uv found: $(uv --version)"
+        log "uv found: $(command -v uv)"
+        log "uv version: $(uv --version)"
         return
     fi
 
-    log "uv not found. Installing uv into user space..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    log "uv not found. Installing uv..."
 
-    # Add standard uv install locations to the PATH so we can use it immediately.
-    export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+    if [[ "${PLATFORM_MODE}" == "scinet" ]]; then
+        curl -LsSf https://astral.sh/uv/install.sh |
+            env \
+                HOME="${HOME}" \
+                XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+                XDG_DATA_HOME="${XDG_DATA_HOME}" \
+                UV_INSTALL_DIR="${UV_INSTALL_DIR}" \
+                sh
+    else
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+    fi
 
-    command -v uv >/dev/null 2>&1 || die "uv installation failed. Please install manually."
-    log "uv successfully installed: $(uv --version)"
+    hash -r
+
+    command -v uv >/dev/null 2>&1 ||
+        die "uv installation failed"
+
+    log "uv installed: $(command -v uv)"
+    log "uv version: $(uv --version)"
 }
 
-# Generates the list of required packages using flexible constraints.
-# We do not pin exact versions here so 'uv' can mathematically resolve the 
-# best, newest compatible combinations.
-create_requirements_if_missing() {
-    if [[ -f "$REQUIREMENTS_FILE" ]]; then
-        log "Using existing ${REQUIREMENTS_FILE}"
+verify_uv_storage() {
+    if [[ "${PLATFORM_MODE}" != "scinet" ]]; then
         return
     fi
 
-    log "Creating flexible ${REQUIREMENTS_FILE} for dependency resolution..."
-    cat > "$REQUIREMENTS_FILE" <<'EOF'
-# Core Data & Math
+    local reported_cache
+    reported_cache="$(uv cache dir)"
+
+    [[ "${reported_cache}" == "${UV_CACHE_DIR}" ]] ||
+        die \
+            "uv cache is using '${reported_cache}', but expected " \
+            "'${UV_CACHE_DIR}'."
+
+    log "Confirmed uv cache directory: ${reported_cache}"
+}
+
+# ------------------------------------------------------------------------------
+# 7. Requirements
+# ------------------------------------------------------------------------------
+
+create_requirements_if_missing() {
+    if [[ -f "${REQUIREMENTS_FILE}" ]]; then
+        log "Using existing requirements file: ${REQUIREMENTS_FILE}"
+        return
+    fi
+
+    log "Creating requirements file: ${REQUIREMENTS_FILE}"
+
+    cat > "${REQUIREMENTS_FILE}" <<'EOF'
+# Core data and math
 numpy
 pandas
 
-# Vision & Plotting
+# Vision and plotting
 matplotlib
 pillow
 scikit-image
@@ -110,146 +350,212 @@ tqdm
 pyyaml
 gputil
 
-# Config & Tracking
+# Configuration and tracking
 hydra-core
 omegaconf
 wandb
 fiftyone
 
-# Segmentation & Metrics
+# Segmentation and metrics
 pytorch-lightning
 segmentation-models-pytorch
 torchmetrics
 
-# Optional / Future use
+# Additional tools
 ultralytics
 ollama
 EOF
 }
 
 # ------------------------------------------------------------------------------
-# 4. Hardware Detection
+# 8. CUDA detection
 # ------------------------------------------------------------------------------
 
-# Asks the system's Nvidia drivers what CUDA version it is running.
-detect_cuda_version() {
-    if ! command -v nvidia-smi >/dev/null 2>&1; then
-        echo "none"
-        return
-    fi
-    nvidia-smi \
-        | sed -n 's/.*CUDA Version: \([0-9]\+\.[0-9]\+\).*/\1/p' \
-        | head -n 1
-}
+# uv automatically selects a compatible CUDA or CPU PyTorch build for the
+# current machine through --torch-backend=auto. Manual CUDA version parsing and
+# hard-coded PyTorch package indexes are intentionally not used.
+# ------------------------------------------------------------------------------
+# 9. Activation helper
+# ------------------------------------------------------------------------------
 
-# Translates the system CUDA version into the corresponding PyTorch wheel tag.
-detect_torch_cuda() {
-    local cuda_version
-    cuda_version="$(detect_cuda_version)"
+create_activation_script() {
+    local activation_script="${REPO_DIR}/activate.sh"
 
-    case "$cuda_version" in
-        12.6|12.7|12.8|12.9) echo "cu126" ;;
-        12.4|12.5)           echo "cu124" ;;
-        12.1|12.2|12.3)      echo "cu121" ;;
-        none|"")             echo "cpu" ;;
-        *)
-            log "Unrecognized CUDA version '${cuda_version}'. Defaulting to cu126." >&2
-            echo "cu126"
-            ;;
-    esac
-}
+    log "Writing activation helper: ${activation_script}"
 
-# Maps the PyTorch wheel tag to the official Nvidia/PyTorch download URL.
-torch_index_url_for() {
-    local torch_cuda="$1"
-    case "$torch_cuda" in
-        cu126) echo "https://download.pytorch.org/whl/cu126" ;;
-        cu124) echo "https://download.pytorch.org/whl/cu124" ;;
-        cu121) echo "https://download.pytorch.org/whl/cu121" ;;
-        cpu)   echo "https://download.pytorch.org/whl/cpu" ;;
-        *)     die "Unsupported TORCH_CUDA='${torch_cuda}'. Use cu124, cu121, or cpu." ;;
-    esac
+    cat > "${activation_script}" <<'ACTIVATE_HEADER'
+#!/usr/bin/env bash
+
+_activation_repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_activation_host_short="$(hostname -s 2>/dev/null || hostname)"
+_activation_host_full="$(hostname -f 2>/dev/null || hostname)"
+_activation_host_string="${_activation_host_short,,} ${_activation_host_full,,}"
+
+if [[ "${_activation_host_string}" =~ (^|[[:space:]._-])ceres([[:space:]._-]|[0-9]|$) ]] ||
+   [[ "${_activation_host_string}" =~ (^|[[:space:]._-])atlas([[:space:]._-]|[0-9]|$) ]]; then
+
+    export FIELD_SEGMENTATION_PLATFORM="scinet"
+    export FIELD_SEGMENTATION_STORAGE_ROOT="/project/dash_agir/matthew.kutugata"
+
+    export HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/.runtime_home"
+
+    export XDG_CACHE_HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache"
+    export XDG_CONFIG_HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/config"
+    export XDG_DATA_HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/data"
+    export XDG_STATE_HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/state"
+
+    export TMPDIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/tmp"
+    export TEMP="${TMPDIR}"
+    export TMP="${TMPDIR}"
+
+    export UV_INSTALL_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/bin"
+    export UV_CACHE_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/uv"
+    export UV_PYTHON_INSTALL_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/python"
+    export UV_TOOL_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/uv-tools"
+    export UV_TOOL_BIN_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/bin"
+
+    export PIP_CACHE_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/pip"
+    export PYTHONPYCACHEPREFIX="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/python/pycache"
+    export MPLCONFIGDIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/config/matplotlib"
+    export WANDB_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/wandb"
+    export WANDB_CACHE_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/wandb"
+    export TORCH_HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/torch"
+    export HF_HOME="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/huggingface"
+    export HUGGINGFACE_HUB_CACHE="${HF_HOME}/hub"
+    export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
+    export NUMBA_CACHE_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/cache/numba"
+    export YOLO_CONFIG_DIR="${FIELD_SEGMENTATION_STORAGE_ROOT}/config/ultralytics"
+
+    export PATH="${FIELD_SEGMENTATION_STORAGE_ROOT}/bin:${PATH}"
+
+    _activation_venv="${_activation_repo_dir}/.field_segmentation"
+else
+    export FIELD_SEGMENTATION_PLATFORM="regular"
+    export FIELD_SEGMENTATION_STORAGE_ROOT="${HOME}"
+
+    _activation_venv="${_activation_repo_dir}/.field_segmentation"
+fi
+
+if [[ ! -f "${_activation_venv}/bin/activate" ]]; then
+    echo "Environment does not exist on this host:"
+    echo "  ${_activation_venv}"
+    echo
+    echo "Run:"
+    echo "  bash ${_activation_repo_dir}/setup.sh"
+    return 1 2>/dev/null || exit 1
+fi
+
+# shellcheck disable=SC1091
+source "${_activation_venv}/bin/activate"
+
+echo "Environment activated"
+echo "  Platform: ${FIELD_SEGMENTATION_PLATFORM}"
+echo "  Host:     ${_activation_host_full}"
+echo "  Python:   $(command -v python)"
+
+if [[ "${FIELD_SEGMENTATION_PLATFORM}" == "scinet" ]]; then
+    echo "  HOME:     ${HOME}"
+    echo "  Cache:    ${UV_CACHE_DIR}"
+fi
+
+unset _activation_repo_dir
+unset _activation_host_short
+unset _activation_host_full
+unset _activation_host_string
+unset _activation_venv
+ACTIVATE_HEADER
+
+    chmod +x "${activation_script}"
 }
 
 # ------------------------------------------------------------------------------
-# 5. Main Execution Engine
+# 10. Main
 # ------------------------------------------------------------------------------
 
 main() {
-    log "Starting training environment setup..."
+    log "Starting field-segmentation environment setup"
 
-    # Ensure pre-requisites are met
     require_command curl
+
+    prepare_storage
+    print_configuration
     install_uv_if_missing
+    verify_uv_storage
     create_requirements_if_missing
 
-    # Step A: Create and activate the isolated virtual environment
     log "Creating virtual environment: ${VENV_DIR}"
-    uv venv --python "$PYTHON_VERSION" "$VENV_DIR"
-    
+
+    uv venv \
+        --python "${PYTHON_VERSION}" \
+        --clear \
+        "${VENV_DIR}"
+
     # shellcheck disable=SC1091
     source "${VENV_DIR}/bin/activate"
-    
-    log "Python environment active. Path: $(command -v python)"
 
-    # Step B: Determine the correct hardware target for PyTorch
-    if [[ "$TORCH_CUDA" == "auto" ]]; then
-        DETECTED_CUDA_VERSION="$(detect_cuda_version)"
-        TORCH_CUDA="$(detect_torch_cuda)"
-        log "Auto-detected CUDA version: ${DETECTED_CUDA_VERSION}"
-    fi
-    TORCH_INDEX_URL="$(torch_index_url_for "$TORCH_CUDA")"
-    log "Targeting PyTorch build: ${TORCH_CUDA} via ${TORCH_INDEX_URL}"
+    log "Python executable: $(command -v python)"
+    log "Python version: $(python --version)"
 
-    # Step C: The Anchor (Install PyTorch FIRST)
-    # We strictly pin PyTorch to v2.6.0 and install it from the custom Nvidia URL.
-    # By anchoring this into the environment first, we prevent Ultralytics or 
-    # PyTorch Lightning from accidentally clobbering it with CPU-only versions later.
-    log "Anchoring PyTorch 2.6.0 to the environment..."
-    uv pip install torch==2.6.0 torchvision==0.21.0 torchaudio --index-url "$TORCH_INDEX_URL"
+    log "Installing PyTorch with automatic backend selection"
 
-    # Step D: The Flexible Resolution (Install everything else)
-    # uv reads the requirements.txt, sees PyTorch is already installed, accepts it 
-    # as truth, and rapidly calculates the best versions for the remaining packages.
-    log "Resolving and installing remaining dependencies..."
-    uv pip install -r "$REQUIREMENTS_FILE"
+    uv pip install \
+        torch \
+        torchvision \
+	--torch-backend=auto
 
-    # Step E: Sanity Check
-    # Run a quick, invisible Python script to ensure the GPU is actually accessible.
-    log "Verifying installation..."
-    python -c "
-import torch
-import ultralytics
+    log "Installing remaining dependencies"
+
+    uv pip install \
+        --index-strategy unsafe-best-match \
+        -r "${REQUIREMENTS_FILE}"
+
+    log "Verifying installation"
+
+    python - <<'PYTHON'
+import os
+from pathlib import Path
+
 import pytorch_lightning
 import segmentation_models_pytorch
-print(f'   -> PyTorch Version: {torch.__version__}')
-print(f'   -> CUDA Available: {torch.cuda.is_available()}')
+import torch
+import ultralytics
+
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+
 if torch.cuda.is_available():
-    print(f'   -> GPU Count: {torch.cuda.device_count()}')
-print('   -> Basic imports passed successfully!')
-"
+    print(f"CUDA device count: {torch.cuda.device_count()}")
+    print(f"CUDA device: {torch.cuda.get_device_name(0)}")
 
-    # Step F: Version Control Lock
-    # Snapshot the mathematically perfect environment uv just created so we can 
-    # commit it to Git and guarantee reproducibility in the future.
-    log "Writing exact dependency snapshot to uv.lock.txt..."
-    uv pip freeze > uv.lock.txt
+print(f"Python home: {Path.home()}")
+print(f"Virtual environment: {os.environ.get('VIRTUAL_ENV')}")
+print("Basic imports passed successfully.")
+PYTHON
 
-    # Success output
+    log "Writing dependency snapshot: ${LOCK_FILE}"
+    uv pip freeze > "${LOCK_FILE}"
+
+    create_activation_script
+
     cat <<EOF
 
 ==================================================
-Setup successfully completed!
+Setup completed successfully
 ==================================================
 
-To activate this environment, run:
-  source ${VENV_DIR}/bin/activate
+Host:
+  ${HOST_FULL}
 
-To commit this stable environment to version control:
-  git add setup.sh requirements.txt uv.lock.txt
-  git commit -m "chore: migrate to uv and lock environment dependencies"
+Detected platform:
+  ${PLATFORM_MODE}
+
+Environment:
+  ${VENV_DIR}
+
+Activate it with:
+  source ${REPO_DIR}/activate.sh
 EOF
 }
 
-# Execute the main function, passing along any terminal arguments
 main "$@"
+
