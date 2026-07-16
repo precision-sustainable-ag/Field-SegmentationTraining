@@ -1,0 +1,527 @@
+# conf/augment/field_strong.yaml
+# All data‐augmentation transforms. Your datamodule should read these keys
+# and apply the appropriate torchvision / albumentations transforms.
+
+# ─── how many samples to visualize each epoch ─────────────────────────────
+augmentation_visualizer:
+  enable: true        # toggle on/off
+  num_samples: 4      # how many image+mask pairs to log
+
+  # ─── legend panel settings ─────────────────────────────────────────
+  legend:
+    # font size = max(min_font_size, height / font_divisor)
+    font_divisor: 40
+    min_font_size: 12
+
+# ─── train transformations ──────────────────────────────────────────
+train:
+  enable: true
+
+  # target size for all spatial ops (pad/crop/resize happens upstream)
+  img_size:
+    height: ${preprocess.pad_gridcrop_resize.size.height}
+    width:  ${preprocess.pad_gridcrop_resize.size.width}
+
+  # =========================
+  # SPATIAL TRANSFORM GROUPS
+  # =========================
+  spatial:
+    enable: true     # master switch for all spatial transforms
+
+    # ── A) Initial Resizing / Cropping (choose ONE strategy) ─────────
+    initial_resize_crop:
+      mode:
+        type: one_of      # one_of | some_of | all
+        enable: false
+        p: 1.0
+        n: 1              # used only if type == some_of
+        replace: false
+
+      random_crop:
+        enable: false
+        p: 1.0
+        height: ${augment.train.img_size.height} # these need to be changed
+        width:  ${augment.train.img_size.width} # these need to be changed
+
+        # Optional padding when crop > image (Albumentations pads first, then crops)
+        pad_if_needed: false          # ← set true if your dataset has small images
+
+        # If you enable pad_if_needed, these control how padding looks:
+        border_mode: constant         # constant | reflect | reflect101 | replicate | wrap
+        fill: 0                       # image padding value (int or [r,g,b])
+        fill_mask: 0                  # mask padding value (usually 0 for background)
+        pad_position: center          # center | top_left | top_right | bottom_left | bottom_right | random
+
+      # Alternative strategies if you ever want them (disabled by default):
+      # Option 1: SmallestMaxSize -> RandomCrop to your fixed train size
+      smallest_max_size_then_random_crop:
+        enable: false
+        p: 1.0
+
+        # Choose exactly one of these:
+        # max_size: scales so min(side) == max_size
+        # OR max_size_hw: scales to meet (height,width) constraints
+        max_size: ${augment.train.img_size.height}   # or a list, e.g. [256, 320, 384]
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+
+        # Interpolation settings (strings mapped to cv2 codes in augment.py)
+        interpolation: linear         # nearest | linear | cubic | area | lanczos4
+        mask_interpolation: nearest   # usually 'nearest' for masks
+        area_for_downscale: image     # null | image | image_mask
+
+        # Final crop to the training size (kept as-is)
+        final_height: ${augment.train.img_size.height}
+        final_width:  ${augment.train.img_size.width}
+
+      # Option 2: SmallestMaxSize only (no crop)
+      smallest_max_size:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+        interpolation: linear
+        mask_interpolation: nearest
+        area_for_downscale: image
+
+      # Option 3: LongestMaxSize -> PadIfNeeded (keeps aspect, then pads)
+      longest_max_size_then_pad_if_needed:
+        enable: false
+        p: 1.0
+
+        # Choose exactly one of these (like the docs):
+        #   - max_size: int or list[int] (sampled if list)
+        #   - max_size_hw: [height|null, width|null]
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+
+        # Interpolation settings (strings; mapped to cv2 in code)
+        interpolation: linear         # nearest | linear | cubic | area | lanczos4
+        mask_interpolation: nearest   # usually nearest for masks
+        area_for_downscale: image     # null | image | image_mask
+
+        # Final padding target (usually your train size)
+        pad_min_height: ${augment.train.img_size.height}
+        pad_min_width:  ${augment.train.img_size.width}
+        pad_border_mode: constant     # constant | reflect | reflect101 | replicate | wrap
+        # pad_fill: 0                 # (optional) image padding fill value
+        # pad_fill_mask: 0            # (optional) mask padding fill value
+        # pad_position: center        # (optional) center/top_left/.../random
+
+      # Option 4: LongestMaxSize only (no padding)
+      longest_max_size:
+        enable: false
+        p: 1.0
+        max_size: ${augment.train.img_size.height}
+        # max_size_hw: [${augment.train.img_size.height}, ${augment.train.img_size.width}]
+        interpolation: linear
+        mask_interpolation: nearest
+        area_for_downscale: image
+
+    # ── B) Basic Geometric (usually “always include”) ────────────────
+    basic_geometric:
+      mode:
+        type: all         # horizontal/vertical/90° rotations in one block
+        enable: true
+        p: 1.0
+        replace: false
+      horizontal_flip:
+        enable: true
+        p: 0.5         # mirror left‐right
+      vertical_flip:
+        enable: true
+        p: 0.5         # mirror up‐down
+      random_rotate90:
+        enable: true
+        p: 0.5         # rotate by a multiple of 90°
+
+    # ── C) Affine / Perspective / Warps (choose ONE) ─────────────────
+    affine_perspective:
+      mode:
+        type: all
+        enable: true
+        p: 0.85                  # CHANGED: Increased overall probability
+
+      # core rigid-ish geometry first
+      affine:
+        enable: true
+        p: 0.8
+        scale: [0.7, 1.3]        # CHANGED: More aggressive camera height simulation
+        translate_percent: [-0.1, 0.1] # CHANGED: More aggressive centering drift
+        rotate: [-45, 45]        # CHANGED: Full rotation coverage
+        shear: [-15, 15]         # CHANGED: Simulates severe camera tilt
+        
+      perspective:
+        enable: true
+        p: 0.4                   # CHANGED: Increased probability
+        scale: [0.05, 0.12]
+        keep_size: true
+        fit_output: false
+
+      # ── put non‑linear warps at the END of this group ───────────────
+      elastic_transform:
+        enable: true             # CHANGED: Crucial for simulating organic leaf bending
+        p: 0.4
+        alpha: 120
+        sigma: 10                # CHANGED: Slightly increased sigma for smoother global warps
+        
+      # Keep these disabled to avoid redundant compute
+      shift_scale_rotate:
+        enable: false
+      optical_distortion:
+        enable: false
+      random_scale:
+        enable: false
+      grid_distortion:
+        enable: false
+      thin_plate_spline:
+        enable: false
+
+    # ── D) Occlusion / Dropout (HIGHLY RECOMMENDED; choose ONE) ──────
+    dropout_occlusion:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.6                   # CHANGED: Slightly increased probability
+        replace: false
+        
+      coarse_dropout:
+        enable: true
+        p: 1.0                   # (If block triggers, always use coarse_dropout)
+        # CHANGED: More holes to simulate heavy leaf overlap and insect damage
+        num_holes_range: [4, 8]  
+        hole_height_range: [0.05, 0.15] 
+        hole_width_range:  [0.05, 0.15]
+        fill_value: 0            # PERFECT: Matches your physical background mats
+        
+      # Keep these disabled (Coarse Dropout is superior for organic shapes)
+      grid_dropout:
+        enable: false
+      erasing:
+        enable: false
+
+    # ── E) Context Independence ─────────────
+    context_independence:
+      mode:
+        type: one_of
+        enable: false            # MANDATORY: Keep disabled for Transformers
+
+  # =========================
+  # PIXEL-LEVEL TRANSFORM GROUPS
+  # =========================
+  pixel:
+    enable: true     # master switch for all pixel‐level transforms
+
+    # ── F) Color Space Reduction (sparingly; choose ONE) ─────────────
+    color_space_reduction:
+      mode:
+        type: one_of
+        enable: true             # CHANGED: Enable this block
+        p: 0.2                   # CHANGED: 20% of the time, the image loses color data
+        replace: false
+        
+      to_gray:
+        enable: true
+        p: 0.5                   # 50% chance (if the block triggers) to go grayscale
+        
+      channel_dropout:
+        enable: true
+        p: 0.5                   # 50% chance (if the block triggers) to drop a channel
+        channel_drop_range: [1, 1]
+
+    # ── G) Color Augmentations (choose ONE) ──────────────────────────
+    color_augmentations:
+      mode:
+        type: some_of       
+        n: 2                 # Applying 2 of these at once is a great stress test
+        enable: true
+        p: 0.7               # Keeps ~30% of tiles natural to avoid noise artifacts
+        replace: false
+
+      random_brightness_contrast:
+        enable: true
+        p: 0.8
+        brightness_limit: 0.3    # CHANGED: Increased to simulate harsh glare/deep overcast
+        contrast_limit: 0.3      # CHANGED: Increased for harsher lighting
+
+      color_jitter:
+        enable: false            # Keep disabled (redundant with the other blocks)
+
+      hue_saturation_value:
+        enable: true
+        p: 0.5                   # CHANGED: Increased probability
+        hue_shift_limit: 20      # CHANGED: Simulates plant health variations (green to yellow)
+        sat_shift_limit: 40      # CHANGED: Simulates wet vs. dry/dusty leaves
+        val_shift_limit: 30      # CHANGED: Increased for exposure variety
+
+      random_gamma:
+        enable: true
+        p: 0.3
+        gamma_limit: [70, 130]   # CHANGED: Slightly widened for extreme exposure simulation
+
+      planckian_jitter:
+        enable: true             # CHANGED: Enabled (Highly recommended for outdoor data)
+        p: 0.4
+        mode: blackbody          
+        # 4000K (warm afternoon) to 7500K (cool, heavily overcast sky)
+        temperature_limit: [4000, 7500] 
+        sampling_method: uniform 
+
+      # Keep these disabled (too artificial for sensor data)
+      rgb_shift:
+        enable: false
+      channel_shuffle:
+        enable: false
+
+    # ── H) Blur (low probability; choose ONE) ────────────────────────
+    blur:
+      mode:
+        type: one_of
+        enable: true             # CHANGED: Enable the master switch
+        p: 0.3                   # Keep probability low (30% of tiles get blurred)
+        replace: false
+
+      gaussian_blur:
+        enable: true
+        p: 0.5
+        blur_limit: [3, 7]       # CHANGED: Slightly increased upper bound for a softer out-of-focus effect
+        sigma_limit: [0.5, 3.0]
+
+      motion_blur:
+        enable: true
+        p: 0.5                   # CHANGED: Increased relative probability
+        blur_limit: [5, 9]       # CHANGED: Bumped up to simulate a heavier operator camera shake
+        angle_range: [0.0, 360.0] 
+        direction_range: [-1.0, 1.0] 
+        allow_shifted: true
+
+      # Keep these disabled:
+      # Median blur creates a "watercolor" effect that destroys thin structural lines.
+      median_blur:
+        enable: false
+      advanced_blur:
+        enable: false
+      zoom_blur:                 # Not physically realistic for this capture method
+        enable: false
+
+    # ── I) Noise (low probability; choose ONE) ───────────────────────
+    noise:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.4                   # CHANGED: Slightly increased so 40% of tiles get some noise
+        replace: false
+        
+      gauss_noise:
+        enable: true
+        p: 0.5
+        std_range:  [0.05, 0.20] # CHANGED: Pushed upper limit for heavier grain
+        mean_range: [0.0, 0.0] 
+        per_channel: true
+        noise_scale_factor: 1.0  
+        
+      iso_noise:
+        enable: true             # CHANGED: Enabled. The best option for camera data.
+        p: 0.5
+        color_shift: [0.01, 0.05]
+        intensity: [0.10, 0.50]
+        
+      salt_and_pepper:
+        enable: true             # CHANGED: Enabled to simulate dirt/dust on the mats
+        p: 0.3
+        amount: [0.01, 0.04]     # 1% to 4% of pixels become dirt speckles
+        salt_vs_pepper: [0.3, 0.7] # Skewed toward "pepper" (dark dirt)
+        
+      # Keep disabled
+      multiplicative_noise:
+        enable: false
+
+    # ── J) Compression / Downscaling ────
+    compression_downscale:
+      mode:
+        type: one_of
+        enable: true
+        p: 0.2                   # Keeps this effect rare but impactful
+        replace: false
+        
+      image_compression:
+        enable: true
+        p: 0.5
+        quality_range: [40, 90]  # CHANGED: Lowered minimum to simulate cellular transmission
+
+      downscale:
+        enable: true             # CHANGED: Enabled to simulate lower-res sensors
+        p: 0.5
+        scale_range: [0.50, 0.80] # CHANGED: Restricted range to prevent destroying vein textures
+
+    # ── K) Contrast Enhancement ───────────────
+    contrast_enhancement:
+      mode:
+        type: one_of
+        enable: true             # CHANGED: Enabled master switch
+        p: 0.2                   # Low probability to avoid background mat noise explosion
+        replace: false
+        
+      clahe:
+        enable: true
+        p: 1.0
+        clip_limit: 2.0          # 2.0 is a safe, realistic enhancement
+        tile_grid_size: [8, 8]   # Keeps the enhancement highly localized
+
+    # ── L) Weather / Outdoor Effects (image-only) ────────────────────────────────
+    weather_effects:
+      mode:
+        type: some_of       
+        enable: true             # CHANGED: Master switch on
+        p: 0.5                   # 50% of tiles get hit with a weather effect
+        n: 1                     # Only apply one at a time to prevent total image destruction
+        replace: false
+
+      random_sun_flare:
+        enable: true
+        p: 0.3                   # 30% chance if the block triggers
+        # CHANGED: Opened up to the full tile so glare can happen anywhere
+        flare_roi: [0.0, 0.0, 1.0, 1.0] 
+        angle_range: [0.0, 1.0]
+        num_flare_circles_range: [4, 8]  # Slightly reduced for realism
+        src_radius: 300                  # Reduced so it doesn't swallow a whole 512x512 tile
+        src_color: [255, 255, 255]
+        method: physics_based 
+
+      random_shadow:
+        enable: true 
+        p: 0.6                   # CHANGED: High probability, shadows are your biggest confounder
+        # CHANGED: Opened up to the full tile 
+        shadow_roi: [0.0, 0.0, 1.0, 1.0] 
+        num_shadows_limit: [1, 3]        # CHANGED: Allow for multiple overlapping canopy shadows
+        shadow_dimension: 5
+        shadow_intensity_range: [0.4, 0.7] # CHANGED: Allow for much darker, harsher shadows
+
+      random_fog:
+        enable: true
+        p: 0.2                   # Great for simulating early morning dew/humidity on the lens
+        fog_coef_range: [0.20, 0.50]
+        alpha_coef: 0.08
+
+      # Keep these disabled to protect morphological features and mat contrast
+      random_rain:
+        enable: false
+      random_snow:
+        enable: false
+
+    # ── M) Spectrogram Augmentation (only if your data are spectrograms) ─────────
+    spectrogram:
+      mode:
+        type: one_of
+        enable: false
+        p: 0.3
+        replace: false
+      # Applies masking strips to an image, either horizontally (X axis) or vertically (Y axis),
+      # simulating occlusions. This transform is useful for training models to recognize images
+      # with varied visibility conditions. It's particularly effective for spectrogram images,
+      # allowing spectral and frequency masking to improve model robustness.
+      xy_masking:
+        enable: false     # set to true only if you really want this
+        p: 1.0
+        num_masks_x: [1, 3]
+        num_masks_y: [1, 3]
+        mask_x_length: [10, 100]   # pick sensible fractions or ints per docs
+        mask_y_length: [30, 100]
+        fill: 0
+        fill_mask: 0
+    # ── N) Domain Adaptation (requires reference images) ─────────────────────────
+    domain_adaptation:
+      mode:
+        type: one_of
+        enable: false # Not implemented
+        p: 0.2
+        replace: false
+      # # Fourier Domain Adaptation: Adapts the style of the input image to match the style of a reference image
+      # by manipulating their frequency components in the Fourier domain. This is
+      # particularly useful for unsupervised domain adaptation (UDA).
+      fda: # TODO: needs reference image, does NOT work
+        enable: false        # A.FDA if available
+        p: 1.0
+        beta_limit: [0.01, 0.05]
+      # This transform modifies the pixel intensities of the input image so that its histogram
+      # matches the histogram of a provided reference image. This process is applied independently
+      # to each channel of the image if it is multi-channel.
+      histogram_matching: # Fails with errors
+        enable: false # Not implemented        # A.HistogramMatching
+        p: 1.0
+
+  # ─── batch-level mixing ops ─────────────────────────────────────
+  batch:
+    enable: true           
+
+    mosaic:
+      enable: false        # Keep disabled (preserves tile scale)
+
+    cutmix:
+      enable: true
+      p: 0.5               # CHANGED: Increased to synthesize dense, overlapping canopies
+      alpha: 1.0           
+
+    mixup:
+      enable: false        # Keep disabled (prevents ghostly transparency)
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: false          # ONLY keep false if handled downstream in PyTorch!
+
+# ─── validation (only resize/pad) ────────────────────────────────────
+val:
+  enable: false
+  img_size:
+    height: ${augment.train.img_size.height}
+    width:  ${augment.train.img_size.width}
+
+  spatial:
+    enable: false
+    initial_resize_crop:
+      mode:
+        type: one_of
+        enable: true
+        p: 1.0
+      random_crop:
+        enable: false
+    basic_geometric:
+      mode:
+        type: all
+        enable: false
+    affine_perspective:
+      mode:
+        type: one_of
+        enable: false
+    dropout_occlusion:
+      mode:
+        type: one_of
+        enable: false
+
+  pixel:
+    enable: false
+
+  batch:
+    enable: false           # no batch mixing on validation
+
+  # ── Final, sample-specific normalization ───────────────────────────
+  normalization:
+    enable: false
+    # one of: image | image_per_channel
+    kind: image_per_channel
+    p: 1.0
+
+# ─── test (no augment) ───────────────────────────────────────────────
+test:
+  enable: false
+  img_size:
+    height: ${augment.train.img_size.height}
+    width:  ${augment.train.img_size.width}
+
+  spatial:
+    enable: false
+  
+  pixel:
+    enable: false
+  
+  batch:
+    enable: false

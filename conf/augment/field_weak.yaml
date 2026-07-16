@@ -1,4 +1,4 @@
-# conf/augment/segformer.yaml
+# conf/augment/field_weak.yaml
 # All data‐augmentation transforms. Your datamodule should read these keys
 # and apply the appropriate torchvision / albumentations transforms.
 
