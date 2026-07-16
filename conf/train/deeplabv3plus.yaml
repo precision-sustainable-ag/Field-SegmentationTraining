@@ -1,7 +1,7 @@
-# conf/train/unet_resnet34_baseline.yaml
+# conf/train/deeplabv3plus.yaml
 
-batch_size: 64
-max_epochs: 50
+batch_size: 32
+max_epochs: 100
 num_workers: 16
 pin_memory: true
 seed: 42
@@ -14,7 +14,7 @@ dataloader_visualizer:
 # Optimizer:
 optimizer:
   _target_: "torch.optim.AdamW"
-  lr: 5e-4
+  lr: 1e-4
   weight_decay: 1e-4                   # Increased slightly for better regularization
 
 # Scheduler:
@@ -43,24 +43,26 @@ losses:
   
   dice:
     enabled: true
-    weight: 0.5
+    weight: 0.25
     loss:
       _target_: segmentation_models_pytorch.losses.DiceLoss
       mode: "binary"
       from_logits: true
       
   focal:
-    enabled: false
-    weight: 1.0
+    enabled: true
+    weight: 0.25
     loss:
       _target_: segmentation_models_pytorch.losses.FocalLoss
       mode: "binary"
+      gamma: 2.0    # Focuses heavily on hard/unconfident pixels
+      alpha: 0.75   # Balances the importance of positive vs negative classes
 
 # Checkpoint callback:
 checkpoint:
   monitor: "val/fg_iou"
   mode: "max"
-  save_top_k: 1
+  save_top_k: 2
   save_last: true
 
 # EarlyStopping callback (optional):
@@ -68,7 +70,7 @@ early_stop:
   enabled: true
   monitor: "val/fg_iou"
   mode: "max"
-  patience: 15                         # Increased slightly for longer epochs
+  patience: 30                         # Increased slightly for longer epochs
 
 logger:
   - _target_: pytorch_lightning.loggers.CSVLogger
