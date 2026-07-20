@@ -1,4 +1,4 @@
-# conf/augment/unet_resnet34_baseline.yaml
+# conf/augment/field_weak.yaml
 # All data‐augmentation transforms. Your datamodule should read these keys
 # and apply the appropriate torchvision / albumentations transforms.
 
@@ -435,7 +435,7 @@ train:
         replace: false
       image_compression:
         enable: true
-        p: 0.5
+        p: 0.2
         # Range for the compression quality.
         # The values should be in [1, 100] range, where:
         # - 1 is the lowest quality (maximum compression)
@@ -478,8 +478,8 @@ train:
       mode:
         type: some_of       # pick n of them per sample
         enable: false
-        p: 1.0
-        n: 5
+        p: 0.5
+        n: 1
         replace: false
       random_sun_flare:
         enable: true
@@ -578,15 +578,15 @@ train:
 
   # ─── batch-level mixing ops ─────────────────────────────────────
   batch:
-    enable: false           # master switch for batch mixing ops
+    enable: true           # master switch for batch mixing ops
 
     mosaic:
-      enable: true
-      p: 0.5               # probability per batch
+      enable: false
+      p: 0.2               # probability per batch
 
     cutmix:
       enable: true
-      p: 0.5
+      p: 0.2
       alpha: 1.0           # Beta(alpha,alpha) hyperparameter
 
     mixup:

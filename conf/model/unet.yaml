@@ -5,11 +5,11 @@
 # UNet‐specific parameters:
 arch_name: "Unet"
 name: "unet"
-encoder_name: "resnet34"          # e.g. resnet18, resnet34, resnet50, efficientnet-b0, etc.
+encoder_name: "resnet34"          # e.g. resnet18, resnet34, resnet50, mit_b2, efficientnet-b0, etc.
 encoder_weights: "imagenet"       # or "None"
 in_channels: 3
 classes: 1
-activation: "sigmoid"             # "softmax2d" if multiclass
+activation: null                  # Activation function, e.g. "sigmoid2d" or "softmax2d"
 
 # (Optional) if you want to freeze the encoder:
 encoder_freeze: false

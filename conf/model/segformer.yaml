@@ -2,11 +2,11 @@
 # Uses the hierarchical Mix Transformer (MiT) encoder and the lightweight MLP decoder.
                           
 arch_name: "Segformer"    # The actual SMP class name
-name: "segformer_b4"
+name: "segformer"         # Optional label
 encoder_name: "mit_b4"    # Options: mit_b0 (tiny) to mit_b5 (massive). B3 or B4 is the sweet spot for accuracy vs memory.
 encoder_weights: "imagenet"
 in_channels: 3
 classes: 1
-activation: "sigmoid"
+activation: null
 
 encoder_freeze: false
