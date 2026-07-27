@@ -7,7 +7,7 @@ max_epochs: 50
 num_workers: 16
 pin_memory: true
 seed: 42
-use_data_normalization: false
+use_data_normalization: true
 
 dataloader_visualizer:
   enabled: true
@@ -31,9 +31,14 @@ num_gpus: 2  # Set between 1 and 3
 
 trainer:
   accelerator: "gpu"
-  devices: null  # Will be dynamically set by GPU utility
-  precision: 16-mixed
-  deterministic: true
+  devices: null
+  precision: bf16-mixed
+  deterministic: warn
+  log_every_n_steps: 10
+  sync_batchnorm: true
+  accumulate_grad_batches: 2
+  gradient_clip_val: 1.0              # Caps the maximum gradient norm to prevent exploding gradients
+  gradient_clip_algorithm: "norm"     # Caps the gradient norm (as opposed to value) for more stable training 
 
 losses:
   bce:
@@ -44,7 +49,7 @@ losses:
   
   dice:
     enabled: true
-    weight: 0.5
+    weight: 0.25
     loss:
       _target_: segmentation_models_pytorch.losses.DiceLoss
       mode: "binary"
@@ -52,14 +57,14 @@ losses:
       
   focal:
     enabled: false
-    weight: 1.0
+    weight: 0.25
     loss:
       _target_: segmentation_models_pytorch.losses.FocalLoss
       mode: "binary"
 
 # Checkpoint callback:
 checkpoint:
-  monitor: "val/fg_iou"
+  monitor: "mean/fg_iou"
   mode: "max"
   save_top_k: 1
   save_last: true
@@ -67,7 +72,7 @@ checkpoint:
 # EarlyStopping callback (optional):
 early_stop:
   enabled: true
-  monitor: "val/fg_iou"
+  monitor: "mean/fg_iou"
   mode: "max"
   patience: 10
 
