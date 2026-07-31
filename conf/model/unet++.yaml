@@ -1,0 +1,15 @@
+# conf/model/unet++.yaml
+
+arch_name: "UnetPlusPlus"
+name: "unetplusplus_se_resnext101"
+
+# Native 5-stage CNN backbone supported in UnetPlusPlus
+encoder_name: "se_resnext101_32x4d" # or "efficientnet-b7" or "resnet101"
+encoder_weights: "imagenet"
+
+in_channels: 3
+classes: 1
+activation: null
+encoder_freeze: false
+
+decoder_attention_type: "scse"

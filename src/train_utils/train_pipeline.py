@@ -141,6 +141,8 @@ def run_train_pipeline(cfg: DictConfig) -> None:
         logger=loggers,
         sync_batchnorm=cfg.train.trainer.get("sync_batchnorm", False), # only needed for multi-GPU, but doesn't hurt on single GPU
         accumulate_grad_batches=cfg.train.trainer.get("accumulate_grad_batches", 1), # gradient accumulation to simulate larger batch sizes (e.g. 2x accumulation with batch_size=8 simulates batch_size=16)
+        gradient_clip_val=cfg.train.trainer.get("gradient_clip_val", None),
+        gradient_clip_algorithm=cfg.train.trainer.get("gradient_clip_algorithm", "norm"),
         callbacks=[checkpoint_cb, earlystop_cb],
         default_root_dir=str(Path(cfg.paths.project_train_dir)),
         log_every_n_steps=cfg.train.trainer.get("log_every_n_steps", 50),

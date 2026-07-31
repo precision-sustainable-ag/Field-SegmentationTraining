@@ -25,16 +25,18 @@ scheduler:
 
 # Lightning Trainer arguments:
 use_multi_gpu: true
-num_gpus: 6
+num_gpus: 8
 
 trainer:
   accelerator: "gpu"
   devices: null
   precision: bf16-mixed
-  deterministic: true
+  deterministic: warn
   log_every_n_steps: 10
   sync_batchnorm: true
   accumulate_grad_batches: 2
+  gradient_clip_val: 1.0              # Caps the maximum gradient norm to prevent exploding gradients
+  gradient_clip_algorithm: "norm"     # Caps the gradient norm (as opposed to value) for more stable training 
 
 losses:
   bce:
@@ -62,7 +64,7 @@ losses:
 
 # Checkpoint callback:
 checkpoint:
-  monitor: "val/fg_iou"
+  monitor: "val/mean_iou"
   mode: "max"
   save_top_k: 2
   save_last: true
@@ -70,7 +72,7 @@ checkpoint:
 # EarlyStopping callback (optional):
 early_stop:
   enabled: true
-  monitor: "val/fg_iou"
+  monitor: "val/mean_iou"
   mode: "max"
   patience: 30                         # Increased slightly for longer epochs
 

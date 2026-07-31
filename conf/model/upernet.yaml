@@ -1,0 +1,12 @@
+# conf/model/upernet.yaml
+
+arch_name: "UPerNet"
+name: "upernet_convnextv2_large"
+
+encoder_name: "tu-convnextv2_large"
+encoder_weights: "imagenet"
+
+in_channels: 3
+classes: 1
+activation: null
+encoder_freeze: false
