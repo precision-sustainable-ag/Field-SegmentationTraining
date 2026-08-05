@@ -3,6 +3,7 @@
 
 input_dir: ${paths.test_images_dir}        # Directory to read images from
 output_root: ${paths.project_inference_dir}
+weights_path: ${paths.local_yolo_weed_detection_model}
 
 # ─── YOLO Thresholds ──────────────────────────────────────────────────
 conf: 0.25  # Confidence threshold for keeping a bounding box

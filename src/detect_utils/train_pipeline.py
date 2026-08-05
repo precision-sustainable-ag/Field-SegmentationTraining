@@ -3,6 +3,7 @@ from typing import List, Union
 import wandb
 from omegaconf import DictConfig
 from ultralytics import YOLO
+import shutil
 
 from src.utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed
@@ -70,6 +71,8 @@ def run_yolo_training(cfg: DictConfig) -> None:
     # 6. Execute Training
     # We map the relevant custom hyperparameters from Hydra into the YOLO engine
     print("Commencing YOLO training loop...")
+    # We define the run name here so we can reference it after training
+    run_name = f"detect_train_{cfg.job.job_now_time}"
     model.train(
         data=data_yaml_path,
         epochs=cfg.train.max_epochs,
@@ -82,11 +85,25 @@ def run_yolo_training(cfg: DictConfig) -> None:
         box=cfg.train.box,
         cls=cfg.train.cls,
         dfl=cfg.train.dfl,
-        project=cfg.project.name,
+        project=cfg.paths.project_dir,
         name=f"detect_train_{cfg.job.job_now_time}"  # Organizes output folders dynamically
     )
     
-    # 7. Cleanup
+    # 7. Auto-Copy Best Weights to Static Location
+    # Calculate exactly where YOLO just saved the weights
+    trained_weights_path = os.path.join(cfg.paths.project_dir, run_name, "weights", "best.pt")
+    
+    # Calculate the static destination from your paths config
+    static_model_path = cfg.paths.local_yolo_weed_detection_model
+    os.makedirs(os.path.dirname(static_model_path), exist_ok=True)
+    
+    if os.path.exists(trained_weights_path):
+        shutil.copy(trained_weights_path, static_model_path)
+        print(f"Successfully copied latest best weights to: {static_model_path}")
+    else:
+        print(f"Warning: Expected to find trained weights at {trained_weights_path} but they were missing.")
+
+    # 8. Cleanup
     if wandb.run is not None:
         wandb.finish()
     

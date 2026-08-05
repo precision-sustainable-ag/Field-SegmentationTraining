@@ -39,8 +39,8 @@ def run_yolo_inference(cfg: DictConfig) -> None:
     # 2. Determine Model Weights
     # For inference, you typically want to load the specifically trained weights
     # mapped in your paths config, rather than the base architecture (yolov8s.pt)
-    weights_path: str = cfg.paths.yolo_weed_detection_model
-    
+    weights_path: str = cfg.inference.weights_path if 'weights_path' in cfg.inference else cfg.paths.yolo_weed_detection_model  
+      
     if not os.path.exists(weights_path):
         raise FileNotFoundError(f"Model weights not found at: {weights_path}")
         

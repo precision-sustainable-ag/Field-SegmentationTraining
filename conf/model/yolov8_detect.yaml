@@ -1,0 +1,4 @@
+# conf/model/yolov8_detect.yaml
+
+name: "yolov8s.pt"  # Pretrained weights (will auto-download if not present)
+task: "detect"
