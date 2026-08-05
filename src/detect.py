@@ -3,6 +3,7 @@ from omegaconf import DictConfig
 
 from src.detect_utils.train_pipeline import run_yolo_training
 from src.detect_utils.inference_pipeline import run_yolo_inference
+from src.detect_utils.export_pipeline import run_yolo_export
 
 log = logging.getLogger(__name__)
 

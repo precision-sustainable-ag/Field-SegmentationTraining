@@ -16,13 +16,26 @@ project_datastats_dir: ${paths.project_preprocess_dir}/data_stats
 preprocess_stats_file: ${paths.project_preprocess_dir}/data_stats.txt
 preprocess_image_list_file: ${paths.project_preprocess_dir}/images.txt
 
-# Train, validation, and test directories for both images and masks
+# ─── Train/Val/Test Split Directories ─────────────────────────────────
+# Images (Shared between Segmentation and Detection)
 train_images_dir: ${paths.preprocess_split_dir}/train/images
-train_masks_dir: ${paths.preprocess_split_dir}/train/masks
 val_images_dir: ${paths.preprocess_split_dir}/val/images
-val_masks_dir: ${paths.preprocess_split_dir}/val/masks
 test_images_dir: ${paths.preprocess_split_dir}/test/images
+
+# Segmentation Masks
+train_masks_dir: ${paths.preprocess_split_dir}/train/masks
+val_masks_dir: ${paths.preprocess_split_dir}/val/masks
 test_masks_dir: ${paths.preprocess_split_dir}/test/masks
+
+# YOLO Detection Labels
+train_labels_dir: ${paths.preprocess_split_dir}/train/labels
+val_labels_dir: ${paths.preprocess_split_dir}/val/labels
+test_labels_dir: ${paths.preprocess_split_dir}/test/labels
+
+# ─── Raw Detection Data Sources ───────────────────────────────────────
+# Where your raw images and .txt labels are currently sitting
+raw_detect_images_dir: ${paths.project_dir}/raw_data/images
+raw_detect_labels_dir: ${paths.project_dir}/raw_data/labels
 
 # LLM output paths
 llm_output_dir: ${paths.project_dir}/llm_output
@@ -54,18 +67,3 @@ agir_field_db: ${paths.agir_field_db_dir}/agir_field.db
 
 # Keys
 keys_path: ${paths.base_dir}/.keys/default.yaml
-
-# ─── Raw Detection Data Sources ───────────────────────────────────────
-# Where your raw images and .txt labels are currently sitting
-raw_detect_images_dir: ${paths.project_dir}/raw_data/images
-raw_detect_labels_dir: ${paths.project_dir}/raw_data/labels
-
-# ─── YOLO Split Destination Directories ───────────────────────────────
-train_images_dir: ${paths.preprocess_split_dir}/train/images
-train_labels_dir: ${paths.preprocess_split_dir}/train/labels
-
-val_images_dir: ${paths.preprocess_split_dir}/val/images
-val_labels_dir: ${paths.preprocess_split_dir}/val/labels
-
-test_images_dir: ${paths.preprocess_split_dir}/test/images
-test_labels_dir: ${paths.preprocess_split_dir}/test/labels

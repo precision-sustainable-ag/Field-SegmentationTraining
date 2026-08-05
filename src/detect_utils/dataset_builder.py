@@ -83,9 +83,9 @@ def split_and_prepare_dataset(cfg: DictConfig) -> str:
             shutil.rmtree(lbl_dir)
         create_dirs([img_dir, lbl_dir])
 
-    # 3. Gather files (supporting standard image extensions)
+    # 3. Gather files (supporting standard image extensions, case-sensitive)
     image_files: List[str] = []
-    for ext in ('*.jpg', '*.jpeg', '*.png'):
+    for ext in ('*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG'):
         image_files.extend(glob.glob(os.path.join(raw_images_dir, ext)))
     
     # Pair images with their corresponding YOLO .txt label files
