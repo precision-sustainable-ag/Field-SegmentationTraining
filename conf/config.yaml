@@ -5,11 +5,11 @@
 # Hydra defaults and settings. 
 defaults:
   - paths: default             # all filesystem paths (data_dir, model_save_dir, etc.)
-  - model: unet                # architecture group: unet (can switch to deeplabv3plus, etc.)
-  - train: default             # training hyperparameters + Lightning Trainer settings
-  - augment: default           # data augmentation transforms
-  - preprocess: default        # resizing / normalization / cropping
-  - inference: default         # inference & evaluation settings
+  - model: yolov8_detect                # architecture group: unet (can switch to deeplabv3plus, etc.)
+  - train: yolo_detect             # training hyperparameters + Lightning Trainer settings
+  - augment: field_strong           # data augmentation transforms
+  - preprocess: yolo_detect        # resizing / normalization / cropping
+  - inference: yolo_detect         # inference & evaluation settings
   - evaluation: default         # evaluation metrics and settings
   - mask_gen: default
   - create_project: default
@@ -21,15 +21,15 @@ defaults:
 # Any keys you want to sit “outside” those groups:
 project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
-  name: test # or field
+  name: rede # or field
 
-mode: llm                  # one of: mask_gen / preprocess / train / inference / finalize / llm
+mode: detect                  # one of: mask_gen / preprocess / train / inference / finalize / llm
 
 tasks:
   preprocess:
     pad_gridcrop_resize: false
     train_val_test_split: false
-    compute_data_stats: false
+    compute_data_stats: true
 
   mask_gen:
     sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
@@ -42,19 +42,24 @@ tasks:
     export_cvat: false
 
   train:
-    vis_augment: false
-    train_pipeline: false
+    vis_augment: true
+    train_pipeline: true
 
   finalize:
     finalize_lts: false
 
   inference:
-    local: false
-    lts: true
+    local: true
+    lts: false
 
   llm:
-    tabulate_hparams: true
-    summarize_run: true
+    tabulate_hparams: false
+    summarize_run: false
+
+  detect:
+    train: true
+    inference: false
+    export: false
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:

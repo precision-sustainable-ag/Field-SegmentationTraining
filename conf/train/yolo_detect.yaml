@@ -1,0 +1,34 @@
+# conf/train/yolo_detect.yaml
+# YOLO-specific training hyperparameters mapped to the Hydra pipeline.
+
+max_epochs: 100
+batch_size: 16
+num_workers: 16
+seed: 42
+deterministic: true  # Ensures reproducibility across runs (requires cuDNN deterministic settings)
+
+# ─── Hardware & GPU Selection ─────────────────────────────────────────
+gpu:
+  enable: true          # Enable auto-selection via gpu_utils
+  max_gpus: 4           # Number of GPUs to allocate for Multi-GPU DDP training
+  exclude_gpu_ids: [0]  # List of GPU IDs to skip (e.g., [0] if GPU 0 is busy)
+
+# ─── Loss Weights (Tuned for Edge Precision) ─────────────────────────
+box: 7.5
+cls: 0.5
+dfl: 2.0     # Increased from Nav's 1.5 to prioritize sub-pixel edge alignment
+
+# ─── Optimization ────────────────────────────────────────────────────
+optimizer: "auto"
+lr0: 0.01
+
+# Note: We are relying on YOLO's internal augmentation engine for mosaic/cutmix 
+# rather than Albumentations to preserve native bounding box safety.
+
+# ─── Logging & Experiment Tracking ─────────────────────────────────
+logger:
+  wandb:
+    enable: true
+    project: ${project.name}
+    entity: ""
+    run_name: ""

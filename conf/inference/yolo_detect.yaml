@@ -1,0 +1,26 @@
+# conf/inference/yolo_detect.yaml
+# Inference configuration strictly for YOLO object detection.
+
+input_dir: ${paths.test_images_dir}        # Directory to read images from
+output_root: ${paths.project_inference_dir}
+
+# ─── YOLO Thresholds ──────────────────────────────────────────────────
+conf: 0.25  # Confidence threshold for keeping a bounding box
+iou: 0.45   # Intersection over Union threshold for Non-Maximum Suppression (NMS)
+
+# ─── Hardware & Precision ─────────────────────────────────────────────
+amp:
+  enable: true          # Use mixed precision (fp16) during inference for speed
+
+gpu:
+  enable: true
+  max_gpus: 1           # YOLO inference generally only needs 1 GPU
+  exclude_gpu_ids: [0]  # Skip GPU 0 if it's currently busy with training
+
+# ─── Logging ──────────────────────────────────────────────────────────
+logger:
+  wandb:
+    enable: false       # Usually off for inference, but available if needed
+    project: ${project.name}
+    entity: ""
+    run_name: ""

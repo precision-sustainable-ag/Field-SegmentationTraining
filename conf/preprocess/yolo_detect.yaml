@@ -1,0 +1,15 @@
+# conf/preprocess/yolo_detect.yaml
+# Streamlined preprocessing configuration for YOLO detection.
+
+image_processing:
+  num_workers: 16
+  # YOLO uses this dynamically during training/inference for letterboxing
+  size:
+    height: 1024
+    width: 1024
+
+split:
+  # train/val/test set proportions (must sum to 1.0)
+  train: 0.9
+  val:   0.1
+  test:  0.0
