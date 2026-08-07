@@ -27,19 +27,31 @@ def run_yolo_export(cfg: DictConfig) -> None:
     log.info(f"Loading model weights from: {weights_path}")
     model = YOLO(weights_path, task='detect')
 
-    # 2. Execute Export
-    # Compiling a TensorRT engine requires the target image size and must be run on the GPU.
-    log.info("Commencing export to TensorRT engine (FP16)...")
+    # 2. Extract Export Configuration Settings
+    export_cfg = getattr(cfg.inference, "export", {})
+    export_format: str = export_cfg.get("format", "engine")
+    end2end_flag: bool = export_cfg.get("end2end", True)
+    max_det_val: int = export_cfg.get("max_det", 300)
+    quantize_val: int = export_cfg.get("quantize", 16)
+    target_device: int = export_cfg.get("device", 0)
+    workspace_gb: int = export_cfg.get("workspace", 4)
+
+    log.info(f"Commencing export to {export_format.upper()} (end2end={end2end_flag}, quantize={quantize_val})...")
     
     try:
-        exported_path = model.export(
-            format="engine",       # TensorRT format for edge architectures
-            half=True,             # FP16 precision for accelerated inference
+        exported_path: str = model.export(
+            format=export_format,
+            quantize=quantize_val,
+            end2end=end2end_flag,
+            max_det=max_det_val,
             imgsz=cfg.preprocess.image_processing.size.height,
-            device=0,              # TensorRT compilation must happen on a GPU
-            workspace=4            # Allocates 4GB max workspace for the TRT builder
+            device=target_device,
+            workspace=workspace_gb
         )
         log.info(f"YOLO export completed successfully. Engine saved to: {exported_path}")
         
     except Exception as e:
-        log.error(f"Export failed. Ensure you are running this on the target edge hardware with JetPack/TensorRT installed. Error: {e}")
+        log.error(
+            f"Export failed. If exporting to TensorRT on an edge device, ensure TensorRT and "
+            f"JetPack are correctly configured. Details: {e}"
+        )

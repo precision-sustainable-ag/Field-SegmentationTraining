@@ -56,7 +56,7 @@ def run_yolo_inference(cfg: DictConfig) -> None:
 
     # Ensure there are actually images to process to prevent cryptic YOLO errors
     image_files: List[str] = []
-    for ext in ('*.jpg', '*.jpeg', '*.png'):
+    for ext in ('*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG'):
         image_files.extend(glob.glob(os.path.join(input_source, ext)))
         
     if not image_files:
@@ -65,22 +65,33 @@ def run_yolo_inference(cfg: DictConfig) -> None:
 
     print(f"Found {len(image_files)} images for inference. Commencing prediction...")
 
-    # 4. Execute Native Inference
-    # We map configurations directly to YOLO's native prediction kwargs
+    # 4. Extract YOLO26 / YOLOv8 Specific Parameters
+    end2end_flag: bool = getattr(cfg.inference, "end2end", True)
+    max_det_val: int = getattr(cfg.inference, "max_det", 300)
+    conf_val: float = getattr(cfg.inference, "conf", 0.25)
+    iou_val: float = getattr(cfg.inference, "iou", 0.45)
+    # Map the new precision argument (fallback to 16 if missing)
+    quantize_val: int = getattr(cfg.inference, "precision", 16)
+
+    image_size: int = cfg.inference.image_processing.size.height if 'image_processing' in cfg.inference else 1024
     output_dir: str = cfg.paths.project_inference_dir
-    
+    run_subfolder: str = f"detect_run_{cfg.job.job_now_time}"
+
+    # 5. Execute Prediction
     results = model.predict(
         source=input_source,
         device=device_arg,
-        conf=cfg.inference.roi.conf if 'roi' in cfg.inference else 0.25,
-        iou=cfg.inference.roi.iou if 'roi' in cfg.inference else 0.45,
-        imgsz=cfg.preprocess.image_processing.size.height,
-        half=cfg.inference.seg.amp.enable if 'seg' in cfg.inference else True,  # Mixed precision
-        save=True,          # Natively saves images with drawn bounding boxes
-        save_txt=True,      # Saves raw .txt coordinate outputs for downstream analysis
-        save_conf=True,     # Includes confidence scores in the .txt files
-        project=output_dir, # Base output directory
-        name=f"detect_run_{cfg.job.job_now_time}" # Subfolder mapping
+        conf=conf_val,
+        iou=iou_val,
+        imgsz=image_size,
+        quantize=quantize_val,
+        max_det=max_det_val,
+        end2end=end2end_flag,
+        save=True,          
+        save_txt=True,      
+        save_conf=True,     
+        project=output_dir, 
+        name=run_subfolder
     )
     
     print(f"YOLO inference completed. Results saved to: {output_dir}")

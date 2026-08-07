@@ -1,9 +1,11 @@
+# src/detect_utils/train_pipeline.py
+
 import os
-from typing import List, Union
-import wandb
-from omegaconf import DictConfig
-from ultralytics import YOLO
 import shutil
+from typing import List, Union
+
+from omegaconf import DictConfig, OmegaConf
+from ultralytics import YOLO, settings
 
 from src.utils.gpu_utils import select_available_gpus
 from src.utils.seed import set_seed
@@ -12,22 +14,29 @@ from src.detect_utils.dataset_builder import split_and_prepare_dataset
 
 def run_yolo_training(cfg: DictConfig) -> None:
     """
-    Executes the YOLO training pipeline.
+    Executes the YOLO object detection training pipeline.
     
-    This function handles reproducibility seeding, dynamic GPU allocation,
-    dataset preparation, Weights & Biases initialization, and mapping Hydra 
-    configurations directly into the Ultralytics training engine.
+    This function handles:
+    1. Global reproducibility seeding.
+    2. Dynamic GPU allocation and DDP (Distributed Data Parallel) setup.
+    3. Dataset splitting and YOLO configuration generation.
+    4. DDP-safe Weights & Biases initialization via OS environment variables.
+    5. Directory caging to prevent Ultralytics from downloading artifacts to the root path.
+    6. Automatic copying of the best-trained weights to a static local directory for inference.
 
     Args:
-        cfg (DictConfig): The global Hydra configuration object containing 
-                          paths, model architectures, and training hyperparameters.
+        cfg (DictConfig): The global Hydra configuration object containing paths, 
+                          model architectures, and training hyperparameters.
+
+    Returns:
+        None
     """
     # 1. Enforce strict reproducibility across Python, NumPy, and PyTorch
     print(f"Setting global seed to: {cfg.train.seed}")
     set_seed(cfg.train.seed)
     
     # 2. GPU Allocation
-    # Reads GPU selection configuration directly from cfg.train.gpu
+    # Read GPU selection configuration directly from cfg.train.gpu
     if hasattr(cfg.train, "gpu") and cfg.train.gpu.enable:
         exclude_ids: List[int] = list(cfg.train.gpu.exclude_gpu_ids)
         max_gpus: int = cfg.train.gpu.max_gpus
@@ -43,58 +52,91 @@ def run_yolo_training(cfg: DictConfig) -> None:
     
     # YOLO accepts a list of integers (e.g., [1, 2, 3]) for DDP or 'cpu'
     device_arg: Union[List[int], str] = chosen_gpus if len(chosen_gpus) > 0 else 'cpu'
-    
-    # YOLO accepts a list of integers (e.g., [1, 2]) for multi-GPU Distributed Data Parallel (DDP)
-    # If no GPUs are found, fallback to CPU
-    device_arg: Union[List[int], str] = chosen_gpus if len(chosen_gpus) > 0 else 'cpu'
 
     # 3. Prepare the dataset and generate data.yaml
     print("Preparing dataset and generating YOLO configuration...")
     data_yaml_path: str = split_and_prepare_dataset(cfg)
 
-    # 4. Initialize Weights & Biases (if enabled in config)
-    # Ultralytics natively hooks into wandb if the run is initialized beforehand
+    # Define the unique run name used for both folder creation and W&B logging
+    run_name: str = f"detect_train_{cfg.job.job_now_time}"
+
+    # 4. Setup Project-Specific Directories
+    # Ensures that W&B logs and downloaded pretrained weights stay inside the project folder
+    project_wandb_dir: str = os.path.join(cfg.paths.project_dir, "wandb")
+    project_weights_dir: str = os.path.join(cfg.paths.project_dir, "pretrained_weights")
+    
+    os.makedirs(project_wandb_dir, exist_ok=True)
+    os.makedirs(project_weights_dir, exist_ok=True)
+
+    # 5. Configure DDP-Safe Weights & Biases and Ultralytics Settings
     if cfg.train.logger.wandb.enable:
-        print("Initializing Weights & Biases logger...")
-        wandb.init(
-            project=cfg.train.logger.wandb.project,
-            entity=cfg.train.logger.wandb.entity,
-            name=cfg.train.logger.wandb.run_name or None,
-            config=dict(cfg)  # Log the full Hydra config for experiment tracking
+        print("Configuring Weights & Biases for DDP...")
+        
+        # Pass credentials via environment variables so DDP child processes inherit them natively
+        os.environ["WANDB_PROJECT"] = cfg.train.logger.wandb.project
+        if cfg.train.logger.wandb.entity:
+            os.environ["WANDB_ENTITY"] = cfg.train.logger.wandb.entity
+        os.environ["WANDB_NAME"] = run_name
+        os.environ["WANDB_DIR"] = cfg.paths.project_dir  # W&B automatically appends '/wandb' to this
+        
+        # Force W&B on and redirect pretrained weight downloads internally
+        settings.update({
+            'wandb': True,
+            'weights_dir': project_weights_dir
+        })
+    else:
+        settings.update({
+            'wandb': False,
+            'weights_dir': project_weights_dir
+        })
+
+    # 6. Cage Ultralytics to the project weights directory
+    # YOLO downloads dummy weights during its AMP hardware check. 
+    # Temporarily changing the working directory forces these files into the project folder.
+    original_cwd: str = os.getcwd()
+    
+    try:
+        os.chdir(project_weights_dir)
+        
+        # Explicitly pass the absolute path for the starting weights if they already exist locally
+        target_model_path: str = os.path.join(project_weights_dir, cfg.model.name)
+        model_to_load: str = target_model_path if os.path.exists(target_model_path) else cfg.model.name
+        
+        print(f"Initializing YOLO architecture: {cfg.model.name}")
+        model = YOLO(model_to_load, task=cfg.model.task)
+
+        # 7. Execute Training
+        print("Commencing YOLO training loop...")
+
+        # Convert the augment config block into a standard dictionary
+        augment_kwargs = OmegaConf.to_container(cfg.augment, resolve=True)
+
+        model.train(
+            data=data_yaml_path,
+            epochs=cfg.train.max_epochs,
+            batch=cfg.train.batch_size,
+            imgsz=cfg.preprocess.image_processing.size.height,
+            workers=cfg.train.num_workers,
+            device=device_arg,
+            seed=cfg.train.seed,
+            deterministic=cfg.train.deterministic,
+            box=cfg.train.box,
+            cls=cfg.train.cls,
+            dfl=cfg.train.dfl,
+            project=cfg.paths.project_dir,
+            name=run_name,
+            **augment_kwargs                    # Dynamically injects everything from detect_default.yaml
         )
-
-    # 5. Initialize the Ultralytics Model
-    # Uses the predefined weights (e.g., yolov8s.pt) and explicitly sets the task to 'detect'
-    print(f"Initializing YOLO architecture: {cfg.model.name}")
-    model = YOLO(cfg.model.name, task=cfg.model.task)
-
-    # 6. Execute Training
-    # We map the relevant custom hyperparameters from Hydra into the YOLO engine
-    print("Commencing YOLO training loop...")
-    # We define the run name here so we can reference it after training
-    run_name = f"detect_train_{cfg.job.job_now_time}"
-    model.train(
-        data=data_yaml_path,
-        epochs=cfg.train.max_epochs,
-        batch=cfg.train.batch_size,
-        imgsz=cfg.preprocess.image_processing.size.height,
-        workers=cfg.train.num_workers,
-        device=device_arg,
-        seed=cfg.train.seed,
-        deterministic=cfg.train.deterministic,  # Combines with cuDNN deterministic settings
-        box=cfg.train.box,
-        cls=cfg.train.cls,
-        dfl=cfg.train.dfl,
-        project=cfg.paths.project_dir,
-        name=f"detect_train_{cfg.job.job_now_time}"  # Organizes output folders dynamically
-    )
+    finally:
+        # Always restore the original working directory regardless of training success or failure
+        os.chdir(original_cwd)
     
-    # 7. Auto-Copy Best Weights to Static Location
-    # Calculate exactly where YOLO just saved the weights
-    trained_weights_path = os.path.join(cfg.paths.project_dir, run_name, "weights", "best.pt")
+    # 8. Auto-Copy Best Weights to Static Location
+    # Calculate exactly where YOLO just saved the best weights from this run
+    trained_weights_path: str = os.path.join(cfg.paths.project_dir, run_name, "weights", "best.pt")
     
-    # Calculate the static destination from your paths config
-    static_model_path = cfg.paths.local_yolo_weed_detection_model
+    # Calculate the static destination from the Hydra paths configuration
+    static_model_path: str = cfg.paths.local_yolo_weed_detection_model
     os.makedirs(os.path.dirname(static_model_path), exist_ok=True)
     
     if os.path.exists(trained_weights_path):
@@ -103,8 +145,4 @@ def run_yolo_training(cfg: DictConfig) -> None:
     else:
         print(f"Warning: Expected to find trained weights at {trained_weights_path} but they were missing.")
 
-    # 8. Cleanup
-    if wandb.run is not None:
-        wandb.finish()
-    
     print("YOLO training pipeline completed successfully.")
