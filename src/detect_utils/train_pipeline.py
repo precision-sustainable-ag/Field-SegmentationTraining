@@ -90,45 +90,42 @@ def run_yolo_training(cfg: DictConfig) -> None:
             'weights_dir': project_weights_dir
         })
 
-    # 6. Cage Ultralytics to the project weights directory
-    # YOLO downloads dummy weights during its AMP hardware check. 
-    # Temporarily changing the working directory forces these files into the project folder.
+    # 6. Build Consolidated YOLO Training Arguments
+    train_args: Dict[str, Any] = OmegaConf.to_container(cfg.train, resolve=True)
+    augment_args: Dict[str, Any] = (
+        OmegaConf.to_container(cfg.augment, resolve=True) if hasattr(cfg, "augment") else {}
+    )
+
+    # Merge training and augmentation parameters
+    yolo_kwargs: Dict[str, Any] = {**train_args, **augment_args}
+
+    # Filter out pipeline-only configuration keys
+    for key in ["gpu", "logger"]:
+        yolo_kwargs.pop(key, None)
+
+    # Enforce mandatory execution overrides
+    yolo_kwargs["data"] = data_yaml_path
+    yolo_kwargs["imgsz"] = cfg.preprocess.image_processing.size.height
+    yolo_kwargs["device"] = device_arg
+    yolo_kwargs["project"] = cfg.paths.project_dir
+    yolo_kwargs["name"] = run_name
+
+    # 7. Cage Ultralytics to project weights directory during execution
     original_cwd: str = os.getcwd()
     
     try:
         os.chdir(project_weights_dir)
         
-        # Explicitly pass the absolute path for the starting weights if they already exist locally
         target_model_path: str = os.path.join(project_weights_dir, cfg.model.name)
         model_to_load: str = target_model_path if os.path.exists(target_model_path) else cfg.model.name
         
         print(f"Initializing YOLO architecture: {cfg.model.name}")
         model = YOLO(model_to_load, task=cfg.model.task)
 
-        # 7. Execute Training
         print("Commencing YOLO training loop...")
-
-        # Convert the augment config block into a standard dictionary
-        augment_kwargs = OmegaConf.to_container(cfg.augment, resolve=True)
-
-        model.train(
-            data=data_yaml_path,
-            epochs=cfg.train.max_epochs,
-            batch=cfg.train.batch_size,
-            imgsz=cfg.preprocess.image_processing.size.height,
-            workers=cfg.train.num_workers,
-            device=device_arg,
-            seed=cfg.train.seed,
-            deterministic=cfg.train.deterministic,
-            box=cfg.train.box,
-            cls=cfg.train.cls,
-            dfl=cfg.train.dfl,
-            project=cfg.paths.project_dir,
-            name=run_name,
-            **augment_kwargs                    # Dynamically injects everything from detect_default.yaml
-        )
+        model.train(**yolo_kwargs)
+        
     finally:
-        # Always restore the original working directory regardless of training success or failure
         os.chdir(original_cwd)
     
     # 8. Auto-Copy Best Weights to Static Location

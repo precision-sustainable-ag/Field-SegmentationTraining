@@ -10,6 +10,6 @@ image_processing:
 
 split:
   # train/val/test set proportions (must sum to 1.0)
-  train: 0.9
-  val:   0.1
-  test:  0.0
+  train: 0.90
+  val:   0.10
+  test:  0.00

@@ -32,7 +32,7 @@ export:
   format: "engine"   # Target export format (e.g., "engine", "onnx", "torchscript")
   end2end: true      # Export end-to-end graph without NMS operator
   max_det: 300
-  quantize: 16       # 16 for FP16 precision export (Replaces legacy 'half')
+  quantize: 32       # 16 for FP16 precision export (Replaces legacy 'half')
   device: 0
   workspace: 4
 
