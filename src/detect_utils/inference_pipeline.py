@@ -66,6 +66,7 @@ def run_yolo_inference(cfg: DictConfig) -> None:
     print(f"Found {len(image_files)} images for inference. Commencing prediction...")
 
     # 4. Extract YOLO26 / YOLOv8 Specific Parameters
+    rect_val: bool = getattr(cfg.inference.image_processing, "rect", False)
     end2end_flag: bool = getattr(cfg.inference, "end2end", True)
     max_det_val: int = getattr(cfg.inference, "max_det", 300)
     conf_val: float = getattr(cfg.inference, "conf", 0.25)
@@ -73,7 +74,10 @@ def run_yolo_inference(cfg: DictConfig) -> None:
     # Map the new precision argument (fallback to 16 if missing)
     quantize_val: int = getattr(cfg.inference, "precision", 16)
 
-    image_size: int = cfg.inference.image_processing.size.height if 'image_processing' in cfg.inference else 1024
+    # Read both height and width independently, defaulting to 1024x1024
+    img_height: int = cfg.inference.image_processing.size.height if 'image_processing' in cfg.inference else 1024
+    img_width: int = cfg.inference.image_processing.size.width if 'image_processing' in cfg.inference else 1024
+    
     output_dir: str = cfg.paths.project_inference_dir
     # Natively pull Date and Time from Hydra to guarantee chronological sorting
     run_subfolder: str = f"detect_infer_{cfg.job.job_now_date}_{cfg.job.job_now_time}"
@@ -83,10 +87,11 @@ def run_yolo_inference(cfg: DictConfig) -> None:
         device=device_arg,
         conf=conf_val,
         iou=iou_val,
-        imgsz=image_size,
+        imgsz=[img_height, img_width],
         quantize=quantize_val,
         max_det=max_det_val,
         end2end=end2end_flag,
+        rect=rect_val,
         save=True,          
         save_txt=True,      
         save_conf=True,     

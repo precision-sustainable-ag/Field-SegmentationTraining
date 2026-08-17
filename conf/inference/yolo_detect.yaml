@@ -10,6 +10,7 @@ image_processing:
   size:
     height: 1024
     width: 1024
+  rect: true       # True: Use rectangular inference (no padding) | false: square inference (with padding)
 
 # ─── YOLO26 & Detection Control ────────────────────────────────────────
 end2end: true       # true: YOLO26 end-to-end (no NMS) | false: traditional NMS head
