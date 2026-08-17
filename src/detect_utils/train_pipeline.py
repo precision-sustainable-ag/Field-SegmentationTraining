@@ -2,7 +2,7 @@
 
 import os
 import shutil
-from typing import List, Union
+from typing import Dict, Any, List, Union
 
 from omegaconf import DictConfig, OmegaConf
 from ultralytics import YOLO, settings
@@ -58,8 +58,8 @@ def run_yolo_training(cfg: DictConfig) -> None:
     data_yaml_path: str = split_and_prepare_dataset(cfg)
 
     # Define the unique run name used for both folder creation and W&B logging
-    run_name: str = f"detect_train_{cfg.job.job_now_time}"
-
+    run_name: str = f"detect_train_{cfg.job.job_now_date}_{cfg.job.job_now_time}"
+    
     # 4. Setup Project-Specific Directories
     # Ensures that W&B logs and downloaded pretrained weights stay inside the project folder
     project_wandb_dir: str = os.path.join(cfg.paths.project_dir, "wandb")
@@ -107,7 +107,7 @@ def run_yolo_training(cfg: DictConfig) -> None:
     yolo_kwargs["data"] = data_yaml_path
     yolo_kwargs["imgsz"] = cfg.preprocess.image_processing.size.height
     yolo_kwargs["device"] = device_arg
-    yolo_kwargs["project"] = cfg.paths.project_dir
+    yolo_kwargs["project"] = cfg.paths.project_train_dir
     yolo_kwargs["name"] = run_name
 
     # 7. Cage Ultralytics to project weights directory during execution
@@ -130,7 +130,7 @@ def run_yolo_training(cfg: DictConfig) -> None:
     
     # 8. Auto-Copy Best Weights to Static Location
     # Calculate exactly where YOLO just saved the best weights from this run
-    trained_weights_path: str = os.path.join(cfg.paths.project_dir, run_name, "weights", "best.pt")
+    trained_weights_path: str = os.path.join(cfg.paths.project_train_dir, run_name, "weights", "best.pt")
     
     # Calculate the static destination from the Hydra paths configuration
     static_model_path: str = cfg.paths.local_yolo_weed_detection_model

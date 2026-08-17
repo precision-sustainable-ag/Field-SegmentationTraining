@@ -1,0 +1,32 @@
+# conf/augment/detect_optimal.yaml
+# Optimized for maximum mAP@50-95. Preserves crisp leaf boundaries while 
+# simulating edge cut-offs and physical debris.
+
+# ─── Color Space Adjustments ──────────────────────────────────────────
+hsv_h: 0.015       
+hsv_s: 0.7         
+hsv_v: 0.4         
+bgr: 0.0           
+
+# ─── Geometric Transformations (Restrained for Edge Preservation) ─────
+degrees: 0.0       # Disable rotation to prevent black padding artifacts
+translate: 0.1     # Keep translation moderate
+scale: 0.5         # Standard scaling 
+shear: 0.0         # Disable to preserve natural leaf geometry
+perspective: 0.0   
+
+# ─── Flipping (Plants are orientation agnostic) ───────────────────────
+flipud: 0.5        
+fliplr: 0.5        
+
+# ─── Complex Augmentations ────────────────────────────────────────────
+mosaic: 1.0        # KEEP: This is the secret to mastering cut-off leaves
+mixup: 0.0         # DISABLE: Ghost images destroy strict IoU precision
+cutmix: 0.0        # DISABLE: Unnatural sharp squares confuse the model
+copy_paste: 0.0    
+copy_paste_mode: "flip" 
+
+# ─── Advanced / Training Dynamics ─────────────────────────────────────
+auto_augment: "randaugment" 
+erasing: 0.4       # KEEP: Excellent for simulating overlapping debris/dirt
+close_mosaic: 15   # CRITICAL: 15 epochs of pure, clean fine-tuning at the end

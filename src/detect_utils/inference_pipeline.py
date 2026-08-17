@@ -75,8 +75,8 @@ def run_yolo_inference(cfg: DictConfig) -> None:
 
     image_size: int = cfg.inference.image_processing.size.height if 'image_processing' in cfg.inference else 1024
     output_dir: str = cfg.paths.project_inference_dir
-    run_subfolder: str = f"detect_run_{cfg.job.job_now_time}"
-
+    # Natively pull Date and Time from Hydra to guarantee chronological sorting
+    run_subfolder: str = f"detect_infer_{cfg.job.job_now_date}_{cfg.job.job_now_time}"
     # 5. Execute Prediction
     results = model.predict(
         source=input_source,
