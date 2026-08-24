@@ -230,6 +230,7 @@ Currently supported:
 * SegFormer (MiT-B0 to MiT-B5): Hierarchical Vision Transformer with a global receptive field and lightweight MLP decoder (State-of-the-art for contiguous agricultural features).
 * UNet: Standard CNN encoder-decoder.
 * DeepLabV3+: CNN with Atrous Spatial Pyramid Pooling (ASPP).
+* YOLO26 & YOLOv8 & YOLOv11: Object detection architectures scaling from Nano (~2.5M) to X-Large (~58M parameters).
 
 Models are instantiated via Hydra and wrapped in a LightningModule defined in `src/models/lit_segmentation.py`.
 
@@ -347,6 +348,7 @@ CI configuration is defined in: `.github/workflows/ci.yaml`
 
 ## Example Training Command
 
+**Segmentation:**
 ```bash
 python main.py \
   mode=train \
@@ -354,6 +356,15 @@ python main.py \
   train.max_epochs=50 \
   train.batch_size=8 \
   augment.train.batch.mixup.enable=True
+```
+
+**YOLO Object Detection:**
+```bash
+python main.py \
+  mode=detect \
+  detect.task=train \
+  model=yolo26s_detect \
+  augment=detect_optimal
 ```
 
 ## License
