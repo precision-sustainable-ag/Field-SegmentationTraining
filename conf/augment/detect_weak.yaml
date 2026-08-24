@@ -1,0 +1,32 @@
+# conf/augment/detect_weak.yaml
+# Weak augmentation: Minimal geometric distortions and low color jitter.
+# Ideal for establishing a clean baseline where the model learns the natural state of the plant and mat.
+
+# ─── Color Space Adjustments ──────────────────────────────────────────
+hsv_h: 0.010       # Minimal hue shift
+hsv_s: 0.3         # Slight saturation variance
+hsv_v: 0.2         # Slight brightness variance
+bgr: 0.0           
+
+# ─── Geometric Transformations ────────────────────────────────────────
+degrees: 15.0      # Slight rotation to prevent rigid orientation memorization
+translate: 0.05    # Minimal shifting, keeping the plant mostly centered
+scale: 0.2         # Small scale variance (+/- 20%)
+shear: 0.0         # Disabled
+perspective: 0.0   # Disabled
+
+# ─── Flipping ─────────────────────────────────────────────────────────
+flipud: 0.5        # 50% chance of vertical flip (physically valid for top-down field shots)
+fliplr: 0.5        # 50% chance of horizontal flip
+
+# ─── Complex Augmentations ────────────────────────────────────────────
+mosaic: 0.0        # Disabled to preserve the single-plant-on-mat context
+mixup: 0.0         
+cutmix: 0.0        
+copy_paste: 0.0    
+copy_paste_mode: "flip" 
+
+# ─── Advanced / Training Dynamics ─────────────────────────────────────
+auto_augment: "randaugment" 
+erasing: 0.0       # Disabled so the plant is never artificially occluded
+close_mosaic: 0

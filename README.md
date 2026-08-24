@@ -2,7 +2,7 @@
 
 ![Field Segmentation Pipeline](assets/pipeline_diagram.png)
 
-Field Segmentation is a modular, configuration-driven deep learning pipeline for semantic segmentation of field imagery. The repository supports mask generation, preprocessing, training, inference, and evaluation within a unified and reproducible framework.
+Field Segmentation is a modular, configuration-driven deep learning pipeline for semantic segmentation and high-resolution object detection of field imagery. The repository supports mask generation, preprocessing, training, inference, and evaluation within a unified and reproducible framework.
 
 The system is built using PyTorch Lightning, Hydra, and `segmentation_models_pytorch`, enabling scalable experimentation and clean configuration management.
 
@@ -13,6 +13,8 @@ This repository provides an end-to-end segmentation workflow:
 * Mask generation
 * Data preprocessing, augmentation, and transformation
 * Model training with configurable architectures
+* Semantic segmentation training
+* High-resolution YOLO object detection training
 * Inference and transfer to LTS storage
 * Evaluation and visualization
 * Structured experiment management per project
@@ -51,17 +53,15 @@ Hydra configuration groups:
 * `hydra/` – Logging and runtime behavior
 
 ### Source Code (`src/`)
-* `data/` – Dataset and augmentation pipelines
-* `models/` – LightningModule implementations
-* `maskgen/` – Mask generation and refinement logic
-* `inference/` – Inference pipeline
 * `utils/` – Utilities (GPU handling, seeding, logging)
 * `train_utils/` – Training helpers and visualizers
+* `inference_utils/` – Inference and evaluation utilities
+* `detect_utils/` – Object detection utilities
 * `preprocess_utils/` – Dataset preparation utilities
 * `mask_gen_utils/` – Mask post-processing utilities
 * `llm_utils/` – LLM integration utilities
 
-Mode entrypoints: `train.py`, `maskgen.py`, `preprocess.py`, `inference.py`, `llm.py`
+Mode entrypoints: `train.py`, `maskgen.py`, `preprocess.py`, `inference.py`, `llm.py`, `detect.py`
 
 ## Installation
 
@@ -153,7 +153,7 @@ The project uses a single Hydra-based entry point:
 python main.py mode=<mode>
 ```
 
-Available modes: `maskgen`, `preprocess`, `train`, `inference`, `llm`.
+Available modes: `maskgen`, `preprocess`, `train`, `inference`, `llm`, `detect`.
 
 ### Mask Generation
 Generates segmentation masks.
@@ -205,6 +205,23 @@ python main.py mode=inference inference.checkpoint_path=path/to/checkpoint.ckpt
     * Overlay saving
 * **Configuration:** `conf/inference/default.yaml`
 
+### Object Detection (YOLO)
+The pipeline features a fully integrated, high-resolution object detection engine optimized for agricultural targets using Ultralytics YOLO architectures (YOLOv8, YOLOv11, YOLO26).
+
+**Training:**
+Executes YOLO training with multi-GPU DDP support, automated chronological directory sorting, and optimized field augmentations.
+
+```bash
+python main.py mode=detect detect.task=train model=yolo26s_detect
+```
+
+**Inference:**
+Runs batch inference with strict spatial grid enforcement.
+
+```bash
+python main.py mode=detect detect.task=inference
+```
+
 ### Model Architectures
 
 Model configurations are located in: `conf/model/`
@@ -213,6 +230,7 @@ Currently supported:
 * SegFormer (MiT-B0 to MiT-B5): Hierarchical Vision Transformer with a global receptive field and lightweight MLP decoder (State-of-the-art for contiguous agricultural features).
 * UNet: Standard CNN encoder-decoder.
 * DeepLabV3+: CNN with Atrous Spatial Pyramid Pooling (ASPP).
+* YOLO26 & YOLOv8 & YOLOv11: Object detection architectures scaling from Nano (~2.5M) to X-Large (~58M parameters).
 
 Models are instantiated via Hydra and wrapped in a LightningModule defined in `src/models/lit_segmentation.py`.
 
@@ -330,6 +348,7 @@ CI configuration is defined in: `.github/workflows/ci.yaml`
 
 ## Example Training Command
 
+**Segmentation:**
 ```bash
 python main.py \
   mode=train \
@@ -337,6 +356,15 @@ python main.py \
   train.max_epochs=50 \
   train.batch_size=8 \
   augment.train.batch.mixup.enable=True
+```
+
+**YOLO Object Detection:**
+```bash
+python main.py \
+  mode=detect \
+  detect.task=train \
+  model=yolo26s_detect \
+  augment=detect_optimal
 ```
 
 ## License

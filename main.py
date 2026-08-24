@@ -13,6 +13,7 @@ from src.inference import inference
 from src.mask_gen import main as mask_gen
 from src.finalize import main as finalize
 from src.llm import main as llm_runner
+from src.detect import detect_mode
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ TASK_REGISTRY = {
     "inference": inference,
     "finalize": finalize,
     "llm": llm_runner,
+    "detect": detect_mode,
     # Add more tasks here as needed
 }
 

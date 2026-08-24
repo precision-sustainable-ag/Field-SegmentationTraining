@@ -1,0 +1,85 @@
+# conf/train/yolo_detect.yaml
+# Complete Ultralytics YOLO training hyperparameters mapped to Hydra.
+
+# ─── Primary Execution Controls ────────────────────────────────────────
+epochs: 100
+batch: 64               # Fixed batch size (or -1 for 60% GPU auto-batching)
+workers: 16             # Dataloader worker count per GPU
+seed: 42
+deterministic: true     # Combines with cuDNN deterministic settings
+time: null              # Maximum training time in hours (e.g., 2.0 overrides epochs)
+patience: 30            # Early stopping epoch patience
+
+# ─── Hardware & Acceleration ──────────────────────────────────────────
+amp: true               # Automatic Mixed Precision (FP16) training
+compile: false          # PyTorch 2.x graph compilation (backend='inductor')
+channels_last: false    # Use NHWC memory format on CUDA Tensor Cores
+fraction: 1.0           # Fraction of dataset to train on (0.0 to 1.0)
+freeze: null            # Freeze first N layers or list of layer indices
+
+# ─── Custom GPU Allocation (Pipeline Control) ─────────────────────────
+gpu:
+  enable: true          # Enable auto-selection via gpu_utils
+  max_gpus: 4           # Maximum number of GPUs to allocate for DDP
+  exclude_gpu_ids: [0]  # GPU IDs to skip
+
+# ─── Optimization & Learning Rate Scheduler ───────────────────────────
+optimizer: "auto"       # SGD, MuSGD, Adam, AdamW, NAdam, RMSProp, or auto
+lr0: 0.01               # Initial learning rate
+lrf: 0.01               # Final learning rate fraction (lr0 * lrf)
+momentum: 0.937         # SGD momentum or Adam beta1
+weight_decay: 0.0005    # L2 regularization term
+nbs: 64                 # Nominal batch size for loss normalization
+cos_lr: false           # Cosine learning rate scheduler
+
+# ─── Warmup Dynamics ──────────────────────────────────────────────────
+warmup_epochs: 3.0      # Warmup duration in epochs
+warmup_momentum: 0.8    # Initial momentum during warmup
+warmup_bias_lr: 0.1     # Learning rate for bias parameters during warmup
+
+# ─── Loss Weights & Task Coefficients ─────────────────────────────────
+box: 7.5               # Bounding box loss weight
+cls: 0.5               # Classification loss weight
+dfl: 2.0               # Distribution Focal Loss weight (tuned for edge precision)
+cls_pw: 0.0            # Class weighting power for imbalanced datasets
+end2end: null          # Force YOLO26 end-to-end head (null = auto-detect)
+
+# Multi-task & Distillation Loss Coefficients
+# pose: 12.0             # Keypoint pose loss weight (pose estimation)
+# kobj: 1.0              # Keypoint objectness loss weight (pose estimation)
+# rle: 1.0               # Residual log-likelihood estimation loss weight (pose estimation)
+# angle: 1.0             # Oriented bounding box (OBB) angle loss weight (oriented object detection)
+# dlog: 1.0              # SILog loss weight (depth estimation)
+# dgrad: 0.5             # Gradient loss weight (depth estimation)
+# dlam: 1.0              # Variance-focus factor (depth estimation)
+distill_model: null    # Teacher checkpoint path for knowledge distillation (null = no distillation) (knowledge distillation)
+dis: 6.0               # Distillation loss weight (knowledge distillation)
+
+# ─── Model Architecture & Fine-Tuning Control ─────────────────────────
+pretrained: true       # Load pretrained weights
+cls_remap: true        # Retain classification head weights for matching class names
+single_cls: false      # Treat all classes as a single target class
+classes: null          # Filter training to specific class IDs (e.g., [0, 2])
+rect: false            # Minimum padding strategy for square batching
+multi_scale: 0.0       # Vary image size by +/- fraction each batch (e.g., 0.25)
+# overlap_mask: true     # Merge overlapping masks (segmentation)
+# mask_ratio: 4          # Mask downsample ratio (segmentation)
+dropout: 0.0           # Classification dropout rate
+
+# ─── Validation, Saving & Output Controls ──────────────────────────────
+val: true              # Validate model at each epoch
+plots: true            # Save training metrics and prediction plots
+save: true             # Save model checkpoints
+save_period: -1        # Save checkpoint every N epochs (-1 disables)
+exist_ok: false        # Overwrite existing project run directory
+profile: false         # Profile ONNX/TensorRT execution speed during run
+max_det: 300           # Maximum detections per image during validation
+verbose: true          # Print detailed training progress
+
+# ─── Logging & Experiment Tracking ───────────────────────────────────
+logger:
+  wandb:
+    enable: true
+    project: ${project.name}
+    entity: ""
+    run_name: ""

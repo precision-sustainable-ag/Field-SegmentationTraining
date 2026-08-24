@@ -3,14 +3,15 @@
 # Top‐level Hydra configuration. Lists each config group in the "defaults:" section.
 # Order matters: later entries can override earlier keys.
 # Hydra defaults and settings. 
+
 defaults:
   - paths: default             # all filesystem paths (data_dir, model_save_dir, etc.)
-  - model: unet                # architecture group: unet (can switch to deeplabv3plus, etc.)
+  - model: default             # architecture group: unet (can switch to deeplabv3plus, etc.)
   - train: default             # training hyperparameters + Lightning Trainer settings
   - augment: default           # data augmentation transforms
   - preprocess: default        # resizing / normalization / cropping
   - inference: default         # inference & evaluation settings
-  - evaluation: default         # evaluation metrics and settings
+  - evaluation: default        # evaluation metrics and settings
   - mask_gen: default
   - create_project: default
   - finalize: default          # finalization settings
@@ -18,12 +19,11 @@ defaults:
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 
-# Any keys you want to sit “outside” those groups:
 project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
-  name: test # or field
+  name: field 
 
-mode: llm                  # one of: mask_gen / preprocess / train / inference / finalize / llm
+mode: preprocess               # one of: mask_gen / preprocess / train / inference / finalize / llm / detect
 
 tasks:
   preprocess:
@@ -50,11 +50,16 @@ tasks:
 
   inference:
     local: false
-    lts: true
+    lts: false
 
   llm:
-    tabulate_hparams: true
-    summarize_run: true
+    tabulate_hparams: false
+    summarize_run: false
+
+  detect:
+    train: false
+    inference: false
+    export: false
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
 hydra:

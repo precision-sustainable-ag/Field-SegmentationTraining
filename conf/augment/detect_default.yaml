@@ -1,0 +1,31 @@
+# conf/augment/detect_default.yaml
+# Native Ultralytics YOLO augmentation hyperparameters.
+
+# ─── Color Space Adjustments ──────────────────────────────────────────
+hsv_h: 0.015      # Image HSV-Hue augmentation (fraction)
+hsv_s: 0.7        # Image HSV-Saturation augmentation (fraction)
+hsv_v: 0.4        # Image HSV-Value (brightness) augmentation (fraction)
+bgr: 0.0          # Probability of flipping image channels from RGB to BGR
+
+# ─── Geometric Transformations ────────────────────────────────────────
+degrees: 0.0      # Image rotation (+/- degrees)
+translate: 0.1    # Image translation (+/- fraction of size)
+scale: 0.5        # Image scale (+/- gain)
+shear: 0.0        # Image shear (+/- degrees)
+perspective: 0.0  # Image perspective transformation (range 0.0 - 0.001)
+
+# ─── Flipping ─────────────────────────────────────────────────────────
+flipud: 0.0       # Probability of flipping image upside down
+fliplr: 0.5       # Probability of flipping image left to right
+
+# ─── Complex Augmentations ────────────────────────────────────────────
+mosaic: 1.0       # Probability of combining 4 images into 1 (highly recommended)
+mixup: 0.0        # Probability of blending two images and their labels
+cutmix: 0.0       # Probability of combining portions of two images
+copy_paste: 0.0   # Probability of copying objects across images (mainly for segmentation)
+copy_paste_mode: "flip" # Strategy to use: 'flip' or 'mixup'
+
+# ─── Advanced / Training Dynamics ─────────────────────────────────────
+auto_augment: "randaugment" # Predefined augmentation policy
+erasing: 0.4      # Random erasing probability (forces model to learn partial features)
+close_mosaic: 10  # Disable mosaic in the final N epochs to stabilize convergence
