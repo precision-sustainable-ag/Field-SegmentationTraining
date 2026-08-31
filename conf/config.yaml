@@ -12,7 +12,6 @@ defaults:
   - preprocess: default        # resizing / normalization / cropping
   - inference: default         # inference & evaluation settings
   - evaluation: default        # evaluation metrics and settings
-  - mask_gen: default
   - create_project: default
   - llm: default               # LLM settings 
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
