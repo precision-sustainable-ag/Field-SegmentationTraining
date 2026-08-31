@@ -14,7 +14,6 @@ defaults:
   - evaluation: default        # evaluation metrics and settings
   - mask_gen: default
   - create_project: default
-  - finalize: default          # finalization settings
   - llm: default               # LLM settings 
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
@@ -23,30 +22,17 @@ project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
   name: field 
 
-mode: preprocess               # one of: mask_gen / preprocess / train / inference / finalize / llm / detect
+mode: detect                  # one of:  preprocess / train / inference / llm / detect
 
 tasks:
   preprocess:
     pad_gridcrop_resize: false
     train_val_test_split: false
-    compute_data_stats: false
-
-  mask_gen:
-    sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    create_project: false
-    detect: false
-    segment: false
-    inspect: false
-    refine: false
-    upload_cvat: false
-    export_cvat: false
+    compute_data_stats: true
 
   train:
-    vis_augment: false
-    train_pipeline: false
-
-  finalize:
-    finalize_lts: false
+    vis_augment: true
+    train_pipeline: true
 
   inference:
     local: false
@@ -71,9 +57,6 @@ hydra:
 
 test:
   enabled: true
-
-mask_inspect: # TODO: what is this for?
-  save2lts: false
 
 job:
   job_now_date: &nowdir ${now:%Y-%m-%d}
