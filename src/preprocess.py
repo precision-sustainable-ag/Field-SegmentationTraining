@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 def preprocess(cfg: DictConfig) -> None:
     """
     Entry point for preprocessing:
-    - pad/grid-crop/resize cutouts & masks to cfg.preprocess.size
+    - pad/grid-crop/resize images & masks to cfg.preprocess.size
     """
     run_dir = Path(HydraConfig.get().runtime.output_dir)
     pipe_logger = PipelineLogger(run_dir, "preprocess")
@@ -35,15 +35,15 @@ def preprocess(cfg: DictConfig) -> None:
 
     success = False
     try:
-        # Source directories from mask_gen (use paths config)
-        cutouts_dir = Path(cfg.paths.mask_gen_cutout_dir)
-        masks_dir   = Path(cfg.paths.refined_masks_dir)
+        # Source directories from raw segmentation data (use paths config)
+        images_dir = Path(cfg.paths.raw_seg_images_dir)
+        masks_dir   = Path(cfg.paths.raw_seg_masks_dir)
         # Output into preprocess directory
         out_base    = Path(cfg.paths.project_preprocess_dir)
 
         if cfg.tasks.preprocess.pad_gridcrop_resize:
             pad_gridcrop_resize(
-                cutouts_dir=cutouts_dir,
+                images_dir=images_dir,
                 masks_dir=masks_dir,
                 out_images=out_base/"images",
                 out_masks=out_base/"masks",
