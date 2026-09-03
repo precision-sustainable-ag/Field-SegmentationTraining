@@ -1,5 +1,7 @@
 # Field Segmentation
 
+![](assets/ALA00951_triptych_gh.png)
+
 Field Segmentation is a modular, configuration-driven deep learning pipeline for semantic segmentation and high-resolution object detection of field imagery. The repository supports mask generation, preprocessing, training, inference, and evaluation within a unified and reproducible framework.
 
 The system is built using PyTorch Lightning, Hydra, and `segmentation_models_pytorch`, enabling scalable experimentation and clean configuration management.
