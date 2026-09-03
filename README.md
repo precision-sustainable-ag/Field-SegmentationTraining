@@ -46,7 +46,6 @@ Hydra configuration groups:
 * `train/` – Optimizer, scheduler, training settings
 * `augment/` – Data augmentation configuration
 * `preprocess/` – Resizing, normalization, mask remapping
-* `maskgen/` – Mask generation and refinement settings
 * `llm/` – Large Language Model configuration
 * `inference/` – Inference and evaluation configuration
 * `evaluation/` – Metrics and visualization settings
@@ -58,10 +57,9 @@ Hydra configuration groups:
 * `inference_utils/` – Inference and evaluation utilities
 * `detect_utils/` – Object detection utilities
 * `preprocess_utils/` – Dataset preparation utilities
-* `mask_gen_utils/` – Mask post-processing utilities
 * `llm_utils/` – LLM integration utilities
 
-Mode entrypoints: `train.py`, `maskgen.py`, `preprocess.py`, `inference.py`, `llm.py`, `detect.py`
+Mode entrypoints: `train.py`, `preprocess.py`, `inference.py`, `llm.py`, `detect.py`
 
 ## Installation
 
@@ -153,19 +151,7 @@ The project uses a single Hydra-based entry point:
 python main.py mode=<mode>
 ```
 
-Available modes: `maskgen`, `preprocess`, `train`, `inference`, `llm`, `detect`.
-
-### Mask Generation
-Generates segmentation masks.
-
-```bash
-python main.py mode=maskgen
-```
-* **Configuration:** `conf/maskgen/default.yaml`
-* **Supports:**
-    * Classical thresholding with morphological cleanup
-    * Model-based refinement
-    * Manual quality control overlays
+Available modes: `preprocess`, `train`, `inference`, `llm`, `detect`.
 
 ### Preprocessing
 Performs resizing, normalization, cropping, mask remapping, train_val_test split and pad_gridcrop_resize.
@@ -301,17 +287,20 @@ Experiments are organized under: `projects/{project.name}/`
 Example:
 ```text
 projects/my_project/
-├── mask_gen/
-│   ├── developed-images/
-│   ├── cutouts/
-│   ├── refined_masks/
-│   └── db/
+├── preprocess/
+│   ├── data_stats/
+│   └── train_val_test_split/
+├── inference/
+│   ├── version_1/
+│   └── version_2/
+├── train/
+│   ├── version_1/
+│   └── version_2/
 ```
 
 This structure ensures that each project maintains its own:
 * Raw images
 * Generated masks
-* Refined masks
 * Metadata
 * Outputs and reports
 
