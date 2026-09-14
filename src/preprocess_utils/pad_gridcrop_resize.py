@@ -161,7 +161,7 @@ def _process_one(
     raise RuntimeError(msg)
 
 def pad_gridcrop_resize(
-    cutouts_dir: Path,
+    images_dir: Path,
     masks_dir: Path,
     out_images: Path,
     out_masks: Path,
@@ -173,7 +173,7 @@ def pad_gridcrop_resize(
     or sequentially processes each image via _process_one().
 
     Args:
-        cutouts_dir: Path to directory with JPEG/PNG cutouts (e.g., TXC08723_0.jpg)
+        images_dir:  Path to directory with JPEG/PNG images (e.g., TXC08723_0.jpg)
         masks_dir:   Path to directory with refined masks (e.g., TXC08723_0_mask.png)
         out_images:  Path to write standardized images
         out_masks:   Path to write standardized masks
@@ -183,7 +183,7 @@ def pad_gridcrop_resize(
     out_images.mkdir(parents=True, exist_ok=True)
     out_masks.mkdir(parents=True, exist_ok=True)
 
-    img_paths = list(cutouts_dir.glob("*.jpg"))
+    img_paths = list(images_dir.glob("*.jpg"))
     use_cc    = bool(getattr(cfg, "use_concurrency", False))
     workers   = int(getattr(cfg, "num_workers", 1)) if use_cc else 1
 

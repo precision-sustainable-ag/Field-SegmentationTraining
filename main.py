@@ -10,8 +10,6 @@ from src.utils.pipeline_log import PipelineLogger
 from src.preprocess import preprocess
 from src.train import train
 from src.inference import inference
-from src.mask_gen import main as mask_gen
-from src.finalize import main as finalize
 from src.llm import main as llm_runner
 from src.detect import detect_mode
 
@@ -21,9 +19,7 @@ log = logging.getLogger(__name__)
 TASK_REGISTRY = {
     "preprocess": preprocess,
     "train": train,
-    "mask_gen": mask_gen,
     "inference": inference,
-    "finalize": finalize,
     "llm": llm_runner,
     "detect": detect_mode,
     # Add more tasks here as needed

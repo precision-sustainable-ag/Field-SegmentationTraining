@@ -3,7 +3,6 @@
 # Top‐level Hydra configuration. Lists each config group in the "defaults:" section.
 # Order matters: later entries can override earlier keys.
 # Hydra defaults and settings. 
-
 defaults:
   - paths: default             # all filesystem paths (data_dir, model_save_dir, etc.)
   - model: default             # architecture group: unet (can switch to deeplabv3plus, etc.)
@@ -12,44 +11,29 @@ defaults:
   - preprocess: default        # resizing / normalization / cropping
   - inference: default         # inference & evaluation settings
   - evaluation: default        # evaluation metrics and settings
-  - mask_gen: default
-  - create_project: default
-  - finalize: default          # finalization settings
   - llm: default               # LLM settings 
   - override hydra/job_logging: custom # a custom logging config (Hydra job logger override)
   - _self_                     # Ensures overriding behavior
 
+# Any keys you want to sit “outside” those groups:
 project:
   # Note: project_name typically duplicated from projects.field.project_name, but putting here
-  name: field 
+  name: rede # or field
 
-mode: preprocess               # one of: mask_gen / preprocess / train / inference / finalize / llm / detect
+mode: detect                  # one of:  preprocess / train / inference / llm / detect
 
 tasks:
   preprocess:
     pad_gridcrop_resize: false
     train_val_test_split: false
-    compute_data_stats: false
-
-  mask_gen:
-    sync: false # skip for now; copies the most up-to-date version of the files needed to run the mask_gen mode from LTS to here
-    create_project: false
-    detect: false
-    segment: false
-    inspect: false
-    refine: false
-    upload_cvat: false
-    export_cvat: false
+    compute_data_stats: true
 
   train:
-    vis_augment: false
-    train_pipeline: false
-
-  finalize:
-    finalize_lts: false
+    vis_augment: true
+    train_pipeline: true
 
   inference:
-    local: false
+    local: true
     lts: false
 
   llm:
@@ -58,7 +42,7 @@ tasks:
 
   detect:
     train: false
-    inference: false
+    inference: true
     export: false
 
 # You can add any global flags here if desired, e.g. debug: false, seed: 42, etc.
@@ -71,9 +55,6 @@ hydra:
 
 test:
   enabled: true
-
-mask_inspect: # TODO: what is this for?
-  save2lts: false
 
 job:
   job_now_date: &nowdir ${now:%Y-%m-%d}
