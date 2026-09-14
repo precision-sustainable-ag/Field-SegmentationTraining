@@ -106,14 +106,6 @@ source .field_segmentation/bin/activate
 
 *(Note: If you specified a custom environment name via `VENV_DIR`, replace `.field_segmentation` with your custom folder name).*
 
-### (deprecated) Alternatively, create the Environment using Conda:
-
-```bash
-conda env create -f environment.yaml
-conda activate field_segmentation
-```
-*Alternatively, install dependencies manually from `environment.yaml`.*
-
 ### LLM Setup (Ollama)
 
 This project requires Ollama for local model inference. Follow these steps to install and run it without root/sudo access.
