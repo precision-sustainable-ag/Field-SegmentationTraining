@@ -9,7 +9,7 @@ import pandas as pd
 import cv2
 import numpy as np
 import torch
-
+from typing import Any, cast
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
@@ -17,6 +17,8 @@ from src.inference_utils.inference_pipeline import (
     _read_rgb,
     _overlay_rgb_mask,
     _save_triptych,
+    _save_vegetation_cutout,
+    _save_metadata_json,
     _to_tensor01,
     _pad_to_divisor,
     _unpad,
@@ -176,6 +178,8 @@ def run_inference_lts(cfg: DictConfig) -> None:
     (run_dir / "masks").mkdir(parents=True, exist_ok=True)
     (run_dir / "overlays").mkdir(parents=True, exist_ok=True)
     (run_dir / "triptych").mkdir(parents=True, exist_ok=True)
+    (run_dir / "cutouts").mkdir(parents=True, exist_ok=True)
+    (run_dir / "metadata").mkdir(parents=True, exist_ok=True)
 
     # W&B (optional)
     wb_cfg = cfg.inference.logger.wandb if "logger" in cfg.inference and "wandb" in cfg.inference.logger else {}
@@ -188,7 +192,7 @@ def run_inference_lts(cfg: DictConfig) -> None:
                 entity=wb_cfg.get("entity", None),
                 name=wb_cfg.get("run_name", stamp),
                 dir=str(run_dir),
-                config=OmegaConf.to_container(cfg, resolve=True),
+                config=cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True)),
                 save_code=False,
                 reinit=True,
             )
@@ -215,6 +219,10 @@ def run_inference_lts(cfg: DictConfig) -> None:
     max_side = int(cfg.inference.preview_max_side)
     tile_cfg = getattr(cfg.inference.seg, "tile", None)
     norm_cfg = getattr(cfg.inference, "normalization", None)
+    save_cutout = bool(getattr(getattr(cfg.inference, "save", {}), "cutout", False))
+    save_metadata = bool(getattr(getattr(cfg.inference, "save", {}), "metadata", False))
+    roi_cfg = getattr(cfg.inference, "roi", None)
+    seg_cfg = getattr(cfg.inference, "seg", None)
 
     # Load image list from LTS database
     df = _load_lts_rows(cfg)
@@ -232,14 +240,20 @@ def run_inference_lts(cfg: DictConfig) -> None:
 
         H, W = rgb.shape[:2]
 
-        roi = _detect_roi_if_enabled(cfg, rgb)
+        roi = _detect_roi_if_enabled(roi_cfg, rgb)
         if roi is None:
             # No ROI → use the full image
             x1, y1, x2, y2 = 0, 0, W, H
-            crop = rgb[y1:y2, x1:x2].copy()
         else:
-            crop = rgb.copy()
-            x1, y1 = 0, 0
+            x1, y1, x2, y2 = roi     
+        
+        pad_cfg = getattr(roi_cfg, "detection_padding", {}) if roi_cfg else {}
+        pad_px = int(getattr(pad_cfg, "pad_px", 0))
+        bbox_was_padded = bool(
+            roi is not None and getattr(pad_cfg, "enabled", False) and pad_px > 0
+        )                               
+
+        crop = rgb[y1:y2, x1:x2].copy()
 
         # Tiled vs Single-shot
         if tile_cfg and tile_cfg.enable:
@@ -287,15 +301,41 @@ def run_inference_lts(cfg: DictConfig) -> None:
                        run_dir / "triptych" / f"{stem}_triptych.png",
                        max_side=max_side)
 
+        # ── vegetation cutout ──────────────────────────────────────
+        if save_cutout:
+            assert seg_cfg is not None, "seg config must be provided to save cutouts"
+            cutout_meta = _save_vegetation_cutout(
+                seg_cfg=seg_cfg,
+                crop_rgb=crop,
+                mask_crop=mask_crop,
+                out_path=run_dir / "cutouts" / f"{stem}_cutout.png",
+                crop_origin_xy=(x1, y1),
+                detection_bbox_xyxy=roi,
+                detection_bbox_padded=bbox_was_padded,
+                detection_pad_px=pad_px
+            )
+            if save_metadata:
+                _save_metadata_json(
+                    run_dir / "metadata" / f"{stem}.json",
+                    image_name=img_path.name,
+                    meta=cutout_meta,
+                )
+        # ───────────────────────────────────────────────────────────────
+
         # W&B per-image logging
         if use_wandb:
             try:
                 import wandb
-                wandb.log({
+                to_log = {
                     "inference_LTS/mask": wandb.Image(str(run_dir / "masks" / f"{stem}.png")),
                     "inference_LTS/overlay": wandb.Image(str(run_dir / "overlays" / f"{stem}_overlay.png")),
                     "inference_LTS/triptych": wandb.Image(str(run_dir / "triptych" / f"{stem}_triptych.png")),
-                })
+                }
+                if save_cutout:
+                    to_log["inference_LTS/cutout"] = wandb.Image(
+                        str(run_dir / "cutouts" / f"{stem}_cutout.png")
+                    )
+                wandb.log(to_log)
             except Exception as e:
                 log.debug(f"[LTS] W&B log failed: {e}")
 
